@@ -627,9 +627,6 @@
         "txid": {
           "type": "string"
         },
-        "tx": {
-          "type": "string"
-        },
         "parentTxid": {
           "type": "string"
         },

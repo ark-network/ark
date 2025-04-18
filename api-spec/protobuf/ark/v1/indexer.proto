@@ -163,7 +163,6 @@ message IndexerOutpoint {
 
 message IndexerNode {
   string txid = 1;
-  string tx = 2;
   string parent_txid = 3;
   int32 level = 4;
   int32 level_index = 5;

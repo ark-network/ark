@@ -10,6 +10,7 @@ package arkv1
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 
@@ -24,685 +25,509 @@ import (
 )
 
 // Suppress "imported and not used" errors
-var _ codes.Code
-var _ io.Reader
-var _ status.Status
-var _ = runtime.String
-var _ = utilities.NewDoubleArray
-var _ = metadata.Join
+var (
+	_ codes.Code
+	_ io.Reader
+	_ status.Status
+	_ = errors.New
+	_ = runtime.String
+	_ = utilities.NewDoubleArray
+	_ = metadata.Join
+)
 
 func request_IndexerService_GetCommitmentTx_0(ctx context.Context, marshaler runtime.Marshaler, client IndexerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetCommitmentTxRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetCommitmentTxRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["txid"]
+	io.Copy(io.Discard, req.Body)
+	val, ok := pathParams["txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "txid")
 	}
-
 	protoReq.Txid, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "txid", err)
 	}
-
 	msg, err := client.GetCommitmentTx(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_IndexerService_GetCommitmentTx_0(ctx context.Context, marshaler runtime.Marshaler, server IndexerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetCommitmentTxRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetCommitmentTxRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["txid"]
+	val, ok := pathParams["txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "txid")
 	}
-
 	protoReq.Txid, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "txid", err)
 	}
-
 	msg, err := server.GetCommitmentTx(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
-var (
-	filter_IndexerService_GetVtxoTree_0 = &utilities.DoubleArray{Encoding: map[string]int{"batch_outpoint": 0, "txid": 1, "vout": 2}, Base: []int{1, 1, 1, 2, 0, 0}, Check: []int{0, 1, 2, 2, 3, 4}}
-)
+var filter_IndexerService_GetVtxoTree_0 = &utilities.DoubleArray{Encoding: map[string]int{"batch_outpoint": 0, "txid": 1, "vout": 2}, Base: []int{1, 1, 1, 2, 0, 0}, Check: []int{0, 1, 2, 2, 3, 4}}
 
 func request_IndexerService_GetVtxoTree_0(ctx context.Context, marshaler runtime.Marshaler, client IndexerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetVtxoTreeRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetVtxoTreeRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["batch_outpoint.txid"]
+	io.Copy(io.Discard, req.Body)
+	val, ok := pathParams["batch_outpoint.txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "batch_outpoint.txid")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "batch_outpoint.txid", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "batch_outpoint.txid", err)
 	}
-
 	val, ok = pathParams["batch_outpoint.vout"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "batch_outpoint.vout")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "batch_outpoint.vout", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "batch_outpoint.vout", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetVtxoTree_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := client.GetVtxoTree(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_IndexerService_GetVtxoTree_0(ctx context.Context, marshaler runtime.Marshaler, server IndexerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetVtxoTreeRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetVtxoTreeRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["batch_outpoint.txid"]
+	val, ok := pathParams["batch_outpoint.txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "batch_outpoint.txid")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "batch_outpoint.txid", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "batch_outpoint.txid", err)
 	}
-
 	val, ok = pathParams["batch_outpoint.vout"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "batch_outpoint.vout")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "batch_outpoint.vout", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "batch_outpoint.vout", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetVtxoTree_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := server.GetVtxoTree(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
-var (
-	filter_IndexerService_GetForfeitTxs_0 = &utilities.DoubleArray{Encoding: map[string]int{"batch_outpoint": 0, "txid": 1, "vout": 2}, Base: []int{1, 1, 1, 2, 0, 0}, Check: []int{0, 1, 2, 2, 3, 4}}
-)
+var filter_IndexerService_GetForfeitTxs_0 = &utilities.DoubleArray{Encoding: map[string]int{"batch_outpoint": 0, "txid": 1, "vout": 2}, Base: []int{1, 1, 1, 2, 0, 0}, Check: []int{0, 1, 2, 2, 3, 4}}
 
 func request_IndexerService_GetForfeitTxs_0(ctx context.Context, marshaler runtime.Marshaler, client IndexerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetForfeitTxsRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetForfeitTxsRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["batch_outpoint.txid"]
+	io.Copy(io.Discard, req.Body)
+	val, ok := pathParams["batch_outpoint.txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "batch_outpoint.txid")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "batch_outpoint.txid", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "batch_outpoint.txid", err)
 	}
-
 	val, ok = pathParams["batch_outpoint.vout"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "batch_outpoint.vout")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "batch_outpoint.vout", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "batch_outpoint.vout", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetForfeitTxs_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := client.GetForfeitTxs(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_IndexerService_GetForfeitTxs_0(ctx context.Context, marshaler runtime.Marshaler, server IndexerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetForfeitTxsRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetForfeitTxsRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["batch_outpoint.txid"]
+	val, ok := pathParams["batch_outpoint.txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "batch_outpoint.txid")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "batch_outpoint.txid", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "batch_outpoint.txid", err)
 	}
-
 	val, ok = pathParams["batch_outpoint.vout"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "batch_outpoint.vout")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "batch_outpoint.vout", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "batch_outpoint.vout", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetForfeitTxs_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := server.GetForfeitTxs(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
-var (
-	filter_IndexerService_GetConnectors_0 = &utilities.DoubleArray{Encoding: map[string]int{"batch_outpoint": 0, "txid": 1, "vout": 2}, Base: []int{1, 1, 1, 2, 0, 0}, Check: []int{0, 1, 2, 2, 3, 4}}
-)
+var filter_IndexerService_GetConnectors_0 = &utilities.DoubleArray{Encoding: map[string]int{"batch_outpoint": 0, "txid": 1, "vout": 2}, Base: []int{1, 1, 1, 2, 0, 0}, Check: []int{0, 1, 2, 2, 3, 4}}
 
 func request_IndexerService_GetConnectors_0(ctx context.Context, marshaler runtime.Marshaler, client IndexerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetConnectorsRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetConnectorsRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["batch_outpoint.txid"]
+	io.Copy(io.Discard, req.Body)
+	val, ok := pathParams["batch_outpoint.txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "batch_outpoint.txid")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "batch_outpoint.txid", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "batch_outpoint.txid", err)
 	}
-
 	val, ok = pathParams["batch_outpoint.vout"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "batch_outpoint.vout")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "batch_outpoint.vout", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "batch_outpoint.vout", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetConnectors_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := client.GetConnectors(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_IndexerService_GetConnectors_0(ctx context.Context, marshaler runtime.Marshaler, server IndexerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetConnectorsRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetConnectorsRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["batch_outpoint.txid"]
+	val, ok := pathParams["batch_outpoint.txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "batch_outpoint.txid")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "batch_outpoint.txid", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "batch_outpoint.txid", err)
 	}
-
 	val, ok = pathParams["batch_outpoint.vout"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "batch_outpoint.vout")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "batch_outpoint.vout", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "batch_outpoint.vout", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetConnectors_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := server.GetConnectors(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
-var (
-	filter_IndexerService_GetSpendableVtxos_0 = &utilities.DoubleArray{Encoding: map[string]int{"address": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
-)
+var filter_IndexerService_GetSpendableVtxos_0 = &utilities.DoubleArray{Encoding: map[string]int{"address": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 
 func request_IndexerService_GetSpendableVtxos_0(ctx context.Context, marshaler runtime.Marshaler, client IndexerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetSpendableVtxosRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetSpendableVtxosRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["address"]
+	io.Copy(io.Discard, req.Body)
+	val, ok := pathParams["address"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "address")
 	}
-
 	protoReq.Address, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "address", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetSpendableVtxos_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := client.GetSpendableVtxos(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_IndexerService_GetSpendableVtxos_0(ctx context.Context, marshaler runtime.Marshaler, server IndexerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetSpendableVtxosRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetSpendableVtxosRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["address"]
+	val, ok := pathParams["address"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "address")
 	}
-
 	protoReq.Address, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "address", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetSpendableVtxos_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := server.GetSpendableVtxos(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
-var (
-	filter_IndexerService_GetTransactionHistory_0 = &utilities.DoubleArray{Encoding: map[string]int{"address": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
-)
+var filter_IndexerService_GetTransactionHistory_0 = &utilities.DoubleArray{Encoding: map[string]int{"address": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 
 func request_IndexerService_GetTransactionHistory_0(ctx context.Context, marshaler runtime.Marshaler, client IndexerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetTransactionHistoryRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetTransactionHistoryRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["address"]
+	io.Copy(io.Discard, req.Body)
+	val, ok := pathParams["address"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "address")
 	}
-
 	protoReq.Address, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "address", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetTransactionHistory_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := client.GetTransactionHistory(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_IndexerService_GetTransactionHistory_0(ctx context.Context, marshaler runtime.Marshaler, server IndexerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetTransactionHistoryRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetTransactionHistoryRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["address"]
+	val, ok := pathParams["address"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "address")
 	}
-
 	protoReq.Address, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "address", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetTransactionHistory_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := server.GetTransactionHistory(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
-var (
-	filter_IndexerService_GetVtxoChain_0 = &utilities.DoubleArray{Encoding: map[string]int{"outpoint": 0, "txid": 1, "vout": 2}, Base: []int{1, 1, 1, 2, 0, 0}, Check: []int{0, 1, 2, 2, 3, 4}}
-)
+var filter_IndexerService_GetVtxoChain_0 = &utilities.DoubleArray{Encoding: map[string]int{"outpoint": 0, "txid": 1, "vout": 2}, Base: []int{1, 1, 1, 2, 0, 0}, Check: []int{0, 1, 2, 2, 3, 4}}
 
 func request_IndexerService_GetVtxoChain_0(ctx context.Context, marshaler runtime.Marshaler, client IndexerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetVtxoChainRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetVtxoChainRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["outpoint.txid"]
+	io.Copy(io.Discard, req.Body)
+	val, ok := pathParams["outpoint.txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "outpoint.txid")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "outpoint.txid", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "outpoint.txid", err)
 	}
-
 	val, ok = pathParams["outpoint.vout"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "outpoint.vout")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "outpoint.vout", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "outpoint.vout", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetVtxoChain_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := client.GetVtxoChain(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_IndexerService_GetVtxoChain_0(ctx context.Context, marshaler runtime.Marshaler, server IndexerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetVtxoChainRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetVtxoChainRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["outpoint.txid"]
+	val, ok := pathParams["outpoint.txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "outpoint.txid")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "outpoint.txid", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "outpoint.txid", err)
 	}
-
 	val, ok = pathParams["outpoint.vout"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "outpoint.vout")
 	}
-
 	err = runtime.PopulateFieldFromPath(&protoReq, "outpoint.vout", val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "outpoint.vout", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetVtxoChain_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := server.GetVtxoChain(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
-var (
-	filter_IndexerService_GetVirtualTxs_0 = &utilities.DoubleArray{Encoding: map[string]int{"txids": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
-)
+var filter_IndexerService_GetVirtualTxs_0 = &utilities.DoubleArray{Encoding: map[string]int{"txids": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 
 func request_IndexerService_GetVirtualTxs_0(ctx context.Context, marshaler runtime.Marshaler, client IndexerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetVirtualTxsRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetVirtualTxsRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["txids"]
+	io.Copy(io.Discard, req.Body)
+	val, ok := pathParams["txids"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "txids")
 	}
-
 	protoReq.Txids, err = runtime.StringSlice(val, ",")
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "txids", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetVirtualTxs_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := client.GetVirtualTxs(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_IndexerService_GetVirtualTxs_0(ctx context.Context, marshaler runtime.Marshaler, server IndexerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetVirtualTxsRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetVirtualTxsRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["txids"]
+	val, ok := pathParams["txids"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "txids")
 	}
-
 	protoReq.Txids, err = runtime.StringSlice(val, ",")
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "txids", err)
 	}
-
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
 	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetVirtualTxs_0); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-
 	msg, err := server.GetVirtualTxs(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
 func request_IndexerService_GetSweptCommitmentTx_0(ctx context.Context, marshaler runtime.Marshaler, client IndexerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetSweptCommitmentTxRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetSweptCommitmentTxRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["txid"]
+	io.Copy(io.Discard, req.Body)
+	val, ok := pathParams["txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "txid")
 	}
-
 	protoReq.Txid, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "txid", err)
 	}
-
 	msg, err := client.GetSweptCommitmentTx(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
-
 }
 
 func local_request_IndexerService_GetSweptCommitmentTx_0(ctx context.Context, marshaler runtime.Marshaler, server IndexerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq GetSweptCommitmentTxRequest
-	var metadata runtime.ServerMetadata
-
 	var (
-		val string
-		ok  bool
-		err error
-		_   = err
+		protoReq GetSweptCommitmentTxRequest
+		metadata runtime.ServerMetadata
+		err      error
 	)
-
-	val, ok = pathParams["txid"]
+	val, ok := pathParams["txid"]
 	if !ok {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "txid")
 	}
-
 	protoReq.Txid, err = runtime.String(val)
 	if err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "txid", err)
 	}
-
 	msg, err := server.GetSweptCommitmentTx(ctx, &protoReq)
 	return msg, metadata, err
-
 }
 
 // RegisterIndexerServiceHandlerServer registers the http handlers for service IndexerService to "mux".
@@ -711,16 +536,13 @@ func local_request_IndexerService_GetSweptCommitmentTx_0(ctx context.Context, ma
 // Note that using this registration option will cause many gRPC library features to stop working. Consider using RegisterIndexerServiceHandlerFromEndpoint instead.
 // GRPC interceptors will not work for this type of registration. To use interceptors, you must use the "runtime.WithMiddlewares" option in the "runtime.NewServeMux" call.
 func RegisterIndexerServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux, server IndexerServiceServer) error {
-
-	mux.Handle("GET", pattern_IndexerService_GetCommitmentTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetCommitmentTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetCommitmentTx", runtime.WithHTTPPathPattern("/v1/commitmentTx/{txid}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetCommitmentTx", runtime.WithHTTPPathPattern("/v1/commitmentTx/{txid}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -732,20 +554,15 @@ func RegisterIndexerServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetCommitmentTx_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetVtxoTree_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetVtxoTree_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxoTree", runtime.WithHTTPPathPattern("/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/tree"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxoTree", runtime.WithHTTPPathPattern("/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/tree"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -757,20 +574,15 @@ func RegisterIndexerServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetVtxoTree_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetForfeitTxs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetForfeitTxs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetForfeitTxs", runtime.WithHTTPPathPattern("/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/forfeitTxs"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetForfeitTxs", runtime.WithHTTPPathPattern("/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/forfeitTxs"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -782,20 +594,15 @@ func RegisterIndexerServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetForfeitTxs_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetConnectors_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetConnectors_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetConnectors", runtime.WithHTTPPathPattern("/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/connectors"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetConnectors", runtime.WithHTTPPathPattern("/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/connectors"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -807,20 +614,15 @@ func RegisterIndexerServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetConnectors_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetSpendableVtxos_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetSpendableVtxos_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetSpendableVtxos", runtime.WithHTTPPathPattern("/v1/vtxos/{address}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetSpendableVtxos", runtime.WithHTTPPathPattern("/v1/vtxos/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -832,20 +634,15 @@ func RegisterIndexerServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetSpendableVtxos_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetTransactionHistory_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetTransactionHistory_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetTransactionHistory", runtime.WithHTTPPathPattern("/v1/history/{address}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetTransactionHistory", runtime.WithHTTPPathPattern("/v1/history/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -857,20 +654,15 @@ func RegisterIndexerServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetTransactionHistory_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetVtxoChain_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetVtxoChain_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxoChain", runtime.WithHTTPPathPattern("/v1/vtxo/{outpoint.txid}/{outpoint.vout}/chain"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxoChain", runtime.WithHTTPPathPattern("/v1/vtxo/{outpoint.txid}/{outpoint.vout}/chain"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -882,20 +674,15 @@ func RegisterIndexerServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetVtxoChain_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetVirtualTxs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetVirtualTxs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetVirtualTxs", runtime.WithHTTPPathPattern("/v1/virtualTx/{txids}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetVirtualTxs", runtime.WithHTTPPathPattern("/v1/virtualTx/{txids}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -907,20 +694,15 @@ func RegisterIndexerServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetVirtualTxs_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetSweptCommitmentTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetSweptCommitmentTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetSweptCommitmentTx", runtime.WithHTTPPathPattern("/v1/commitmentTx/{txid}/swept"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetSweptCommitmentTx", runtime.WithHTTPPathPattern("/v1/commitmentTx/{txid}/swept"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -932,9 +714,7 @@ func RegisterIndexerServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetSweptCommitmentTx_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
 
 	return nil
@@ -961,7 +741,6 @@ func RegisterIndexerServiceHandlerFromEndpoint(ctx context.Context, mux *runtime
 			}
 		}()
 	}()
-
 	return RegisterIndexerServiceHandler(ctx, mux, conn)
 }
 
@@ -977,14 +756,11 @@ func RegisterIndexerServiceHandler(ctx context.Context, mux *runtime.ServeMux, c
 // doesn't go through the normal gRPC flow (creating a gRPC client etc.) then it will be up to the passed in
 // "IndexerServiceClient" to call the correct interceptors. This client ignores the HTTP middlewares.
 func RegisterIndexerServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux, client IndexerServiceClient) error {
-
-	mux.Handle("GET", pattern_IndexerService_GetCommitmentTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetCommitmentTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetCommitmentTx", runtime.WithHTTPPathPattern("/v1/commitmentTx/{txid}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetCommitmentTx", runtime.WithHTTPPathPattern("/v1/commitmentTx/{txid}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -995,18 +771,13 @@ func RegisterIndexerServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetCommitmentTx_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetVtxoTree_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetVtxoTree_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxoTree", runtime.WithHTTPPathPattern("/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/tree"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxoTree", runtime.WithHTTPPathPattern("/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/tree"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1017,18 +788,13 @@ func RegisterIndexerServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetVtxoTree_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetForfeitTxs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetForfeitTxs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetForfeitTxs", runtime.WithHTTPPathPattern("/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/forfeitTxs"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetForfeitTxs", runtime.WithHTTPPathPattern("/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/forfeitTxs"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1039,18 +805,13 @@ func RegisterIndexerServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetForfeitTxs_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetConnectors_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetConnectors_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetConnectors", runtime.WithHTTPPathPattern("/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/connectors"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetConnectors", runtime.WithHTTPPathPattern("/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/connectors"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1061,18 +822,13 @@ func RegisterIndexerServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetConnectors_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetSpendableVtxos_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetSpendableVtxos_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetSpendableVtxos", runtime.WithHTTPPathPattern("/v1/vtxos/{address}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetSpendableVtxos", runtime.WithHTTPPathPattern("/v1/vtxos/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1083,18 +839,13 @@ func RegisterIndexerServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetSpendableVtxos_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetTransactionHistory_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetTransactionHistory_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetTransactionHistory", runtime.WithHTTPPathPattern("/v1/history/{address}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetTransactionHistory", runtime.WithHTTPPathPattern("/v1/history/{address}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1105,18 +856,13 @@ func RegisterIndexerServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetTransactionHistory_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetVtxoChain_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetVtxoChain_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxoChain", runtime.WithHTTPPathPattern("/v1/vtxo/{outpoint.txid}/{outpoint.vout}/chain"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxoChain", runtime.WithHTTPPathPattern("/v1/vtxo/{outpoint.txid}/{outpoint.vout}/chain"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1127,18 +873,13 @@ func RegisterIndexerServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetVtxoChain_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetVirtualTxs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetVirtualTxs_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetVirtualTxs", runtime.WithHTTPPathPattern("/v1/virtualTx/{txids}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetVirtualTxs", runtime.WithHTTPPathPattern("/v1/virtualTx/{txids}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1149,18 +890,13 @@ func RegisterIndexerServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetVirtualTxs_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
-	mux.Handle("GET", pattern_IndexerService_GetSweptCommitmentTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetSweptCommitmentTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		var err error
-		var annotatedContext context.Context
-		annotatedContext, err = runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetSweptCommitmentTx", runtime.WithHTTPPathPattern("/v1/commitmentTx/{txid}/swept"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetSweptCommitmentTx", runtime.WithHTTPPathPattern("/v1/commitmentTx/{txid}/swept"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1171,50 +907,31 @@ func RegisterIndexerServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-
 		forward_IndexerService_GetSweptCommitmentTx_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-
 	})
-
 	return nil
 }
 
 var (
-	pattern_IndexerService_GetCommitmentTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "commitmentTx", "txid"}, ""))
-
-	pattern_IndexerService_GetVtxoTree_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "batch", "batch_outpoint.txid", "batch_outpoint.vout", "tree"}, ""))
-
-	pattern_IndexerService_GetForfeitTxs_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "batch", "batch_outpoint.txid", "batch_outpoint.vout", "forfeitTxs"}, ""))
-
-	pattern_IndexerService_GetConnectors_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "batch", "batch_outpoint.txid", "batch_outpoint.vout", "connectors"}, ""))
-
-	pattern_IndexerService_GetSpendableVtxos_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "vtxos", "address"}, ""))
-
+	pattern_IndexerService_GetCommitmentTx_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "commitmentTx", "txid"}, ""))
+	pattern_IndexerService_GetVtxoTree_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "batch", "batch_outpoint.txid", "batch_outpoint.vout", "tree"}, ""))
+	pattern_IndexerService_GetForfeitTxs_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "batch", "batch_outpoint.txid", "batch_outpoint.vout", "forfeitTxs"}, ""))
+	pattern_IndexerService_GetConnectors_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "batch", "batch_outpoint.txid", "batch_outpoint.vout", "connectors"}, ""))
+	pattern_IndexerService_GetSpendableVtxos_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "vtxos", "address"}, ""))
 	pattern_IndexerService_GetTransactionHistory_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "history", "address"}, ""))
-
-	pattern_IndexerService_GetVtxoChain_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "vtxo", "outpoint.txid", "outpoint.vout", "chain"}, ""))
-
-	pattern_IndexerService_GetVirtualTxs_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "virtualTx", "txids"}, ""))
-
-	pattern_IndexerService_GetSweptCommitmentTx_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "commitmentTx", "txid", "swept"}, ""))
+	pattern_IndexerService_GetVtxoChain_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "vtxo", "outpoint.txid", "outpoint.vout", "chain"}, ""))
+	pattern_IndexerService_GetVirtualTxs_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "virtualTx", "txids"}, ""))
+	pattern_IndexerService_GetSweptCommitmentTx_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "commitmentTx", "txid", "swept"}, ""))
 )
 
 var (
-	forward_IndexerService_GetCommitmentTx_0 = runtime.ForwardResponseMessage
-
-	forward_IndexerService_GetVtxoTree_0 = runtime.ForwardResponseMessage
-
-	forward_IndexerService_GetForfeitTxs_0 = runtime.ForwardResponseMessage
-
-	forward_IndexerService_GetConnectors_0 = runtime.ForwardResponseMessage
-
-	forward_IndexerService_GetSpendableVtxos_0 = runtime.ForwardResponseMessage
-
+	forward_IndexerService_GetCommitmentTx_0       = runtime.ForwardResponseMessage
+	forward_IndexerService_GetVtxoTree_0           = runtime.ForwardResponseMessage
+	forward_IndexerService_GetForfeitTxs_0         = runtime.ForwardResponseMessage
+	forward_IndexerService_GetConnectors_0         = runtime.ForwardResponseMessage
+	forward_IndexerService_GetSpendableVtxos_0     = runtime.ForwardResponseMessage
 	forward_IndexerService_GetTransactionHistory_0 = runtime.ForwardResponseMessage
-
-	forward_IndexerService_GetVtxoChain_0 = runtime.ForwardResponseMessage
-
-	forward_IndexerService_GetVirtualTxs_0 = runtime.ForwardResponseMessage
-
-	forward_IndexerService_GetSweptCommitmentTx_0 = runtime.ForwardResponseMessage
+	forward_IndexerService_GetVtxoChain_0          = runtime.ForwardResponseMessage
+	forward_IndexerService_GetVirtualTxs_0         = runtime.ForwardResponseMessage
+	forward_IndexerService_GetSweptCommitmentTx_0  = runtime.ForwardResponseMessage
 )
