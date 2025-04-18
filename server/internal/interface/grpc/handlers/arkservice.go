@@ -735,7 +735,6 @@ func (h *listenerHanlder[T]) removeListener(id string) {
 
 	for i, listener := range h.listeners {
 		if listener.id == id {
-			close(listener.ch)
 			h.listeners = append(h.listeners[:i], h.listeners[i+1:]...)
 			return
 		}
