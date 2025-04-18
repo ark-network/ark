@@ -658,7 +658,11 @@ func (h *handler) listenToTxEvents() {
 			logrus.Debugf("forwarding event to %d listeners", len(h.transactionsListenerHandler.listeners))
 			for _, l := range h.transactionsListenerHandler.listeners {
 				go func(l *listener[*arkv1.GetTransactionsStreamResponse]) {
-					l.ch <- txEvent
+					select {
+					case l.ch <- txEvent:
+					default:
+						logrus.Debugf("failed to send event to listener %s (channel full)", l.id)
+					}
 				}(l)
 			}
 
@@ -685,9 +689,13 @@ func (h *handler) listenToTxEvents() {
 					spendableVtxos := allSpendableVtxos[l.id]
 					spentVtxos := allSpentVtxos[l.id]
 					if len(spendableVtxos) > 0 || len(spentVtxos) > 0 {
-						l.ch <- &arkv1.SubscribeForAddressResponse{
+						select {
+						case l.ch <- &arkv1.SubscribeForAddressResponse{
 							NewVtxos:   spendableVtxos,
 							SpentVtxos: spentVtxos,
+						}:
+						default:
+							logrus.Debugf("failed to send address event to listener %s (channel full)", l.id)
 						}
 					}
 				}
@@ -717,6 +725,7 @@ func (h *listenerHanlder[T]) pushListener(l *listener[T]) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
+	l.ch = make(chan T, 100)
 	h.listeners = append(h.listeners, l)
 }
 
@@ -726,6 +735,7 @@ func (h *listenerHanlder[T]) removeListener(id string) {
 
 	for i, listener := range h.listeners {
 		if listener.id == id {
+			close(listener.ch)
 			h.listeners = append(h.listeners[:i], h.listeners[i+1:]...)
 			return
 		}
