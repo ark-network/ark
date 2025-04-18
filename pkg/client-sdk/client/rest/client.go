@@ -1008,7 +1008,6 @@ func (a *restClient) GetVtxoTree(ctx context.Context, batchOutpoint client.Outpo
 	for _, node := range resp.Payload.VtxoTree {
 		nodes = append(nodes, client.IndexerNode{
 			Txid:       node.Txid,
-			Tx:         node.Tx,
 			ParentTxid: node.ParentTxid,
 			Level:      node.Level,
 			LevelIndex: node.LevelIndex,
@@ -1069,7 +1068,6 @@ func (a *restClient) GetConnectors(ctx context.Context, batchOutpoint client.Out
 	for _, connector := range resp.Payload.Connectors {
 		connectors = append(connectors, client.IndexerNode{
 			Txid:       connector.Txid,
-			Tx:         connector.Tx,
 			ParentTxid: connector.ParentTxid,
 			Level:      connector.Level,
 			LevelIndex: connector.LevelIndex,

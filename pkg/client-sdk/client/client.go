@@ -286,7 +286,6 @@ type PageResponse struct {
 
 type IndexerNode struct {
 	Txid       string
-	Tx         string
 	ParentTxid string
 	Level      int32
 	LevelIndex int32

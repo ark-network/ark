@@ -26,9 +26,6 @@ type V1IndexerNode struct {
 	// parent txid
 	ParentTxid string `json:"parentTxid,omitempty"`
 
-	// tx
-	Tx string `json:"tx,omitempty"`
-
 	// txid
 	Txid string `json:"txid,omitempty"`
 }

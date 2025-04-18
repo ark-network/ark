@@ -563,7 +563,6 @@ func (a *grpcClient) GetVtxoTree(ctx context.Context, batchOutpoint client.Outpo
 	for _, node := range resp.GetVtxoTree() {
 		nodes = append(nodes, client.IndexerNode{
 			Txid:       node.GetTxid(),
-			Tx:         node.GetTx(),
 			ParentTxid: node.GetParentTxid(),
 			Level:      node.GetLevel(),
 			LevelIndex: node.GetLevelIndex(),
@@ -628,7 +627,6 @@ func (a *grpcClient) GetConnectors(ctx context.Context, batchOutpoint client.Out
 	for _, connector := range resp.GetConnectors() {
 		connectors = append(connectors, client.IndexerNode{
 			Txid:       connector.GetTxid(),
-			Tx:         connector.GetTx(),
 			ParentTxid: connector.GetParentTxid(),
 			Level:      connector.GetLevel(),
 			LevelIndex: connector.GetLevelIndex(),
