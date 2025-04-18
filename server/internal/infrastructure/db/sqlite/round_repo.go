@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/infrastructure/db/sqlite/sqlc/queries"
@@ -305,8 +306,8 @@ func (r *roundRepository) GetRoundForfeitTxs(ctx context.Context, roundTxid stri
 	forfeits := make([]domain.ForfeitTx, 0, len(rows))
 	for _, row := range rows {
 		forfeits = append(forfeits, domain.ForfeitTx{
-			Txid: row.Txid,
-			Tx:   row.Tx,
+			Txid: row.Txid.String,
+			Tx:   row.Tx.String,
 		})
 	}
 
@@ -324,11 +325,11 @@ func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid s
 	for _, tx := range rows {
 		level := tx.TreeLevel
 		vtxoTree = extendArray(vtxoTree, int(level.Int64))
-		vtxoTree[int(level.Int64)] = extendArray(vtxoTree[int(level.Int64)], int(tx.Position))
-		if vtxoTree[int(level.Int64)][tx.Position] == (tree.Node{}) {
-			vtxoTree[int(level.Int64)][tx.Position] = tree.Node{
-				Tx:         tx.Tx,
-				Txid:       tx.Txid,
+		vtxoTree[int(level.Int64)] = extendArray(vtxoTree[int(level.Int64)], int(tx.Position.Int64))
+		if vtxoTree[int(level.Int64)][tx.Position.Int64] == (tree.Node{}) {
+			vtxoTree[int(level.Int64)][tx.Position.Int64] = tree.Node{
+				Tx:         tx.Tx.String,
+				Txid:       tx.Txid.String,
 				ParentTxid: tx.ParentTxid.String,
 				Leaf:       tx.IsLeaf.Bool,
 			}

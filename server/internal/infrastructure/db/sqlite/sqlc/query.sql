@@ -93,10 +93,13 @@ SELECT
     r.starting_timestamp,
     r.ending_timestamp,
     (
-        SELECT COALESCE(SUM(v2.amount), 0)
-        FROM vtxo v2
-                 JOIN tx_request req2 ON req2.id = v2.request_id
-        WHERE req2.round_id = r.id
+        SELECT COALESCE(SUM(amount), 0)
+        FROM (
+            SELECT DISTINCT v2.*
+            FROM vtxo v2
+                    JOIN tx_request req2 ON req2.id = v2.request_id
+            WHERE req2.round_id = r.id
+        )
     ) AS total_forfeit_amount,
     (
         SELECT COALESCE(COUNT(v3.txid), 0)
@@ -105,11 +108,14 @@ SELECT
         WHERE req3.round_id = r.id
     ) AS total_input_vtxos,
     (
-        SELECT COALESCE(SUM(rr.amount), 0)
-        FROM receiver rr
-                 JOIN tx_request req4 ON req4.id = rr.request_id
-        WHERE req4.round_id = r.id
-          AND (rr.onchain_address = '' OR rr.onchain_address IS NULL)
+        SELECT COALESCE(SUM(amount), 0)
+        FROM (
+            SELECT DISTINCT rr.*
+            FROM receiver rr
+                JOIN tx_request req4 ON req4.id = rr.request_id
+            WHERE req4.round_id = r.id
+            AND (rr.onchain_address = '' OR rr.onchain_address IS NULL)
+        )
     ) AS total_batch_amount,
     (
         SELECT COUNT(*)
@@ -127,12 +133,14 @@ FROM round r
 WHERE r.txid = ?;
 
 -- name: GetRoundForfeitTxs :many
-SELECT tx.* FROM tx
-WHERE tx.round_id = ? AND tx.type = 'forfeit';
+SELECT tx.* FROM round
+LEFT OUTER JOIN tx ON round.id=tx.round_id
+WHERE round.txid = ? AND tx.type = 'forfeit';
 
 -- name: GetRoundConnectorTreeTxs :many
-SELECT tx.* FROM tx
-WHERE tx.round_id = ? AND tx.type = 'tree';
+SELECT tx.* FROM round
+LEFT OUTER JOIN tx ON round.id=tx.round_id
+WHERE round.txid = ? AND tx.type = 'connector';
 
 -- name: GetSpendableVtxosWithPubKey :many
 SELECT vtxo.* FROM vtxo
@@ -183,7 +191,7 @@ SELECT sqlc.embed(vtxo) FROM vtxo;
 
 -- name: SelectVtxosByRoundTxid :many
 SELECT sqlc.embed(vtxo) FROM vtxo
-WHERE round_tx = ?;
+WHERE round_tx = ? AND (redeem_tx IS NULL or redeem_tx = '');
 
 -- name: MarkVtxoAsRedeemed :exec
 UPDATE vtxo SET redeemed = true WHERE txid = ? AND vout = ?;
