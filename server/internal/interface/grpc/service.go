@@ -289,6 +289,11 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		); err != nil {
 			return err
 		}
+		if err := arkv1.RegisterIndexerServiceHandler(
+			ctx, gwmux, conn,
+		); err != nil {
+			return err
+		}
 	}
 	grpcGateway := http.Handler(gwmux)
 
