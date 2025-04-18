@@ -2,10 +2,11 @@ package application
 
 import (
 	"context"
-	"github.com/btcsuite/btcd/btcutil/psbt"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/stretchr/testify/assert"
 
 	"github.com/ark-network/ark/server/internal/core/domain" // adapt for your project
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -96,7 +97,7 @@ func TestBuildChain(t *testing.T) {
 		Vout: 0,
 	}
 
-	resp, err := svc.GetVtxoChain(ctx, outpoint, Page{})
+	resp, err := svc.GetVtxoChain(ctx, outpoint, nil)
 	require.NoError(t, err, "buildChain should succeed")
 
 	redeemTx3Txs := resp.Transactions[redeemTx3ID]
