@@ -197,7 +197,7 @@ func (a *Client) IndexerServiceGetSpendableVtxos(params *IndexerServiceGetSpenda
 	op := &runtime.ClientOperation{
 		ID:                 "IndexerService_GetSpendableVtxos",
 		Method:             "GET",
-		PathPattern:        "/v1/vtxos/{address}",
+		PathPattern:        "/v1/spendableVtxos/{address}",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},

@@ -88,12 +88,12 @@ func (o *IndexerServiceGetSpendableVtxosOK) Code() int {
 
 func (o *IndexerServiceGetSpendableVtxosOK) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/vtxos/{address}][%d] indexerServiceGetSpendableVtxosOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/spendableVtxos/{address}][%d] indexerServiceGetSpendableVtxosOK %s", 200, payload)
 }
 
 func (o *IndexerServiceGetSpendableVtxosOK) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/vtxos/{address}][%d] indexerServiceGetSpendableVtxosOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/spendableVtxos/{address}][%d] indexerServiceGetSpendableVtxosOK %s", 200, payload)
 }
 
 func (o *IndexerServiceGetSpendableVtxosOK) GetPayload() *models.V1GetSpendableVtxosResponse {
@@ -162,12 +162,12 @@ func (o *IndexerServiceGetSpendableVtxosDefault) Code() int {
 
 func (o *IndexerServiceGetSpendableVtxosDefault) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/vtxos/{address}][%d] IndexerService_GetSpendableVtxos default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/spendableVtxos/{address}][%d] IndexerService_GetSpendableVtxos default %s", o._statusCode, payload)
 }
 
 func (o *IndexerServiceGetSpendableVtxosDefault) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/vtxos/{address}][%d] IndexerService_GetSpendableVtxos default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/spendableVtxos/{address}][%d] IndexerService_GetSpendableVtxos default %s", o._statusCode, payload)
 }
 
 func (o *IndexerServiceGetSpendableVtxosDefault) GetPayload() *models.RPCStatus {

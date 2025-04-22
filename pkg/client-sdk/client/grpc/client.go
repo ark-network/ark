@@ -755,10 +755,11 @@ func (a *grpcClient) GetVtxoChain(ctx context.Context, outpoint client.Outpoint,
 		return nil, err
 	}
 
-	graph := make(map[string]*client.Transactions)
-	for txid, txs := range resp.GetGraph() {
-		graph[txid] = &client.Transactions{
-			Txs: txs.GetTxs(),
+	graph := make(map[string]*client.ChainWithExpiry)
+	for txid, chain := range resp.GetGraph() {
+		graph[txid] = &client.ChainWithExpiry{
+			Txs:       txChain{chain.GetTxs()}.parse(),
+			ExpiresAt: chain.GetExpiresAt(),
 		}
 	}
 

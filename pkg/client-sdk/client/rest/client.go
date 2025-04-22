@@ -1241,10 +1241,26 @@ func (a *restClient) GetVtxoChain(ctx context.Context, outpoint client.Outpoint,
 		return nil, err
 	}
 
-	graph := make(map[string]*client.Transactions)
+	graph := make(map[string]*client.ChainWithExpiry)
 	for k, v := range resp.Payload.Graph {
-		graph[k] = &client.Transactions{
-			Txs: v.Txs,
+		txs := make([]client.ChainTx, 0, len(v.Txs))
+		for _, tx := range v.Txs {
+			txType := "virtual"
+			if *tx.Type == models.V1IndexerChainedTxTypeINDEXERCHAINEDTXTYPECOMMITMENT {
+				txType = "commitment"
+			}
+			txs = append(txs, client.ChainTx{
+				Txid: tx.Txid,
+				Type: txType,
+			})
+		}
+		expiresAt, err := strconv.ParseInt(v.ExpiresAt, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		graph[k] = &client.ChainWithExpiry{
+			Txs:       txs,
+			ExpiresAt: expiresAt,
 		}
 	}
 

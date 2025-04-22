@@ -7,7 +7,9 @@ package models
 
 import (
 	"context"
+	"strconv"
 
+	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
@@ -17,17 +19,89 @@ import (
 // swagger:model v1IndexerTransactions
 type V1IndexerTransactions struct {
 
+	// expires at
+	ExpiresAt string `json:"expiresAt,omitempty"`
+
 	// txs
-	Txs []string `json:"txs"`
+	Txs []*V1IndexerChain `json:"txs"`
 }
 
 // Validate validates this v1 indexer transactions
 func (m *V1IndexerTransactions) Validate(formats strfmt.Registry) error {
+	var res []error
+
+	if err := m.validateTxs(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
 	return nil
 }
 
-// ContextValidate validates this v1 indexer transactions based on context it is used
+func (m *V1IndexerTransactions) validateTxs(formats strfmt.Registry) error {
+	if swag.IsZero(m.Txs) { // not required
+		return nil
+	}
+
+	for i := 0; i < len(m.Txs); i++ {
+		if swag.IsZero(m.Txs[i]) { // not required
+			continue
+		}
+
+		if m.Txs[i] != nil {
+			if err := m.Txs[i].Validate(formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("txs" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("txs" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
+		}
+
+	}
+
+	return nil
+}
+
+// ContextValidate validate this v1 indexer transactions based on the context it is used
 func (m *V1IndexerTransactions) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+	var res []error
+
+	if err := m.contextValidateTxs(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
+	return nil
+}
+
+func (m *V1IndexerTransactions) contextValidateTxs(ctx context.Context, formats strfmt.Registry) error {
+
+	for i := 0; i < len(m.Txs); i++ {
+
+		if m.Txs[i] != nil {
+
+			if swag.IsZero(m.Txs[i]) { // not required
+				return nil
+			}
+
+			if err := m.Txs[i].ContextValidate(ctx, formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("txs" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("txs" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
+		}
+
+	}
+
 	return nil
 }
 

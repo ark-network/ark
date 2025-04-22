@@ -361,12 +361,18 @@ type TransactionHistoryResponse struct {
 	Page    PageResponse
 }
 
-type Transactions struct {
-	Txs []string
+type ChainWithExpiry struct {
+	Txs       []ChainTx
+	ExpiresAt int64
+}
+
+type ChainTx struct {
+	Txid string
+	Type string
 }
 
 type VtxoChainResponse struct {
-	Graph map[string]*Transactions
+	Graph map[string]*ChainWithExpiry
 	Page  PageResponse
 }
 
