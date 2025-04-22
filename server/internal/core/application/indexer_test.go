@@ -1,4 +1,4 @@
-package application
+package application_test
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/stretchr/testify/assert"
 
+	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain" // adapt for your project
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
@@ -90,9 +91,9 @@ func TestBuildChain(t *testing.T) {
 
 	vtxoRepo := &MockVtxoRepo{data: mockData}
 	repoManager := &MockRepoManager{vtxoRepo: vtxoRepo}
-	svc := indexerService{repoManager: repoManager}
+	svc := application.NewIndexerService(nil, repoManager)
 
-	outpoint := Outpoint{
+	outpoint := application.Outpoint{
 		Txid: redeemTx3ID,
 		Vout: 0,
 	}
@@ -102,20 +103,25 @@ func TestBuildChain(t *testing.T) {
 
 	redeemTx3Txs := resp.Transactions[redeemTx3ID]
 	assert.Equal(t, len(redeemTx3Txs.Txs), 2)
-	assert.Equal(t, redeemTx3Txs.Txs[0], redeemTx1ID)
-	assert.Equal(t, redeemTx3Txs.Txs[1], redeemTx2ID)
+	assert.Equal(t, redeemTx3Txs.Txs[0].Txid, redeemTx1ID)
+	assert.Equal(t, redeemTx3Txs.Txs[0].Type, "virtual")
+	assert.Equal(t, redeemTx3Txs.Txs[1].Txid, redeemTx2ID)
+	assert.Equal(t, redeemTx3Txs.Txs[1].Type, "virtual")
 
 	redeemTx2Txs := resp.Transactions[redeemTx2ID]
 	assert.Equal(t, len(redeemTx2Txs.Txs), 1)
-	assert.Equal(t, redeemTx2Txs.Txs[0], redeemTx1ID)
+	assert.Equal(t, redeemTx2Txs.Txs[0].Txid, redeemTx1ID)
+	assert.Equal(t, redeemTx2Txs.Txs[0].Type, "virtual")
 
 	redeemTx1Txs := resp.Transactions[redeemTx1ID]
 	assert.Equal(t, len(redeemTx1Txs.Txs), 1)
-	assert.Equal(t, redeemTx1Txs.Txs[0], "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	assert.Equal(t, redeemTx1Txs.Txs[0].Txid, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	assert.Equal(t, redeemTx1Txs.Txs[0].Type, "virtual")
 
 	leafTxTxs := resp.Transactions["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
 	assert.Equal(t, len(leafTxTxs.Txs), 1)
-	assert.Equal(t, leafTxTxs.Txs[0], "roundTxid")
+	assert.Equal(t, leafTxTxs.Txs[0].Txid, "roundTxid")
+	assert.Equal(t, leafTxTxs.Txs[0].Type, "commitment")
 }
 
 type MockRepoManager struct {
