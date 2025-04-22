@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"strings"
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
@@ -92,7 +93,11 @@ func (h *handler) GetInfo(
 			Period:        int64(info.NextMarketHour.Period.Seconds()),
 			RoundInterval: int64(info.NextMarketHour.RoundInterval.Seconds()),
 		},
-		Version: h.version,
+		Version:       h.version,
+		UtxoMinAmount: info.UtxoMinAmount,
+		UtxoMaxAmount: info.UtxoMaxAmount,
+		VtxoMinAmount: info.VtxoMinAmount,
+		VtxoMaxAmount: info.VtxoMaxAmount,
 	}, nil
 }
 
@@ -520,7 +525,7 @@ func (h *handler) SubscribeForAddress(
 	}
 
 	listener := &listener[*arkv1.SubscribeForAddressResponse]{
-		id: vtxoScript,
+		id: fmt.Sprintf("%s:%s", uuid.NewString(), vtxoScript),
 		ch: make(chan *arkv1.SubscribeForAddressResponse),
 	}
 
@@ -678,8 +683,9 @@ func (h *handler) listenToTxEvents() {
 				}
 
 				for _, l := range h.addressSubsHandler.listeners {
-					spendableVtxos := allSpendableVtxos[l.id]
-					spentVtxos := allSpentVtxos[l.id]
+					vtxoScript := strings.Split(l.id, ":")[1]
+					spendableVtxos := allSpendableVtxos[vtxoScript]
+					spentVtxos := allSpentVtxos[vtxoScript]
 					if len(spendableVtxos) > 0 || len(spentVtxos) > 0 {
 						l.ch <- &arkv1.SubscribeForAddressResponse{
 							NewVtxos:   spendableVtxos,

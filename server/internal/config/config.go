@@ -185,6 +185,10 @@ var (
 	defaultMarketHourEndTime   = defaultMarketHourStartTime.Add(time.Hour)
 	defaultMarketHourPeriod    = 24 * time.Hour
 	defaultMarketHourInterval  = time.Duration(defaultRoundInterval) * time.Second
+	defaultUtxoMaxAmount       = -1 // -1 means no limit (default), 0 means boarding not allowed
+	defaultUtxoMinAmount       = -1 // -1 means native dust limit (default)
+	defaultVtxoMinAmount       = -1 // -1 means native dust limit (default)
+	defaultVtxoMaxAmount       = -1 // -1 means no limit (default)
 
 	defaultAllowZeroFees             = false
 	defaultRoundMaxParticipantsCount = 128
@@ -216,6 +220,11 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(MarketHourRoundInterval, defaultMarketHourInterval)
 	viper.SetDefault(AllowZeroFees, defaultAllowZeroFees)
 	viper.SetDefault(RoundMaxParticipantsCount, defaultRoundMaxParticipantsCount)
+	viper.SetDefault(UtxoMaxAmount, defaultUtxoMaxAmount)
+	viper.SetDefault(UtxoMinAmount, defaultUtxoMinAmount)
+	viper.SetDefault(VtxoMaxAmount, defaultVtxoMaxAmount)
+	viper.SetDefault(VtxoMinAmount, defaultVtxoMinAmount)
+
 	net, err := getNetwork()
 	if err != nil {
 		return nil, fmt.Errorf("error while getting network: %s", err)
