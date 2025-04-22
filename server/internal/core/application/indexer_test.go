@@ -101,21 +101,21 @@ func TestBuildChain(t *testing.T) {
 	require.NoError(t, err, "buildChain should succeed")
 
 	redeemTx3Txs := resp.Transactions[redeemTx3ID]
-	assert.Equal(t, len(redeemTx3Txs), 2)
-	assert.Equal(t, redeemTx3Txs[0], redeemTx1ID)
-	assert.Equal(t, redeemTx3Txs[1], redeemTx2ID)
+	assert.Equal(t, len(redeemTx3Txs.Txs), 2)
+	assert.Equal(t, redeemTx3Txs.Txs[0], redeemTx1ID)
+	assert.Equal(t, redeemTx3Txs.Txs[1], redeemTx2ID)
 
 	redeemTx2Txs := resp.Transactions[redeemTx2ID]
-	assert.Equal(t, len(redeemTx2Txs), 1)
-	assert.Equal(t, redeemTx2Txs[0], redeemTx1ID)
+	assert.Equal(t, len(redeemTx2Txs.Txs), 1)
+	assert.Equal(t, redeemTx2Txs.Txs[0], redeemTx1ID)
 
 	redeemTx1Txs := resp.Transactions[redeemTx1ID]
-	assert.Equal(t, len(redeemTx1Txs), 1)
-	assert.Equal(t, redeemTx1Txs[0], "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
+	assert.Equal(t, len(redeemTx1Txs.Txs), 1)
+	assert.Equal(t, redeemTx1Txs.Txs[0], "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa")
 
 	leafTxTxs := resp.Transactions["aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"]
-	assert.Equal(t, len(leafTxTxs), 1)
-	assert.Equal(t, leafTxTxs[0], "roundTxid")
+	assert.Equal(t, len(leafTxTxs.Txs), 1)
+	assert.Equal(t, leafTxTxs.Txs[0], "roundTxid")
 }
 
 type MockRepoManager struct {
@@ -171,6 +171,9 @@ func (m *MockVtxoRepo) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtxo,
 }
 func (m *MockVtxoRepo) GetAll(ctx context.Context) ([]domain.Vtxo, error) { panic("not implemented") }
 func (m *MockVtxoRepo) UpdateExpireAt(ctx context.Context, vtxos []domain.VtxoKey, expireAt int64) error {
+	panic("not implemented")
+}
+func (m *MockVtxoRepo) GetAllVtxosWithPubKey(ctx context.Context, pubkey string) ([]domain.Vtxo, []domain.Vtxo, error) {
 	panic("not implemented")
 }
 func (m *MockVtxoRepo) Close() {}

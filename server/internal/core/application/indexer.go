@@ -157,22 +157,11 @@ func (i *indexerService) GetSpendableVtxos(ctx context.Context, address string, 
 }
 
 func (i *indexerService) GetTransactionHistory(
-	ctx context.Context, address string, start, end int64, page *Page,
+	ctx context.Context, pubkey string, start, end int64, page *Page,
 ) (*TxHistoryResp, error) {
-	allVtxos, err := i.repoManager.Vtxos().GetAll(ctx)
+	spendable, spent, err := i.repoManager.Vtxos().GetAllVtxosWithPubKey(ctx, pubkey)
 	if err != nil {
 		return nil, err
-	}
-
-	spendable := make([]domain.Vtxo, 0)
-	spent := make([]domain.Vtxo, 0)
-
-	for _, vtxo := range allVtxos {
-		if vtxo.Spent || vtxo.Swept {
-			spent = append(spent, vtxo)
-		} else {
-			spendable = append(spendable, vtxo)
-		}
 	}
 
 	txs, err := vtxosToTxs(spendable, spent)
@@ -190,10 +179,25 @@ func (i *indexerService) GetTransactionHistory(
 }
 
 func filterByDate(txs []TxHistoryRecord, start, end int64) []TxHistoryRecord {
+	if start == 0 && end == 0 {
+		return txs
+	}
+
 	var filteredTxs []TxHistoryRecord
 	for _, tx := range txs {
-		if tx.CreatedAt.Unix() >= start && tx.CreatedAt.Unix() <= end {
-			filteredTxs = append(filteredTxs, tx)
+		switch {
+		case start > 0 && end > 0:
+			if tx.CreatedAt.Unix() >= start && tx.CreatedAt.Unix() <= end {
+				filteredTxs = append(filteredTxs, tx)
+			}
+		case start > 0 && end == 0:
+			if tx.CreatedAt.Unix() >= start {
+				filteredTxs = append(filteredTxs, tx)
+			}
+		case end > 0 && start == 0:
+			if tx.CreatedAt.Unix() <= end {
+				filteredTxs = append(filteredTxs, tx)
+			}
 		}
 	}
 	return filteredTxs
@@ -205,7 +209,7 @@ type vtxoKeyWithCreatedAt struct {
 }
 
 func (i *indexerService) GetVtxoChain(ctx context.Context, vtxoKey Outpoint, page *Page) (*VtxoChainResp, error) {
-	chainMap := make(map[vtxoKeyWithCreatedAt][]string)
+	chainMap := make(map[vtxoKeyWithCreatedAt]ChainWithExpiry)
 
 	outpoint := domain.VtxoKey{
 		Txid: vtxoKey.Txid,
@@ -222,12 +226,12 @@ func (i *indexerService) GetVtxoChain(ctx context.Context, vtxoKey Outpoint, pag
 	}
 
 	sort.Slice(chainSlice, func(i, j int) bool {
-		return chainSlice[i].CreatedAt > chainSlice[j].CreatedAt
+		return chainSlice[i].CreatedAt < chainSlice[j].CreatedAt
 	})
 
 	pagedChainSlice, pageResp := paginate(chainSlice, page, maxPageSizeVtxoChain)
 
-	txMap := make(map[string][]string)
+	txMap := make(map[string]ChainWithExpiry)
 	for _, vtxo := range pagedChainSlice {
 		txMap[vtxo.Txid] = chainMap[vtxo]
 	}
@@ -241,7 +245,7 @@ func (i *indexerService) GetVtxoChain(ctx context.Context, vtxoKey Outpoint, pag
 func (i *indexerService) buildChain(
 	ctx context.Context,
 	outpoint domain.VtxoKey,
-	chain map[vtxoKeyWithCreatedAt][]string,
+	chain map[vtxoKeyWithCreatedAt]ChainWithExpiry,
 	isFirst bool,
 ) error {
 	vtxos, err := i.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{outpoint})
@@ -259,14 +263,25 @@ func (i *indexerService) buildChain(
 		CreatedAt: vtxo.CreatedAt,
 	}
 	if _, ok := chain[key]; !ok {
-		chain[key] = make([]string, 0)
+		chain[key] = ChainWithExpiry{
+			Txs:       make([]ChainTx, 0),
+			ExpiresAt: vtxo.ExpireAt,
+		}
 	} else {
 		return nil
 	}
 
 	//finish chain if this is the leaf Vtxo
 	if !vtxo.IsPending() {
-		chain[key] = append(chain[key], vtxo.RoundTxid)
+		txs := chain[key].Txs
+		txs = append(txs, ChainTx{
+			Txid: vtxo.RoundTxid,
+			Type: "commitment",
+		})
+		chain[key] = ChainWithExpiry{
+			Txs:       txs,
+			ExpiresAt: chain[key].ExpiresAt,
+		}
 		return nil
 	}
 
@@ -276,7 +291,15 @@ func (i *indexerService) buildChain(
 	}
 
 	for _, in := range redeemPsbt.UnsignedTx.TxIn {
-		chain[key] = append(chain[key], in.PreviousOutPoint.Hash.String())
+		txs := chain[key].Txs
+		txs = append(txs, ChainTx{
+			Txid: in.PreviousOutPoint.Hash.String(),
+			Type: "virtual",
+		})
+		chain[key] = ChainWithExpiry{
+			Txs:       txs,
+			ExpiresAt: chain[key].ExpiresAt,
+		}
 		parentOutpoint := domain.VtxoKey{
 			Txid: in.PreviousOutPoint.Hash.String(),
 			VOut: in.PreviousOutPoint.Index,
