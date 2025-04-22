@@ -19,10 +19,14 @@ Welcome to the Ark monorepo, a comprehensive solution for off-chain Bitcoin tran
 
 ## Supported Networks and Wallets
 
-|         | Covenant-less                | Covenant                               |
-|---------|-----------------------------|-----------------------------------------|
-| Network | Bitcoin signet, Bitcoin regtest | Liquid, Liquid testnet, Liquid regtest |
-| Wallet  | Embedded [lnwallet](https://pkg.go.dev/github.com/lightningnetwork/lnd/lnwallet/btcwallet) | [Ocean](https://github.com/vulpemventures/ocean) wallet |
+`arkd` supports the following Bitcoin network:
+* regtest
+* testnet3
+* signet
+* mutinynet
+* mainnet
+
+and uses [lnwallet](https://pkg.go.dev/github.com/lightningnetwork/lnd/lnwallet/btcwallet) as embedded on-chain wallet.
 
 ## Usage Documentation
 
