@@ -40,8 +40,17 @@ ON CONFLICT(id) DO UPDATE SET
     swept = EXCLUDED.swept;
 
 -- name: GetTxsByTxid :many
-SELECT sqlc.embed(tx) FROM tx
-WHERE txid in (sqlc.slice('ids'));
+SELECT
+    tx.txid,
+    tx.tx AS data
+FROM tx
+WHERE tx.txid IN (sqlc.slice('ids1'))
+UNION
+SELECT
+    vtxo.txid,
+    vtxo.redeem_tx AS data
+FROM vtxo
+WHERE vtxo.txid IN (sqlc.slice('ids2')) AND vtxo.redeem_tx IS NOT '';
 
 -- name: UpsertTxRequest :exec
 INSERT INTO tx_request (id, round_id) VALUES (?, ?)

@@ -373,14 +373,17 @@ func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) 
 }
 
 func (r *roundRepository) GetTxsWithTxids(ctx context.Context, txids []string) ([]string, error) {
-	rows, err := r.querier.GetTxsByTxid(ctx, txids)
+	rows, err := r.querier.GetTxsByTxid(ctx, queries.GetTxsByTxidParams{
+		Ids1: txids,
+		Ids2: txids,
+	})
 	if err != nil {
 		return nil, err
 	}
 
 	resp := make([]string, 0, len(rows))
 	for _, row := range rows {
-		resp = append(resp, row.Tx.Tx)
+		resp = append(resp, row.Data)
 	}
 
 	return resp, nil

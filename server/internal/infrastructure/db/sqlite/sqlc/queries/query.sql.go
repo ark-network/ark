@@ -272,24 +272,47 @@ func (q *Queries) GetSpendableVtxosWithPubKey(ctx context.Context, pubkey string
 }
 
 const getTxsByTxid = `-- name: GetTxsByTxid :many
-SELECT tx.txid, tx.tx, tx.round_id, tx.type, tx.position, tx.tree_level, tx.parent_txid, tx.is_leaf FROM tx
-WHERE txid in (/*SLICE:ids*/?)
+SELECT
+    tx.txid,
+    tx.tx AS data
+FROM tx
+WHERE tx.txid IN (/*SLICE:ids1*/?)
+UNION
+SELECT
+    vtxo.txid,
+    vtxo.redeem_tx AS data
+FROM vtxo
+WHERE vtxo.txid IN (/*SLICE:ids2*/?) AND vtxo.redeem_tx IS NOT ''
 `
 
-type GetTxsByTxidRow struct {
-	Tx Tx
+type GetTxsByTxidParams struct {
+	Ids1 []string
+	Ids2 []string
 }
 
-func (q *Queries) GetTxsByTxid(ctx context.Context, ids []string) ([]GetTxsByTxidRow, error) {
+type GetTxsByTxidRow struct {
+	Txid string
+	Data string
+}
+
+func (q *Queries) GetTxsByTxid(ctx context.Context, arg GetTxsByTxidParams) ([]GetTxsByTxidRow, error) {
 	query := getTxsByTxid
 	var queryParams []interface{}
-	if len(ids) > 0 {
-		for _, v := range ids {
+	if len(arg.Ids1) > 0 {
+		for _, v := range arg.Ids1 {
 			queryParams = append(queryParams, v)
 		}
-		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+		query = strings.Replace(query, "/*SLICE:ids1*/?", strings.Repeat(",?", len(arg.Ids1))[1:], 1)
 	} else {
-		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+		query = strings.Replace(query, "/*SLICE:ids1*/?", "NULL", 1)
+	}
+	if len(arg.Ids2) > 0 {
+		for _, v := range arg.Ids2 {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids2*/?", strings.Repeat(",?", len(arg.Ids2))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids2*/?", "NULL", 1)
 	}
 	rows, err := q.db.QueryContext(ctx, query, queryParams...)
 	if err != nil {
@@ -299,16 +322,7 @@ func (q *Queries) GetTxsByTxid(ctx context.Context, ids []string) ([]GetTxsByTxi
 	var items []GetTxsByTxidRow
 	for rows.Next() {
 		var i GetTxsByTxidRow
-		if err := rows.Scan(
-			&i.Tx.Txid,
-			&i.Tx.Tx,
-			&i.Tx.RoundID,
-			&i.Tx.Type,
-			&i.Tx.Position,
-			&i.Tx.TreeLevel,
-			&i.Tx.ParentTxid,
-			&i.Tx.IsLeaf,
-		); err != nil {
+		if err := rows.Scan(&i.Txid, &i.Data); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
