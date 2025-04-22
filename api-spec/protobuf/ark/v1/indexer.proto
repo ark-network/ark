@@ -27,7 +27,7 @@ service IndexerService {
   };
   rpc GetSpendableVtxos(GetSpendableVtxosRequest) returns (GetSpendableVtxosResponse) {
     option (google.api.http) = {
-      get: "/v1/vtxos/{address}"
+      get: "/v1/spendableVtxos/{address}"
     };
   };
   rpc GetTransactionHistory(GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse) {
@@ -143,9 +143,9 @@ message SubscribeForAddressesResponse {
 }
 
 message IndexerTransactions {
-  repeated string txs = 1;
+  repeated IndexerChain txs = 1;
+  int64 expires_at = 2;
 }
-
 
 message IndexerBatch {
   uint64 total_batch_amount = 1;
@@ -180,6 +180,11 @@ message IndexerVtxo {
   string spent_by = 9;
 }
 
+message IndexerChain {
+  string txid = 1;
+  IndexerChainedTxType type = 2;
+}
+
 message IndexerTxHistoryRecord {
   oneof key {
     string boarding_txid = 1;
@@ -199,6 +204,12 @@ enum IndexerTxType {
   INDEXER_TX_TYPE_RECEIVED = 1;
   INDEXER_TX_TYPE_SENT = 2;
   INDEXER_TX_TYPE_SWEEP = 3;
+}
+
+enum IndexerChainedTxType {
+  INDEXER_CHAINED_TX_TYPE_UNSPECIFIED = 0;
+  INDEXER_CHAINED_TX_TYPE_VIRTUAL = 1;
+  INDEXER_CHAINED_TX_TYPE_COMMITMENT = 2;
 }
 
 message IndexerPageRequest {

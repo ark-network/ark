@@ -287,6 +287,50 @@
         ]
       }
     },
+    "/v1/spendableVtxos/{address}": {
+      "get": {
+        "operationId": "IndexerService_GetSpendableVtxos",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetSpendableVtxosResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
     "/v1/virtualTx/{txids}": {
       "get": {
         "operationId": "IndexerService_GetVirtualTxs",
@@ -366,50 +410,6 @@
             "required": true,
             "type": "integer",
             "format": "int64"
-          },
-          {
-            "name": "page.size",
-            "in": "query",
-            "required": false,
-            "type": "integer",
-            "format": "int32"
-          },
-          {
-            "name": "page.index",
-            "in": "query",
-            "required": false,
-            "type": "integer",
-            "format": "int32"
-          }
-        ],
-        "tags": [
-          "IndexerService"
-        ]
-      }
-    },
-    "/v1/vtxos/{address}": {
-      "get": {
-        "operationId": "IndexerService_GetSpendableVtxos",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetSpendableVtxosResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "address",
-            "in": "path",
-            "required": true,
-            "type": "string"
           },
           {
             "name": "page.size",
@@ -621,6 +621,26 @@
         }
       }
     },
+    "v1IndexerChain": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/v1IndexerChainedTxType"
+        }
+      }
+    },
+    "v1IndexerChainedTxType": {
+      "type": "string",
+      "enum": [
+        "INDEXER_CHAINED_TX_TYPE_UNSPECIFIED",
+        "INDEXER_CHAINED_TX_TYPE_VIRTUAL",
+        "INDEXER_CHAINED_TX_TYPE_COMMITMENT"
+      ],
+      "default": "INDEXER_CHAINED_TX_TYPE_UNSPECIFIED"
+    },
     "v1IndexerNode": {
       "type": "object",
       "properties": {
@@ -688,8 +708,13 @@
         "txs": {
           "type": "array",
           "items": {
-            "type": "string"
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerChain"
           }
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
