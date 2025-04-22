@@ -708,12 +708,13 @@ func (a *grpcClient) GetTransactionHistory(ctx context.Context, address string, 
 	history := make([]client.TxHistoryRecord, 0, len(resp.GetHistory()))
 	for _, record := range resp.GetHistory() {
 		history = append(history, client.TxHistoryRecord{
-			Txid:        getTxidFromHistoryRecord(record),
-			Type:        client.TxType(record.GetType()),
-			Amount:      record.GetAmount(),
-			CreatedAt:   record.GetCreatedAt(),
-			ConfirmedAt: record.GetConfirmedAt(),
-			IsSettled:   record.GetIsSettled(),
+			CommitmentTxid: record.GetCommitmentTxid(),
+			VirtualTxid:    record.GetVirtualTxid(),
+			Type:           client.TxType(record.GetType()),
+			Amount:         record.GetAmount(),
+			CreatedAt:      record.GetCreatedAt(),
+			ConfirmedAt:    record.GetConfirmedAt(),
+			IsSettled:      record.GetIsSettled(),
 		})
 	}
 
@@ -725,21 +726,6 @@ func (a *grpcClient) GetTransactionHistory(ctx context.Context, address string, 
 			Total:   resp.GetPage().GetTotal(),
 		},
 	}, nil
-}
-
-func getTxidFromHistoryRecord(record *arkv1.IndexerTxHistoryRecord) string {
-	switch {
-	case record.GetBoardingTxid() != "":
-		return record.GetBoardingTxid()
-	case record.GetCommitmentTxid() != "":
-		return record.GetCommitmentTxid()
-	case record.GetSweepTxid() != "":
-		return record.GetSweepTxid()
-	case record.GetArkTxid() != "":
-		return record.GetArkTxid()
-	default:
-		return ""
-	}
 }
 
 func (a *grpcClient) GetVtxoChain(ctx context.Context, outpoint client.Outpoint, page client.PageRequest) (*client.VtxoChainResponse, error) {

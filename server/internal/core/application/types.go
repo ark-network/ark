@@ -223,12 +223,13 @@ type TxHistoryResp struct {
 }
 
 type TxHistoryRecord struct {
-	Txid        string
-	Type        TxType
-	Amount      uint64
-	CreatedAt   time.Time
-	ConfirmedAt int64
-	Settled     bool
+	CommitmentTxid string
+	VirtualTxid    string
+	Type           TxType
+	Amount         uint64
+	CreatedAt      time.Time
+	ConfirmedAt    int64
+	Settled        bool
 }
 
 type Page struct {

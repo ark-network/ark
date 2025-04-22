@@ -352,12 +352,13 @@ const (
 )
 
 type TxHistoryRecord struct {
-	Txid        string
-	Type        TxType
-	Amount      uint64
-	CreatedAt   int64
-	ConfirmedAt int64
-	IsSettled   bool
+	CommitmentTxid string
+	VirtualTxid    string
+	Type           TxType
+	Amount         uint64
+	CreatedAt      int64
+	ConfirmedAt    int64
+	IsSettled      bool
 }
 
 type TransactionHistoryResponse struct {

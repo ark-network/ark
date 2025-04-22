@@ -721,16 +721,10 @@
     "v1IndexerTxHistoryRecord": {
       "type": "object",
       "properties": {
-        "boardingTxid": {
-          "type": "string"
-        },
         "commitmentTxid": {
           "type": "string"
         },
-        "sweepTxid": {
-          "type": "string"
-        },
-        "arkTxid": {
+        "virtualTxid": {
           "type": "string"
         },
         "type": {

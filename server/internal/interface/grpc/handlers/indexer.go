@@ -217,15 +217,26 @@ func (e indexerService) GetTransactionHistory(
 		return nil, status.Errorf(codes.Internal, "failed to get transaction history: %v", err)
 	}
 
-	history := make([]*arkv1.IndexerTxHistoryRecord, len(resp.Records))
-	for i, record := range resp.Records {
-		history[i] = &arkv1.IndexerTxHistoryRecord{
+	history := make([]*arkv1.IndexerTxHistoryRecord, 0, len(resp.Records))
+	for _, record := range resp.Records {
+		historyRecord := &arkv1.IndexerTxHistoryRecord{
 			Type:        arkv1.IndexerTxType(record.Type),
 			Amount:      record.Amount,
 			CreatedAt:   record.CreatedAt.Unix(),
 			ConfirmedAt: record.ConfirmedAt,
 			IsSettled:   record.Settled,
 		}
+		if record.CommitmentTxid != "" {
+			historyRecord.Key = &arkv1.IndexerTxHistoryRecord_CommitmentTxid{
+				CommitmentTxid: record.CommitmentTxid,
+			}
+		}
+		if record.VirtualTxid != "" {
+			historyRecord.Key = &arkv1.IndexerTxHistoryRecord_VirtualTxid{
+				VirtualTxid: record.VirtualTxid,
+			}
+		}
+		history = append(history, historyRecord)
 	}
 
 	return &arkv1.GetTransactionHistoryResponse{

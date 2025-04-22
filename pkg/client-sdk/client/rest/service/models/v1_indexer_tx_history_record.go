@@ -21,12 +21,6 @@ type V1IndexerTxHistoryRecord struct {
 	// amount
 	Amount string `json:"amount,omitempty"`
 
-	// ark txid
-	ArkTxid string `json:"arkTxid,omitempty"`
-
-	// boarding txid
-	BoardingTxid string `json:"boardingTxid,omitempty"`
-
 	// commitment txid
 	CommitmentTxid string `json:"commitmentTxid,omitempty"`
 
@@ -39,11 +33,11 @@ type V1IndexerTxHistoryRecord struct {
 	// is settled
 	IsSettled bool `json:"isSettled,omitempty"`
 
-	// sweep txid
-	SweepTxid string `json:"sweepTxid,omitempty"`
-
 	// type
 	Type *V1IndexerTxType `json:"type,omitempty"`
+
+	// virtual txid
+	VirtualTxid string `json:"virtualTxid,omitempty"`
 }
 
 // Validate validates this v1 indexer tx history record

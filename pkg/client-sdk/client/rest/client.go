@@ -1196,18 +1196,6 @@ func (a *restClient) GetTransactionHistory(ctx context.Context, address string, 
 			return nil, err
 		}
 
-		var txid string
-		switch {
-		case record.BoardingTxid != "":
-			txid = record.BoardingTxid
-		case record.CommitmentTxid != "":
-			txid = record.CommitmentTxid
-		case record.SweepTxid != "":
-			txid = record.SweepTxid
-		case record.ArkTxid != "":
-			txid = record.ArkTxid
-		}
-
 		// Use a zero value for TxType if Type is nil, otherwise use a numeric conversion
 		var txType client.TxType
 		if record.Type != nil {
@@ -1227,12 +1215,13 @@ func (a *restClient) GetTransactionHistory(ctx context.Context, address string, 
 		}
 
 		history = append(history, client.TxHistoryRecord{
-			Txid:        txid,
-			Type:        txType,
-			Amount:      amount,
-			CreatedAt:   createdAt,
-			ConfirmedAt: confirmedAt,
-			IsSettled:   record.IsSettled,
+			CommitmentTxid: record.CommitmentTxid,
+			VirtualTxid:    record.VirtualTxid,
+			Type:           txType,
+			Amount:         amount,
+			CreatedAt:      createdAt,
+			ConfirmedAt:    confirmedAt,
+			IsSettled:      record.IsSettled,
 		})
 	}
 

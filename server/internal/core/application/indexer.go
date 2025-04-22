@@ -411,19 +411,22 @@ func vtxosToTxs(spendable, spent []domain.Vtxo) ([]TxHistoryRecord, error) {
 			continue // settlement or change, ignore
 		}
 
-		txid := vtxo.RoundTxid
+		commitmentTxid := vtxo.RoundTxid
+		virtualTxid := ""
 		settled := !vtxo.IsPending()
 		if vtxo.IsPending() {
-			txid = vtxo.Txid
+			virtualTxid = vtxo.Txid
+			commitmentTxid = ""
 			settled = vtxo.SpentBy != ""
 		}
 
 		txs = append(txs, TxHistoryRecord{
-			Txid:      txid,
-			Amount:    vtxo.Amount - settleAmount - spentAmount,
-			Type:      TxReceived,
-			CreatedAt: time.Unix(vtxo.CreatedAt, 0),
-			Settled:   settled,
+			CommitmentTxid: commitmentTxid,
+			VirtualTxid:    virtualTxid,
+			Amount:         vtxo.Amount - settleAmount - spentAmount,
+			Type:           TxReceived,
+			CreatedAt:      time.Unix(vtxo.CreatedAt, 0),
+			Settled:        settled,
 		})
 	}
 
@@ -455,17 +458,20 @@ func vtxosToTxs(spendable, spent []domain.Vtxo) ([]TxHistoryRecord, error) {
 
 		vtxo := getVtxo(resultedVtxos, vtxosBySpentBy[sb])
 
-		txid := vtxo.RoundTxid
+		commitmentTxid := vtxo.RoundTxid
+		virtualTxid := ""
 		if vtxo.IsPending() {
-			txid = vtxo.Txid
+			virtualTxid = vtxo.Txid
+			commitmentTxid = ""
 		}
 
 		txs = append(txs, TxHistoryRecord{
-			Txid:      txid,
-			Amount:    spentAmount - resultedAmount,
-			Type:      TxSent,
-			CreatedAt: time.Unix(vtxo.CreatedAt, 0),
-			Settled:   true,
+			CommitmentTxid: commitmentTxid,
+			VirtualTxid:    virtualTxid,
+			Amount:         spentAmount - resultedAmount,
+			Type:           TxSent,
+			CreatedAt:      time.Unix(vtxo.CreatedAt, 0),
+			Settled:        true,
 		})
 
 	}
