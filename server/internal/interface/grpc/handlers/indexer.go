@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"strings"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/server/internal/core/application"
@@ -191,8 +192,10 @@ func (e indexerService) GetSpendableVtxos(ctx context.Context, request *arkv1.Ge
 	}, nil
 }
 
-func (e indexerService) GetTransactionHistory(ctx context.Context, request *arkv1.GetTransactionHistoryRequest) (*arkv1.GetTransactionHistoryResponse, error) {
-	address, err := parseArkAddress(request.GetAddress())
+func (e indexerService) GetTransactionHistory(
+	ctx context.Context, request *arkv1.GetTransactionHistoryRequest,
+) (*arkv1.GetTransactionHistoryResponse, error) {
+	pubkey, err := parseArkAddress(request.GetAddress())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -200,8 +203,16 @@ func (e indexerService) GetTransactionHistory(ctx context.Context, request *arkv
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	startTime, err := parseTimestamp(request.GetStartTime())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	endTime, err := parseTimestamp(request.GetEndTime())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 
-	resp, err := e.indexerSvc.GetTransactionHistory(ctx, address, request.StartTime, request.EndTime, page)
+	resp, err := e.indexerSvc.GetTransactionHistory(ctx, pubkey, startTime, endTime, page)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get transaction history: %v", err)
 	}
@@ -243,9 +254,26 @@ func (e indexerService) GetVtxoChain(ctx context.Context, request *arkv1.GetVtxo
 	}
 
 	graph := make(map[string]*arkv1.IndexerTransactions)
-	for key, value := range resp.Transactions {
+	for key, chain := range resp.Transactions {
+		txs := make([]*arkv1.IndexerChain, 0, len(chain.Txs))
+		for _, tx := range chain.Txs {
+			var txType arkv1.IndexerChainedTxType
+			switch strings.ToLower(tx.Type) {
+			case "commitment":
+				txType = arkv1.IndexerChainedTxType_INDEXER_CHAINED_TX_TYPE_COMMITMENT
+			case "virtual":
+				txType = arkv1.IndexerChainedTxType_INDEXER_CHAINED_TX_TYPE_VIRTUAL
+			default:
+				txType = arkv1.IndexerChainedTxType_INDEXER_CHAINED_TX_TYPE_UNSPECIFIED
+			}
+			txs = append(txs, &arkv1.IndexerChain{
+				Txid: tx.Txid,
+				Type: txType,
+			})
+		}
 		graph[key] = &arkv1.IndexerTransactions{
-			Txs: value,
+			Txs:       txs,
+			ExpiresAt: chain.ExpiresAt,
 		}
 	}
 
@@ -354,4 +382,11 @@ func parseTxids(txids []string) ([]string, error) {
 		}
 	}
 	return txids, nil
+}
+
+func parseTimestamp(timestamp int64) (int64, error) {
+	if timestamp <= 0 {
+		return 0, nil
+	}
+	return timestamp, nil
 }
