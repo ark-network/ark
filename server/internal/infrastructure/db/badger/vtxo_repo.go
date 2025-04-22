@@ -181,6 +181,27 @@ func (r *vtxoRepository) UpdateExpireAt(ctx context.Context, vtxos []domain.Vtxo
 	return err
 }
 
+func (r *vtxoRepository) GetAllVtxosWithPubKey(
+	ctx context.Context, pubkey string,
+) ([]domain.Vtxo, []domain.Vtxo, error) {
+	query := badgerhold.Where("PubKey").Eq(pubkey)
+	vtxos, err := r.findVtxos(ctx, query)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	spentVtxos := make([]domain.Vtxo, 0, len(vtxos))
+	unspentVtxos := make([]domain.Vtxo, 0, len(vtxos))
+	for _, vtxo := range vtxos {
+		if vtxo.Spent || vtxo.Swept {
+			spentVtxos = append(spentVtxos, vtxo)
+		} else {
+			unspentVtxos = append(unspentVtxos, vtxo)
+		}
+	}
+	return unspentVtxos, spentVtxos, nil
+}
+
 func (r *vtxoRepository) Close() {
 	r.store.Close()
 }

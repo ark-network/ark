@@ -99,7 +99,7 @@ SELECT
             FROM vtxo v2
                     JOIN tx_request req2 ON req2.id = v2.request_id
             WHERE req2.round_id = r.id
-        )
+        ) as tx_req_inputs_amount
     ) AS total_forfeit_amount,
     (
         SELECT COALESCE(COUNT(v3.txid), 0)
@@ -115,7 +115,7 @@ SELECT
                 JOIN tx_request req4 ON req4.id = rr.request_id
             WHERE req4.round_id = r.id
             AND (rr.onchain_address = '' OR rr.onchain_address IS NULL)
-        )
+        ) AS tx_req_outputs_amount
     ) AS total_batch_amount,
     (
         SELECT COUNT(*)
@@ -260,4 +260,7 @@ SELECT * FROM market_hour ORDER BY updated_at DESC LIMIT 1;
 -- name: SelectTreeTxsWithRoundTxid :many
 SELECT tx.* FROM round
 LEFT OUTER JOIN tx ON round.id=tx.round_id
-WHERE round.txid = ? AND tx.type = 'tree'
+WHERE round.txid = ? AND tx.type = 'tree';
+
+-- name: SelectVtxosWithPubkey :many
+SELECT sqlc.embed(vtxo) FROM vtxo WHERE pubkey = ?;
