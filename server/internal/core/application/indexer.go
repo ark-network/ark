@@ -1,20 +1,16 @@
 package application
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
 	"fmt"
 	"math"
 	"sort"
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
@@ -34,8 +30,8 @@ type IndexerService interface {
 	GetVtxoTree(ctx context.Context, batchOutpoint Outpoint, page *Page) (*VtxoTreeResp, error)
 	GetForfeitTxs(ctx context.Context, batchOutpoint Outpoint, page *Page) (*ForfeitTxsResp, error)
 	GetConnectors(ctx context.Context, batchOutpoint Outpoint, page *Page) (*ConnectorResp, error)
-	GetSpendableVtxos(ctx context.Context, address string, page *Page) (*SpendableVtxosResp, error)
-	GetTransactionHistory(ctx context.Context, address string, start, end int64, page *Page) (*TxHistoryResp, error)
+	GetSpendableVtxos(ctx context.Context, pubkey string, page *Page) (*SpendableVtxosResp, error)
+	GetTransactionHistory(ctx context.Context, pubkey string, start, end int64, page *Page) (*TxHistoryResp, error)
 	GetVtxoChain(ctx context.Context, vtxoKey Outpoint, page *Page) (*VtxoChainResp, error)
 	GetVirtualTxs(ctx context.Context, txids []string, page *Page) (*VirtualTxsResp, error)
 	GetSweptCommitmentTx(ctx context.Context, txid string) (*SweptCommitmentTxResp, error)
@@ -131,18 +127,7 @@ func (i *indexerService) GetConnectors(ctx context.Context, batchOutpoint Outpoi
 	}, nil
 }
 
-func (i *indexerService) GetSpendableVtxos(ctx context.Context, address string, page *Page) (*SpendableVtxosResp, error) {
-	decodedAddress, err := common.DecodeAddress(address)
-	if err != nil {
-		return nil, err
-	}
-
-	if !bytes.Equal(schnorr.SerializePubKey(decodedAddress.Server), schnorr.SerializePubKey(i.pubkey)) {
-		return nil, err
-	}
-
-	pubkey := hex.EncodeToString(schnorr.SerializePubKey(decodedAddress.VtxoTapKey))
-
+func (i *indexerService) GetSpendableVtxos(ctx context.Context, pubkey string, page *Page) (*SpendableVtxosResp, error) {
 	vtxos, err := i.repoManager.Vtxos().GetSpendableVtxosWithPubKey(ctx, pubkey)
 	if err != nil {
 		return nil, err

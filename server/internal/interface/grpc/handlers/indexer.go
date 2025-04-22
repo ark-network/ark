@@ -150,7 +150,7 @@ func (e indexerService) GetConnectors(ctx context.Context, request *arkv1.GetCon
 }
 
 func (e indexerService) GetSpendableVtxos(ctx context.Context, request *arkv1.GetSpendableVtxosRequest) (*arkv1.GetSpendableVtxosResponse, error) {
-	address, err := parseArkAddress(request.GetAddress())
+	pubkey, err := parseArkAddress(request.GetAddress())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -159,7 +159,7 @@ func (e indexerService) GetSpendableVtxos(ctx context.Context, request *arkv1.Ge
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	resp, err := e.indexerSvc.GetSpendableVtxos(ctx, address, page)
+	resp, err := e.indexerSvc.GetSpendableVtxos(ctx, pubkey, page)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get spendable vtxos: %v", err)
 	}
