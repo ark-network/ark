@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/infrastructure/db/sqlite/sqlc/queries"
@@ -34,7 +35,18 @@ func (n *noteRepository) Close() {
 }
 
 func (n *noteRepository) Add(ctx context.Context, id uint64) error {
-	return n.querier.InsertNote(ctx, int64(id))
+	if err := n.querier.InsertNote(ctx, int64(id)); err != nil {
+		if isConflictError(err) {
+			attempts := 1
+			for isConflictError(err) && attempts <= maxRetries {
+				time.Sleep(100 * time.Millisecond)
+				err = n.querier.InsertNote(ctx, int64(id))
+				attempts++
+			}
+		}
+		return err
+	}
+	return nil
 }
 
 func (n *noteRepository) Contains(ctx context.Context, id uint64) (bool, error) {

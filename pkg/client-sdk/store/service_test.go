@@ -10,7 +10,6 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	filedb "github.com/ark-network/ark/pkg/client-sdk/store/file"
 	inmemorydb "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
-	"github.com/ark-network/ark/pkg/client-sdk/types"
 	sdktypes "github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 	"github.com/btcsuite/btcd/btcec/v2"
@@ -113,8 +112,10 @@ func TestNewService(t *testing.T) {
 	go func() {
 		eventCh := service.TransactionStore().GetEventChannel()
 		for event := range eventCh {
-			log.Infof("Tx inserted: %d %v", event.Txs[0].Amount, event.Txs[0].Type)
-			require.Equal(t, types.TxsAdded, event.Type)
+			if event.Type == sdktypes.TxsAdded {
+				log.Infof("Tx inserted: %d %v", event.Txs[0].Amount, event.Txs[0].Type)
+				require.Equal(t, sdktypes.TxsAdded, event.Type)
+			}
 		}
 	}()
 
@@ -150,6 +151,20 @@ func TestNewService(t *testing.T) {
 	retrievedTxs, err := txStore.GetAllTransactions(ctx)
 	require.NoError(t, err)
 	require.Len(t, retrievedTxs, 2)
+
+	testReplaceTxs := map[string]sdktypes.Transaction{
+		"tx1": {
+			TransactionKey: sdktypes.TransactionKey{
+				RoundTxid: "tx11",
+			},
+			CreatedAt: time.Now(),
+		},
+	}
+	count, err = txStore.RbfTransactions(ctx, testReplaceTxs)
+	require.NoError(t, err)
+	require.Equal(t, 1, count)
+
+	time.Sleep(time.Second)
 
 	service.Close()
 }

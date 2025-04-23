@@ -36,23 +36,22 @@ lint:
 	@echo "Linting code..."
 	@golangci-lint run --fix
 
-## run: run in regtest mode with bitcoind
+## run: run arkd in dev mode with bitcoind on regtest
 run: clean
-	@echo "Running arkd with Bitcoin Core in regtest mode ..."
+	@echo "Running arkd with Bitcoin Core in dev mode on regtest ..."
 	$(call setup_env, envs/bitcoind.regtest.env)
-
 	go run ./cmd/arkd
 
-## run-neutrino: run in regtest mode with neutrino
+## run-neutrino: run arkd in dev mode with neutrino on regtest
 run-neutrino: clean
-	@echo "Running arkd with Neutrino in regtest mode ..."
+	@echo "Running arkd with Neutrino in dev mode on regtest ..."
 	$(call setup_env, envs/neutrino.regtest.env)
 	go run ./cmd/arkd
 
-## run-neutrino-mutinynet: run in signet mode
+## run-neutrino-mutinynet: run arkd in dev mode with neutrino on mutinynet
 run-neutrino-mutinynet: clean
-	@echo "Running arkd with Neutrino in signet mode ..."
-	$(call setup_env, envs/neutrino.signet.env)
+	@echo "Running arkd with Neutrino in dev mode on mutinynet ..."
+	$(call setup_env, envs/neutrino.mutinynet.env)
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests

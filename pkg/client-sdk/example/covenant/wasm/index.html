@@ -85,7 +85,7 @@
             } catch (err) {
                 logMessage("Send error: " + err.message);
             } finally {
-                await lock(password);
+                await lock();
             }
         }
 
@@ -133,7 +133,7 @@
             } catch (err) {
                 logMessage("Onboard error: " + err.message);
             } finally {
-                await lock(password);
+                await lock();
             }
 
         }

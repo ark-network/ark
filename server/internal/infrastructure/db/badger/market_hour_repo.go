@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/dgraph-io/badger/v4"
@@ -61,9 +62,16 @@ func (r *marketHourRepository) Get(ctx context.Context) (*domain.MarketHour, err
 }
 
 func (r *marketHourRepository) Upsert(ctx context.Context, marketHour domain.MarketHour) error {
-	err := r.store.Upsert("market_hour", &marketHour)
-	if err != nil {
-		return fmt.Errorf("failed to upsert market hour: %w", err)
+	if err := r.store.Upsert("market_hour", &marketHour); err != nil {
+		if errors.Is(err, badger.ErrConflict) {
+			attempts := 1
+			for errors.Is(err, badger.ErrConflict) && attempts <= maxRetries {
+				time.Sleep(100 * time.Millisecond)
+				err = r.store.Upsert("market_hour", &marketHour)
+				attempts++
+			}
+		}
+		return err
 	}
 	return nil
 }

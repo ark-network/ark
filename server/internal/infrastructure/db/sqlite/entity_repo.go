@@ -34,46 +34,49 @@ func (r *entityRepository) Close() {
 }
 
 func (r *entityRepository) Add(ctx context.Context, data domain.Entity, vtxoKeys []domain.VtxoKey) error {
-	id, err := r.querier.UpsertEntity(ctx, data.NostrRecipient)
-	if err != nil {
-		return err
-	}
-
-	for _, vtxoKey := range vtxoKeys {
-		if err := r.querier.UpsertEntityVtxo(ctx, queries.UpsertEntityVtxoParams{
-			EntityID: id,
-			VtxoTxid: vtxoKey.Txid,
-			VtxoVout: int64(vtxoKey.VOut),
-		}); err != nil {
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (r *entityRepository) Delete(ctx context.Context, vtxoKeys []domain.VtxoKey) error {
-	for _, vtxoKey := range vtxoKeys {
-		entities, err := r.querier.SelectEntitiesByVtxo(ctx, queries.SelectEntitiesByVtxoParams{
-			VtxoTxid: sql.NullString{String: vtxoKey.Txid, Valid: true},
-			VtxoVout: sql.NullInt64{Int64: int64(vtxoKey.VOut), Valid: true},
-		})
+	return execTx(ctx, r.db, func(qtx *queries.Queries) error {
+		var id int64
+		id, err := qtx.UpsertEntity(ctx, data.NostrRecipient)
 		if err != nil {
 			return err
 		}
 
-		for _, entity := range entities {
-			if err := r.querier.DeleteEntity(ctx, entity.EntityVw.ID); err != nil {
-				return err
-			}
-
-			if err := r.querier.DeleteEntityVtxo(ctx, entity.EntityVw.ID); err != nil {
+		for _, vtxoKey := range vtxoKeys {
+			if err := qtx.UpsertEntityVtxo(ctx, queries.UpsertEntityVtxoParams{
+				EntityID: id,
+				VtxoTxid: vtxoKey.Txid,
+				VtxoVout: int64(vtxoKey.VOut),
+			}); err != nil {
 				return err
 			}
 		}
-	}
+		return nil
+	})
+}
 
-	return nil
+func (r *entityRepository) Delete(ctx context.Context, vtxoKeys []domain.VtxoKey) error {
+	return execTx(ctx, r.db, func(qtx *queries.Queries) error {
+		for _, vtxoKey := range vtxoKeys {
+			entities, err := qtx.SelectEntitiesByVtxo(ctx, queries.SelectEntitiesByVtxoParams{
+				VtxoTxid: sql.NullString{String: vtxoKey.Txid, Valid: true},
+				VtxoVout: sql.NullInt64{Int64: int64(vtxoKey.VOut), Valid: true},
+			})
+			if err != nil {
+				return err
+			}
+
+			for _, entity := range entities {
+				if err := qtx.DeleteEntity(ctx, entity.EntityVw.ID); err != nil {
+					return err
+				}
+
+				if err := qtx.DeleteEntityVtxo(ctx, entity.EntityVw.ID); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	})
 }
 
 func (r *entityRepository) Get(ctx context.Context, vtxoKey domain.VtxoKey) ([]domain.Entity, error) {

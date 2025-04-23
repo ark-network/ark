@@ -91,7 +91,8 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 				if err := querierWithTx.UpsertTransaction(
 					ctx,
 					queries.UpsertTransactionParams{
-						Tx:       tx,
+						Txid:     tx.Txid,
+						Tx:       tx.Tx,
 						RoundID:  round.Id,
 						Type:     "forfeit",
 						Position: int64(pos),
@@ -384,7 +385,10 @@ func rowsToRounds(rows []combinedRow) ([]*domain.Round, error) {
 			switch v.tx.Type.String {
 			case "forfeit":
 				round.ForfeitTxs = extendArray(round.ForfeitTxs, int(position.Int64))
-				round.ForfeitTxs[position.Int64] = v.tx.Tx.String
+				round.ForfeitTxs[position.Int64] = domain.ForfeitTx{
+					Txid: v.tx.Txid.String,
+					Tx:   v.tx.Tx.String,
+				}
 			case "connector":
 				level := v.tx.TreeLevel
 				round.Connectors = extendArray(round.Connectors, int(level.Int64))
@@ -450,10 +454,7 @@ func createUpsertTransactionParams(tx tree.Node, roundID string, txType string, 
 	}
 
 	if txType == "connector" || txType == "tree" {
-		params.Txid = sql.NullString{
-			String: tx.Txid,
-			Valid:  true,
-		}
+		params.Txid = tx.Txid
 		params.TreeLevel = sql.NullInt64{
 			Int64: treeLevel,
 			Valid: true,

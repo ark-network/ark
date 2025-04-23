@@ -22,6 +22,9 @@ type V1RoundTransaction struct {
 	// claimed boarding utxos
 	ClaimedBoardingUtxos []*V1Outpoint `json:"claimedBoardingUtxos"`
 
+	// hex
+	Hex string `json:"hex,omitempty"`
+
 	// spendable vtxos
 	SpendableVtxos []*V1Vtxo `json:"spendableVtxos"`
 

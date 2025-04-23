@@ -29,12 +29,11 @@ CREATE TABLE IF NOT EXISTS receiver (
 );
 
 CREATE TABLE IF NOT EXISTS tx (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    txid TEXT PRIMARY KEY,
     tx TEXT NOT NULL,
     round_id TEXT NOT NULL,
     type TEXT NOT NULL,
     position INTEGER NOT NULL,
-    txid TEXT,
     tree_level INTEGER,
     parent_txid TEXT,
     is_leaf BOOLEAN,
@@ -76,27 +75,43 @@ CREATE TABLE IF NOT EXISTS entity_vtxo (
     PRIMARY KEY (entity_id, vtxo_txid, vtxo_vout)
 );
 
-CREATE VIEW entity_vw AS SELECT entity.id, entity.nostr_recipient, entity_vtxo.vtxo_txid, entity_vtxo.vtxo_vout
+CREATE TABLE IF NOT EXISTS market_hour (
+   id INTEGER PRIMARY KEY AUTOINCREMENT,
+   start_time INTEGER NOT NULL,
+   end_time INTEGER NOT NULL,
+   period INTEGER NOT NULL,
+   round_interval INTEGER NOT NULL,
+   updated_at INTEGER NOT NULL
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_round_txid ON round(txid);
+
+CREATE VIEW IF NOT EXISTS entity_vw AS
+SELECT entity.id, entity.nostr_recipient, entity_vtxo.vtxo_txid, entity_vtxo.vtxo_vout
 FROM entity
 LEFT OUTER JOIN entity_vtxo
 ON entity.id=entity_vtxo.entity_id;
 
-CREATE VIEW round_request_vw AS SELECT tx_request.*
+CREATE VIEW IF NOT EXISTS round_request_vw AS
+SELECT tx_request.*
 FROM round
 LEFT OUTER JOIN tx_request
 ON round.id=tx_request.round_id;
 
-CREATE VIEW round_tx_vw AS SELECT tx.*
+CREATE VIEW IF NOT EXISTS round_tx_vw AS
+SELECT tx.*
 FROM round
 LEFT OUTER JOIN tx
 ON round.id=tx.round_id;
 
-CREATE VIEW request_receiver_vw AS SELECT receiver.*
+CREATE VIEW IF NOT EXISTS request_receiver_vw AS
+SELECT receiver.*
 FROM tx_request
 LEFT OUTER JOIN receiver
 ON tx_request.id=receiver.request_id;
 
-CREATE VIEW request_vtxo_vw AS SELECT vtxo.*
+CREATE VIEW IF NOT EXISTS request_vtxo_vw AS
+SELECT vtxo.*
 FROM tx_request
 LEFT OUTER JOIN vtxo
 ON tx_request.id=vtxo.request_id;

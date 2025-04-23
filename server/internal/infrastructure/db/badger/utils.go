@@ -11,6 +11,8 @@ import (
 	"github.com/timshannon/badgerhold/v4"
 )
 
+const maxRetries = 5
+
 func createDB(dbDir string, logger badger.Logger) (*badgerhold.Store, error) {
 	isInMemory := len(dbDir) <= 0
 

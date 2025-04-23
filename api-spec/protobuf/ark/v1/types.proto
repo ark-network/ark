@@ -74,12 +74,14 @@ message RoundTransaction {
   repeated Vtxo spent_vtxos = 2;
   repeated Vtxo spendable_vtxos = 3;
   repeated Outpoint claimed_boarding_utxos = 4;
+  string hex = 5;
 }
 
 message RedeemTransaction {
   string txid = 1;
   repeated Vtxo spent_vtxos = 2;
   repeated Vtxo spendable_vtxos = 3;
+  string hex = 4;
 }
 
 // This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree.

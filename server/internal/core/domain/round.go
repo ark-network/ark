@@ -33,6 +33,11 @@ type Stage struct {
 	Failed bool
 }
 
+type ForfeitTx struct {
+	Txid string
+	Tx   string
+}
+
 type Round struct {
 	Id                string
 	StartingTimestamp int64
@@ -41,7 +46,7 @@ type Round struct {
 	TxRequests        map[string]TxRequest
 	Txid              string
 	UnsignedTx        string
-	ForfeitTxs        []string
+	ForfeitTxs        []ForfeitTx
 	VtxoTree          tree.TxTree
 	Connectors        tree.TxTree
 	ConnectorAddress  string
@@ -91,7 +96,7 @@ func (r *Round) On(event RoundEvent, replayed bool) {
 	case RoundFinalized:
 		r.Stage.Ended = true
 		r.Txid = e.Txid
-		r.ForfeitTxs = append([]string{}, e.ForfeitTxs...)
+		r.ForfeitTxs = append([]ForfeitTx{}, e.ForfeitTxs...)
 		r.EndingTimestamp = e.Timestamp
 	case RoundFailed:
 		r.Stage.Failed = true
@@ -177,7 +182,7 @@ func (r *Round) StartFinalization(
 	return []RoundEvent{event}, nil
 }
 
-func (r *Round) EndFinalization(forfeitTxs []string, txid string) ([]RoundEvent, error) {
+func (r *Round) EndFinalization(forfeitTxs []ForfeitTx, txid string) ([]RoundEvent, error) {
 	if len(forfeitTxs) <= 0 {
 		for _, request := range r.TxRequests {
 			if len(request.Inputs) > 0 {
@@ -195,7 +200,7 @@ func (r *Round) EndFinalization(forfeitTxs []string, txid string) ([]RoundEvent,
 		return nil, fmt.Errorf("round already finalized")
 	}
 	if forfeitTxs == nil {
-		forfeitTxs = make([]string, 0)
+		forfeitTxs = make([]ForfeitTx, 0)
 	}
 
 	event := RoundFinalized{

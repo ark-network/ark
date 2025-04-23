@@ -65,10 +65,14 @@ var (
 			}},
 		},
 	}
-	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
-	emptyTx  = "0200000000000000000000"
-	txid     = "0000000000000000000000000000000000000000000000000000000000000000"
-	txid2    = "0000000000000000000000000000000000000000000000000000000000000001"
+	emptyPtx       = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
+	emptyTx        = "0200000000000000000000"
+	txid           = "0000000000000000000000000000000000000000000000000000000000000000"
+	txid2          = "0000000000000000000000000000000000000000000000000000000000000001"
+	emptyForfeitTx = domain.ForfeitTx{
+		Txid: txid,
+		Tx:   emptyPtx,
+	}
 	vtxoTree = tree.TxTree{
 		{
 			{
@@ -133,8 +137,11 @@ var (
 			},
 		},
 	}
-	forfeitTxs = []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx, emptyPtx}
-	roundTx    = emptyTx
+	forfeitTxs = []domain.ForfeitTx{
+		emptyForfeitTx, emptyForfeitTx, emptyForfeitTx, emptyForfeitTx, emptyForfeitTx,
+		emptyForfeitTx, emptyForfeitTx, emptyForfeitTx, emptyForfeitTx,
+	}
+	roundTx = emptyTx
 )
 
 func TestRound(t *testing.T) {
@@ -474,7 +481,7 @@ func testEndFinalization(t *testing.T) {
 			}
 			fixtures := []struct {
 				round       *domain.Round
-				forfeitTxs  []string
+				forfeitTxs  []domain.ForfeitTx
 				txid        string
 				expectedErr string
 			}{
@@ -528,7 +535,7 @@ func testEndFinalization(t *testing.T) {
 							Failed: true,
 						},
 					},
-					forfeitTxs:  []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx},
+					forfeitTxs:  []domain.ForfeitTx{emptyForfeitTx, emptyForfeitTx, emptyForfeitTx, emptyForfeitTx},
 					txid:        txid,
 					expectedErr: "not in a valid stage to end finalization",
 				},
@@ -540,7 +547,7 @@ func testEndFinalization(t *testing.T) {
 							Ended: true,
 						},
 					},
-					forfeitTxs:  []string{emptyPtx, emptyPtx, emptyPtx, emptyPtx},
+					forfeitTxs:  []domain.ForfeitTx{emptyForfeitTx, emptyForfeitTx, emptyForfeitTx, emptyForfeitTx},
 					txid:        txid,
 					expectedErr: "round already finalized",
 				},

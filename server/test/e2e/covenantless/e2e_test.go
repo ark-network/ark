@@ -91,10 +91,10 @@ func TestSettleInSameRound(t *testing.T) {
 	bob, grpcBob := setupArkSDK(t)
 	defer grpcBob.Close()
 
-	_, aliceBoardingAddress, err := alice.Receive(ctx)
+	aliceAddr, aliceBoardingAddress, err := alice.Receive(ctx)
 	require.NoError(t, err)
 
-	_, bobBoardingAddress, err := bob.Receive(ctx)
+	bobAddr, bobBoardingAddress, err := bob.Receive(ctx)
 	require.NoError(t, err)
 
 	_, err = utils.RunCommand("nigiri", "faucet", aliceBoardingAddress)
@@ -105,7 +105,7 @@ func TestSettleInSameRound(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	var wg sync.WaitGroup
+	wg := &sync.WaitGroup{}
 	wg.Add(2)
 
 	var aliceRoundID, bobRoundID string
@@ -113,12 +113,31 @@ func TestSettleInSameRound(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
+
+		wwg := &sync.WaitGroup{}
+		wwg.Add(1)
+		go func() {
+			//nolint:all
+			alice.NotifyIncomingFunds(ctx, aliceAddr)
+			wwg.Done()
+		}()
 		aliceRoundID, aliceErr = alice.Settle(ctx)
+		wwg.Wait()
 	}()
 
 	go func() {
 		defer wg.Done()
+
+		wwg := &sync.WaitGroup{}
+		wwg.Add(1)
+		go func() {
+			defer wwg.Done()
+			vtxos, err := bob.NotifyIncomingFunds(ctx, bobAddr)
+			require.NoError(t, err)
+			require.NotEmpty(t, vtxos)
+		}()
 		bobRoundID, bobErr = bob.Settle(ctx)
+		wwg.Wait()
 	}()
 
 	wg.Wait()
@@ -146,14 +165,30 @@ func TestSettleInSameRound(t *testing.T) {
 	require.NoError(t, err)
 
 	// Alice sends to Bob
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := alice.NotifyIncomingFunds(ctx, bobOffchainAddr)
+		require.NoError(t, err)
+		require.NotEmpty(t, vtxos)
+	}()
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobOffchainAddr, 5000)}, false)
 	require.NoError(t, err)
 
+	wg.Wait()
+
 	// Bob sends to Alice
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := bob.NotifyIncomingFunds(ctx, aliceOffchainAddr)
+		require.NoError(t, err)
+		require.NotEmpty(t, vtxos)
+	}()
 	_, err = bob.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(aliceOffchainAddr, 3000)}, false)
 	require.NoError(t, err)
 
-	time.Sleep(2 * time.Second)
+	wg.Wait()
 
 	wg.Add(2)
 
@@ -161,12 +196,30 @@ func TestSettleInSameRound(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
+
+		wwg := &sync.WaitGroup{}
+		wwg.Add(1)
+		go func() {
+			//nolint:all
+			alice.NotifyIncomingFunds(ctx, aliceAddr)
+			wwg.Done()
+		}()
 		aliceSecondRoundID, aliceErr = alice.Settle(ctx)
+		wwg.Wait()
 	}()
 
 	go func() {
 		defer wg.Done()
+
+		wwg := &sync.WaitGroup{}
+		wwg.Add(1)
+		go func() {
+			//nolint:all
+			alice.NotifyIncomingFunds(ctx, aliceAddr)
+			wwg.Done()
+		}()
 		bobSecondRoundID, bobErr = bob.Settle(ctx)
+		wwg.Wait()
 	}()
 
 	wg.Wait()
@@ -259,6 +312,11 @@ func TestCollaborativeExit(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
+	_, err = runClarkCommand("settle", "--password", utils.Password)
+	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
 	_, err = runClarkCommand("redeem", "--amount", "1000", "--address", redeemAddress, "--password", utils.Password)
 	require.NoError(t, err)
 }
@@ -268,7 +326,7 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	client, grpcClient := setupArkSDK(t)
 	defer grpcClient.Close()
 
-	_, boardingAddress, err := client.Receive(ctx)
+	arkAddr, boardingAddress, err := client.Receive(ctx)
 	require.NoError(t, err)
 
 	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
@@ -276,13 +334,30 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := client.NotifyIncomingFunds(ctx, arkAddr)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+	}()
 	_, err = client.Settle(ctx)
 	require.NoError(t, err)
 
-	time.Sleep(2 * time.Second)
+	wg.Wait()
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := client.NotifyIncomingFunds(ctx, arkAddr)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+	}()
 	_, err = client.Settle(ctx)
 	require.NoError(t, err)
+
+	wg.Wait()
 
 	_, spentVtxos, err := client.ListVtxos(ctx)
 	require.NoError(t, err)
@@ -329,19 +404,47 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 
 		time.Sleep(5 * time.Second)
 
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			vtxos, err := sdkClient.NotifyIncomingFunds(ctx, offchainAddress)
+			require.NoError(t, err)
+			require.NotNil(t, vtxos)
+		}()
+
 		roundId, err := sdkClient.Settle(ctx)
 		require.NoError(t, err)
+
+		wg.Wait()
 
 		err = utils.GenerateBlock()
 		require.NoError(t, err)
 
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			vtxos, err := sdkClient.NotifyIncomingFunds(ctx, offchainAddress)
+			require.NoError(t, err)
+			require.NotNil(t, vtxos)
+		}()
+
 		_, err = sdkClient.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)}, false)
 		require.NoError(t, err)
 
+		wg.Wait()
+
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			vtxos, err := sdkClient.NotifyIncomingFunds(ctx, offchainAddress)
+			require.NoError(t, err)
+			require.NotNil(t, vtxos)
+		}()
 		_, err = sdkClient.Settle(ctx)
 		require.NoError(t, err)
 
-		time.Sleep(5 * time.Second)
+		wg.Wait()
 
 		_, spentVtxos, err := sdkClient.ListVtxos(ctx)
 		require.NoError(t, err)
@@ -422,8 +525,18 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 
 		time.Sleep(5 * time.Second)
 
+		wg := &sync.WaitGroup{}
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			vtxos, err := alice.NotifyIncomingFunds(ctx, offchainAddr)
+			require.NoError(t, err)
+			require.NotNil(t, vtxos)
+		}()
 		_, err = alice.Settle(ctx)
 		require.NoError(t, err)
+
+		wg.Wait()
 
 		spendableVtxos, _, err := alice.ListVtxos(ctx)
 		require.NoError(t, err)
@@ -447,7 +560,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 					&tree.CLTVMultisigClosure{
 						Locktime: cltvLocktime,
 						MultisigClosure: tree.MultisigClosure{
-							PubKeys: []*secp256k1.PublicKey{bobPubKey},
+							PubKeys: []*secp256k1.PublicKey{bobPubKey, aliceAddr.Server},
 						},
 					},
 				},
@@ -482,11 +595,19 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		bobAddrStr, err := bobAddr.Encode()
 		require.NoError(t, err)
 
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			vtxos, err := alice.NotifyIncomingFunds(ctx, offchainAddr)
+			require.NoError(t, err)
+			require.NotNil(t, vtxos)
+		}()
+
 		txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)}, false)
 		require.NoError(t, err)
 		require.NotEmpty(t, txid)
 
-		time.Sleep(2 * time.Second)
+		wg.Wait()
 
 		spendable, _, err := alice.ListVtxos(ctx)
 		require.NoError(t, err)
@@ -519,6 +640,14 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
 		require.NoError(t, err)
 
+		tapscripts := make([]string, 0, len(vtxoScript.Closures))
+		for _, closure := range vtxoScript.Closures {
+			script, err := closure.Script()
+			require.NoError(t, err)
+
+			tapscripts = append(tapscripts, hex.EncodeToString(script))
+		}
+
 		ptx, err := bitcointree.BuildRedeemTx(
 			[]common.VtxoInput{
 				{
@@ -526,9 +655,10 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 						Hash:  redeemPtx.UnsignedTx.TxHash(),
 						Index: bobOutputIndex,
 					},
-					Tapscript:   tapscript,
-					WitnessSize: closure.WitnessSize(),
-					Amount:      bobOutput.Value,
+					Tapscript:          tapscript,
+					WitnessSize:        closure.WitnessSize(),
+					Amount:             bobOutput.Value,
+					RevealedTapscripts: tapscripts,
 				},
 			},
 			[]*wire.TxOut{
@@ -553,8 +683,17 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			require.NoError(t, err)
 		}
 
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			vtxos, err := alice.NotifyIncomingFunds(ctx, offchainAddr)
+			require.NoError(t, err)
+			require.NotNil(t, vtxos)
+		}()
 		_, bobTxid, err := grpcTransportClient.SubmitRedeemTx(ctx, signedTx)
 		require.NoError(t, err)
+
+		wg.Wait()
 
 		aliceVtxos, _, err := alice.ListVtxos(ctx)
 		require.NoError(t, err)
@@ -621,6 +760,8 @@ func TestChainOutOfRoundTransactions(t *testing.T) {
 	_, err = runClarkCommand("send", "--amount", "10000", "--to", receive.Offchain, "--password", utils.Password)
 	require.NoError(t, err)
 
+	time.Sleep(1 * time.Second)
+
 	var balance utils.ArkBalance
 	balanceStr, err := runClarkCommand("balance")
 	require.NoError(t, err)
@@ -630,10 +771,88 @@ func TestChainOutOfRoundTransactions(t *testing.T) {
 	_, err = runClarkCommand("send", "--amount", "10000", "--to", receive.Offchain, "--password", utils.Password)
 	require.NoError(t, err)
 
+	time.Sleep(1 * time.Second)
+
 	balanceStr, err = runClarkCommand("balance")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
+}
+
+// TestCollisionBetweenInRoundAndRedeemVtxo tests for a potential collision between VTXOs that could occur
+// due to a race condition between simultaneous Settle and SubmitRedeemTx calls. The race condition doesn't
+// consistently reproduce, making the test unreliable in automated test suites. Therefore, the test is skipped
+// by default and left here as documentation for future debugging and reference.
+func TestCollisionBetweenInRoundAndRedeemVtxo(t *testing.T) {
+	t.Skip()
+
+	ctx := context.Background()
+	alice, grpcAlice := setupArkSDK(t)
+	defer grpcAlice.Close()
+
+	bob, grpcBob := setupArkSDK(t)
+	defer grpcBob.Close()
+
+	_, aliceBoardingAddress, err := alice.Receive(ctx)
+	require.NoError(t, err)
+
+	bobAddr, _, err := bob.Receive(ctx)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", aliceBoardingAddress, "0.00005000")
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "rpc", "generatetoaddress", "1", "bcrt1qe8eelqalnch946nzhefd5ajhgl2afjw5aegc59")
+	require.NoError(t, err)
+	time.Sleep(5 * time.Second)
+
+	_, err = alice.Settle(ctx)
+	require.NoError(t, err)
+
+	time.Sleep(1 * time.Second)
+
+	//test collision when first Settle is called
+	type resp struct {
+		txid string
+		err  error
+	}
+
+	ch := make(chan resp, 2)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		txid, err := alice.Settle(ctx)
+		ch <- resp{txid, err}
+	}()
+	// SDK Settle call is bit slower than Redeem so we introduce small delay so we make sure Settle is called before Redeem
+	// this timeout can vary depending on the environment
+	time.Sleep(50 * time.Millisecond)
+	go func() {
+		defer wg.Done()
+		txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddr, 1000)}, false)
+		ch <- resp{txid, err}
+	}()
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	finalResp := resp{}
+	for resp := range ch {
+		if resp.err != nil {
+			finalResp.err = resp.err
+		} else {
+			finalResp.txid = resp.txid
+		}
+	}
+
+	t.Log(finalResp.err)
+	require.NotEmpty(t, finalResp.txid)
+	require.Error(t, finalResp.err)
+
 }
 
 func TestAliceSendsSeveralTimesToBob(t *testing.T) {
@@ -644,7 +863,7 @@ func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 	bob, grpcBob := setupArkSDK(t)
 	defer grpcBob.Close()
 
-	_, boardingAddress, err := alice.Receive(ctx)
+	aliceAddr, boardingAddress, err := alice.Receive(ctx)
 	require.NoError(t, err)
 
 	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
@@ -652,45 +871,81 @@ func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := alice.NotifyIncomingFunds(ctx, aliceAddr)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+	}()
 	_, err = alice.Settle(ctx)
 	require.NoError(t, err)
 
-	time.Sleep(5 * time.Second)
+	wg.Wait()
 
 	bobAddress, _, err := bob.Receive(ctx)
 	require.NoError(t, err)
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := alice.NotifyIncomingFunds(ctx, bobAddress)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+	}()
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 1000)}, false)
 	require.NoError(t, err)
 
-	time.Sleep(2 * time.Second)
+	wg.Wait()
 
 	bobVtxos, _, err := bob.ListVtxos(ctx)
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 1)
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := alice.NotifyIncomingFunds(ctx, bobAddress)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+	}()
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, false)
 	require.NoError(t, err)
 
-	time.Sleep(2 * time.Second)
+	wg.Wait()
 
 	bobVtxos, _, err = bob.ListVtxos(ctx)
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 2)
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := alice.NotifyIncomingFunds(ctx, bobAddress)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+	}()
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, false)
 	require.NoError(t, err)
 
-	time.Sleep(2 * time.Second)
+	wg.Wait()
 
 	bobVtxos, _, err = bob.ListVtxos(ctx)
 	require.NoError(t, err)
 	require.Len(t, bobVtxos, 3)
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := alice.NotifyIncomingFunds(ctx, bobAddress)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+	}()
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, false)
 	require.NoError(t, err)
 
-	time.Sleep(2 * time.Second)
+	wg.Wait()
 
 	bobVtxos, _, err = bob.ListVtxos(ctx)
 	require.NoError(t, err)
@@ -746,10 +1001,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	walletStore, err := inmemorystore.NewWalletStore()
 	require.NoError(t, err)
 
-	bobWallet, err := singlekeywallet.NewBitcoinWallet(
-		configStore,
-		walletStore,
-	)
+	bobWallet, err := singlekeywallet.NewBitcoinWallet(configStore, walletStore)
 	require.NoError(t, err)
 
 	_, err = bobWallet.Create(ctx, utils.Password, hex.EncodeToString(bobPrivKey.Serialize()))
@@ -772,10 +1024,18 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := alice.NotifyIncomingFunds(ctx, offchainAddr)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+	}()
 	_, err = alice.Settle(ctx)
 	require.NoError(t, err)
 
-	time.Sleep(5 * time.Second)
+	wg.Wait()
 
 	const cltvBlocks = 10
 	const sendAmount = 10000
@@ -789,7 +1049,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 				&tree.CLTVMultisigClosure{
 					Locktime: common.AbsoluteLocktime(currentHeight + cltvBlocks),
 					MultisigClosure: tree.MultisigClosure{
-						PubKeys: []*secp256k1.PublicKey{bobPubKey},
+						PubKeys: []*secp256k1.PublicKey{bobPubKey, aliceAddr.Server},
 					},
 				},
 			},
@@ -824,11 +1084,18 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	bobAddrStr, err := bobAddr.Encode()
 	require.NoError(t, err)
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := alice.NotifyIncomingFunds(ctx, bobAddrStr)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+	}()
 	txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)}, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, txid)
 
-	time.Sleep(2 * time.Second)
+	wg.Wait()
 
 	spendable, _, err := alice.ListVtxos(ctx)
 	require.NoError(t, err)
@@ -860,6 +1127,14 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
 	require.NoError(t, err)
 
+	tapscripts := make([]string, 0, len(vtxoScript.Closures))
+	for _, closure := range vtxoScript.Closures {
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		tapscripts = append(tapscripts, hex.EncodeToString(script))
+	}
+
 	ptx, err := bitcointree.BuildRedeemTx(
 		[]common.VtxoInput{
 			{
@@ -867,9 +1142,10 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 					Hash:  redeemPtx.UnsignedTx.TxHash(),
 					Index: bobOutputIndex,
 				},
-				Tapscript:   tapscript,
-				WitnessSize: closure.WitnessSize(),
-				Amount:      bobOutput.Value,
+				Tapscript:          tapscript,
+				WitnessSize:        closure.WitnessSize(),
+				Amount:             bobOutput.Value,
+				RevealedTapscripts: tapscripts,
 			},
 		},
 		[]*wire.TxOut{
@@ -893,7 +1169,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	require.Error(t, err)
 
 	// Generate blocks to pass the timelock
-	for i := 0; i < cltvBlocks+1; i++ {
+	for range cltvBlocks {
 		err = utils.GenerateBlock()
 		require.NoError(t, err)
 	}
@@ -942,10 +1218,19 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := alice.NotifyIncomingFunds(ctx, offchainAddr)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+	}()
+
 	_, err = alice.Settle(ctx)
 	require.NoError(t, err)
 
-	time.Sleep(5 * time.Second)
+	wg.Wait()
 
 	const sendAmount = 10000
 
@@ -969,7 +1254,7 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 				&tree.ConditionMultisigClosure{
 					Condition: conditionScript,
 					MultisigClosure: tree.MultisigClosure{
-						PubKeys: []*secp256k1.PublicKey{bobPubKey},
+						PubKeys: []*secp256k1.PublicKey{bobPubKey, aliceAddr.Server},
 					},
 				},
 			},
@@ -1004,11 +1289,19 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	bobAddrStr, err := bobAddr.Encode()
 	require.NoError(t, err)
 
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := alice.NotifyIncomingFunds(ctx, bobAddrStr)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+	}()
+
 	txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)}, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, txid)
 
-	time.Sleep(2 * time.Second)
+	wg.Wait()
 
 	spendable, _, err := alice.ListVtxos(ctx)
 	require.NoError(t, err)
@@ -1040,6 +1333,14 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	alicePkScript, err := common.P2TRScript(aliceAddr.VtxoTapKey)
 	require.NoError(t, err)
 
+	tapscripts := make([]string, 0, len(vtxoScript.Closures))
+	for _, closure := range vtxoScript.Closures {
+		script, err := closure.Script()
+		require.NoError(t, err)
+
+		tapscripts = append(tapscripts, hex.EncodeToString(script))
+	}
+
 	ptx, err := bitcointree.BuildRedeemTx(
 		[]common.VtxoInput{
 			{
@@ -1047,9 +1348,10 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 					Hash:  redeemPtx.UnsignedTx.TxHash(),
 					Index: bobOutputIndex,
 				},
-				Tapscript:   tapscript,
-				WitnessSize: closure.WitnessSize(),
-				Amount:      bobOutput.Value,
+				Tapscript:          tapscript,
+				WitnessSize:        closure.WitnessSize(),
+				Amount:             bobOutput.Value,
+				RevealedTapscripts: tapscripts,
 			},
 		},
 		[]*wire.TxOut{

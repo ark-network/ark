@@ -349,7 +349,7 @@ func (svc *Service) ChangePassword(oldPw, newPw []byte) error {
 	return nil
 }
 
-// bakeMacaroon creates a new macaroon with newest version and the given
+// BakeMacaroon creates a new macaroon with newest version and the given
 // permissions then returns it binary serialized.
 func (svc *Service) BakeMacaroon(
 	ctx context.Context, permissions []bakery.Op,

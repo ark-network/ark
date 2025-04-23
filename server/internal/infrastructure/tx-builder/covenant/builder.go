@@ -229,7 +229,7 @@ func (b *txBuilder) VerifyForfeitTxs(
 			locktime = &c.Locktime
 		case *tree.MultisigClosure, *tree.ConditionMultisigClosure:
 		default:
-			return nil, fmt.Errorf("invalid forfeit closure script")
+			return nil, fmt.Errorf("invalid forfeit closure script %x, cannot verify forfeit tx", vtxoTapscript.Script)
 		}
 
 		if locktime != nil {
@@ -998,6 +998,22 @@ func (b *txBuilder) createRoundTx(
 
 func (b *txBuilder) minRelayFeeConnectorTx() (uint64, error) {
 	return b.wallet.MinRelayFee(context.Background(), uint64(common.ConnectorTxSize))
+}
+
+func (b *txBuilder) CountSignedTaprootInputs(tx string) (int, error) {
+	ptx, err := psetv2.NewPsetFromBase64(tx)
+	if err != nil {
+		return -1, err
+	}
+
+	signedInputsCount := 0
+	for _, input := range ptx.Inputs {
+		if len(input.TapScriptSig) == 0 || len(input.TapLeafScript) == 0 {
+			continue
+		}
+		signedInputsCount++
+	}
+	return signedInputsCount, nil
 }
 
 // This method aims to verify and add partial signature from boarding input

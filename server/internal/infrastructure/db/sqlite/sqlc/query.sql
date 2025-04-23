@@ -2,7 +2,7 @@
 INSERT INTO tx (
     tx, round_id, type, position, txid, tree_level, parent_txid, is_leaf
 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(id) DO UPDATE SET
+ON CONFLICT(txid) DO UPDATE SET
     tx = EXCLUDED.tx,
     round_id = EXCLUDED.round_id,
     type = EXCLUDED.type,

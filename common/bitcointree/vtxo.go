@@ -13,6 +13,10 @@ import (
 type VtxoScript common.VtxoScript[bitcoinTapTree, tree.Closure]
 
 func ParseVtxoScript(scripts []string) (VtxoScript, error) {
+	if len(scripts) == 0 {
+		return nil, fmt.Errorf("empty tapscripts array")
+	}
+
 	types := []VtxoScript{
 		&TapscriptsVtxoScript{},
 	}

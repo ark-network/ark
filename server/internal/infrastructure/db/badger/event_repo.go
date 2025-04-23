@@ -2,9 +2,11 @@ package badgerdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/dgraph-io/badger/v4"
@@ -132,13 +134,27 @@ func (r *eventRepository) upsert(
 	if err != nil {
 		return err
 	}
+	var upsertFn func() error
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
-		err = r.store.TxUpsert(tx, id, buf)
+		upsertFn = func() error {
+			return r.store.TxUpsert(tx, id, buf)
+		}
 	} else {
-		err = r.store.Upsert(id, buf)
+		upsertFn = func() error {
+			return r.store.Upsert(id, buf)
+		}
 	}
-	if err != nil {
+
+	if err := upsertFn(); err != nil {
+		if errors.Is(err, badger.ErrConflict) {
+			attempts := 1
+			for errors.Is(err, badger.ErrConflict) && attempts <= maxRetries {
+				time.Sleep(100 * time.Millisecond)
+				err = upsertFn()
+				attempts++
+			}
+		}
 		return fmt.Errorf("failed to upsert events with id %s: %s", id, err)
 	}
 	return nil

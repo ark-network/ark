@@ -411,6 +411,54 @@ func (m *forfeitTxsMap) allSigned() bool {
 	return true
 }
 
+type outpointMap struct {
+	lock      *sync.RWMutex
+	outpoints map[string]struct{}
+}
+
+func newOutpointMap() *outpointMap {
+	return &outpointMap{
+		lock:      &sync.RWMutex{},
+		outpoints: make(map[string]struct{}),
+	}
+}
+
+func (r *outpointMap) add(outpoints []domain.VtxoKey) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	for _, out := range outpoints {
+		r.outpoints[out.String()] = struct{}{}
+	}
+}
+
+func (r *outpointMap) remove(outpoints []domain.VtxoKey) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	for _, out := range outpoints {
+		delete(r.outpoints, out.String())
+	}
+}
+
+func (r *outpointMap) includes(outpoint domain.VtxoKey) bool {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+	_, exists := r.outpoints[outpoint.String()]
+	return exists
+}
+
+func (r *outpointMap) includesAny(outpoints []domain.VtxoKey) (bool, string) {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
+	for _, out := range outpoints {
+		if _, exists := r.outpoints[out.String()]; exists {
+			return true, out.String()
+		}
+	}
+
+	return false, ""
+}
+
 // onchainOutputs iterates over all the nodes' outputs in the vtxo tree and checks their onchain state
 // returns the sweepable outputs as ports.SweepInput mapped by their expiration time
 func findSweepableOutputs(

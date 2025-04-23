@@ -42,11 +42,23 @@ type V1GetInfoResponse struct {
 	// unilateral exit delay
 	UnilateralExitDelay string `json:"unilateralExitDelay,omitempty"`
 
+	// -1 means no limit (default), 0 means boarding not allowed
+	UtxoMaxAmount string `json:"utxoMaxAmount,omitempty"`
+
+	// -1 means native dust limit (default)
+	UtxoMinAmount string `json:"utxoMinAmount,omitempty"`
+
 	// version
 	Version string `json:"version,omitempty"`
 
 	// vtxo descriptor templates
 	VtxoDescriptorTemplates []string `json:"vtxoDescriptorTemplates"`
+
+	// -1 means no limit (default)
+	VtxoMaxAmount string `json:"vtxoMaxAmount,omitempty"`
+
+	// -1 means native dust limit (default)
+	VtxoMinAmount string `json:"vtxoMinAmount,omitempty"`
 
 	// vtxo tree expiry
 	VtxoTreeExpiry string `json:"vtxoTreeExpiry,omitempty"`

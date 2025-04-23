@@ -1,6 +1,7 @@
 package store
 
 import (
+	"context"
 	"fmt"
 
 	filestore "github.com/ark-network/ark/pkg/client-sdk/store/file"
@@ -73,6 +74,19 @@ func (s *service) VtxoStore() types.VtxoStore {
 
 func (s *service) TransactionStore() types.TransactionStore {
 	return s.txStore
+}
+
+func (s *service) Clean(ctx context.Context) {
+	//nolint:all
+	s.configStore.CleanData(ctx)
+	if s.txStore != nil {
+		//nolint:all
+		s.txStore.Clean(ctx)
+	}
+	if s.vtxoStore != nil {
+		//nolint:all
+		s.vtxoStore.Clean(ctx)
+	}
 }
 
 func (s *service) Close() {
