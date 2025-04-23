@@ -5,12 +5,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	middleware "github.com/ark-network/ark/simulation/sdk-middleware"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	middleware "github.com/ark-network/ark/simulation/sdk-middleware"
 
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
@@ -242,7 +243,7 @@ func (c *Client) sendAsyncHandler(w http.ResponseWriter, r *http.Request) {
 		arksdk.NewBitcoinReceiver(req.ToAddress, uint64(req.Amount*1e8)),
 	}
 
-	_, err := c.ArkClient.SendOffChain(ctx, false, receivers, false)
+	_, err := c.ArkClient.SendOffChain(ctx, false, receivers, true)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
