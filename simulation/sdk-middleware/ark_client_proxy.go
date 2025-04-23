@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
@@ -86,12 +87,12 @@ func (p *ArkClientProxy) Unlock(ctx context.Context, password string) error {
 
 }
 
-func (p *ArkClientProxy) Lock(ctx context.Context, password string) error {
+func (p *ArkClientProxy) Lock(ctx context.Context) error {
 
-	middlewareArgs := []interface{}{ctx, password}
+	middlewareArgs := []interface{}{ctx}
 	ctx = p.chain.Before(ctx, "Lock", middlewareArgs)
 
-	ret0 := p.client.Lock(ctx, password)
+	ret0 := p.client.Lock(ctx)
 	results := []interface{}{ret0}
 
 	p.chain.After(ctx, "Lock", results, ret0)
@@ -341,6 +342,31 @@ func (p *ArkClientProxy) SignTransaction(ctx context.Context, tx string) (string
 	p.chain.After(ctx, "SignTransaction", results, ret1)
 
 	return ret0, ret1
+
+}
+
+func (p *ArkClientProxy) NotifyIncomingFunds(ctx context.Context, address string) ([]types.Vtxo, error) {
+
+	middlewareArgs := []interface{}{ctx, address}
+	ctx = p.chain.Before(ctx, "NotifyIncomingFunds", middlewareArgs)
+
+	ret0, ret1 := p.client.NotifyIncomingFunds(ctx, address)
+	results := []interface{}{ret0, ret1}
+
+	p.chain.After(ctx, "NotifyIncomingFunds", results, ret1)
+
+	return ret0, ret1
+
+}
+
+func (p *ArkClientProxy) Reset(ctx context.Context) {
+
+	middlewareArgs := []interface{}{ctx}
+	ctx = p.chain.Before(ctx, "Reset", middlewareArgs)
+
+	p.client.Reset(ctx)
+
+	p.chain.After(ctx, "Reset", nil, nil)
 
 }
 
