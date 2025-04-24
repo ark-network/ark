@@ -100,27 +100,18 @@ func (a *grpcClient) GetBoardingAddress(
 	return resp.GetAddress(), nil
 }
 
-func (a *grpcClient) RegisterInputsForNextRound(
+func (a *grpcClient) RegisterIntent(
 	ctx context.Context,
 	signature, message string,
-	tapscripts map[string][]string,
 ) (string, error) {
-	tapscriptsProto := make(map[string]*arkv1.Tapscripts)
-	for outpoint, scripts := range tapscripts {
-		tapscriptsProto[outpoint] = &arkv1.Tapscripts{
-			Scripts: scripts,
-		}
-	}
-
-	req := &arkv1.RegisterInputsForNextRoundRequest{
+	req := &arkv1.RegisterIntentRequest{
 		Bip322Signature: &arkv1.Bip322Signature{
 			Message:   message,
 			Signature: signature,
 		},
-		Tapscripts: tapscriptsProto,
 	}
 
-	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
+	resp, err := a.svc.RegisterIntent(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -130,10 +121,10 @@ func (a *grpcClient) RegisterInputsForNextRound(
 func (a *grpcClient) RegisterNotesForNextRound(
 	ctx context.Context, notes []string,
 ) (string, error) {
-	req := &arkv1.RegisterInputsForNextRoundRequest{
+	req := &arkv1.RegisterIntentRequest{
 		Notes: notes,
 	}
-	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
+	resp, err := a.svc.RegisterIntent(ctx, req)
 	if err != nil {
 		return "", err
 	}

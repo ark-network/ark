@@ -20,9 +20,9 @@ service ArkService {
 
   /* In-Round Transaction APIs */
 
-  rpc RegisterInputsForNextRound(RegisterInputsForNextRoundRequest) returns (RegisterInputsForNextRoundResponse) {
+  rpc RegisterIntent(RegisterIntentRequest) returns (RegisterIntentResponse) {
     option (google.api.http) = {
-      post: "/v1/round/registerInputs"
+      post: "/v1/round/registerIntent"
       body: "*"
     };
   };
@@ -109,15 +109,13 @@ message GetBoardingAddressResponse {
 
 /* In-Round Transaction API messages */
 
-message RegisterInputsForNextRoundRequest {
-  // Tapscripts aims to reveal the taproot tree of the unspent & unexpired VTXOs.
-  map<string, Tapscripts> tapscripts = 1; 
+message RegisterIntentRequest {
   // BIP322 signature embeds the outpoints and the proof of funds
-  Bip322Signature bip322_signature = 2;
-  repeated string notes = 3;
+  Bip322Signature bip322_signature = 1;
+  repeated string notes = 2;
 }
 
-message RegisterInputsForNextRoundResponse {
+message RegisterIntentResponse {
   string request_id = 1;
 }
 

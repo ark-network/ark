@@ -150,27 +150,18 @@ func (a *restClient) GetBoardingAddress(
 	return resp.Payload.Address, nil
 }
 
-func (a *restClient) RegisterInputsForNextRound(
+func (a *restClient) RegisterIntent(
 	ctx context.Context,
 	signature, message string,
-	tapscripts map[string][]string,
 ) (string, error) {
-	tapscriptsRest := make(map[string]models.V1Tapscripts)
-	for outpoint, scripts := range tapscripts {
-		tapscriptsRest[outpoint] = models.V1Tapscripts{
-			Scripts: scripts,
-		}
-	}
-
-	body := &models.V1RegisterInputsForNextRoundRequest{
+	body := &models.V1RegisterIntentRequest{
 		Bip322Signature: &models.V1Bip322Signature{
 			Message:   message,
 			Signature: signature,
 		},
-		Tapscripts: tapscriptsRest,
 	}
-	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
-		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
+	resp, err := a.svc.ArkServiceRegisterIntent(
+		ark_service.NewArkServiceRegisterIntentParams().WithBody(body),
 	)
 	if err != nil {
 		return "", err
@@ -182,11 +173,11 @@ func (a *restClient) RegisterInputsForNextRound(
 func (a *restClient) RegisterNotesForNextRound(
 	ctx context.Context, notes []string,
 ) (string, error) {
-	body := &models.V1RegisterInputsForNextRoundRequest{
+	body := &models.V1RegisterIntentRequest{
 		Notes: notes,
 	}
-	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
-		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
+	resp, err := a.svc.ArkServiceRegisterIntent(
+		ark_service.NewArkServiceRegisterIntentParams().WithBody(body),
 	)
 	if err != nil {
 		return "", err

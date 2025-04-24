@@ -31,7 +31,7 @@ type Input struct {
 }
 
 // New creates the proof psbt from the message and inputs
-func New(message string, inputs []Input) (*FullProof, error) {
+func New(message string, inputs []Input, outputs []*wire.TxOut) (*FullProof, error) {
 	if len(inputs) == 0 {
 		return nil, ErrMissingInputs
 	}
@@ -44,7 +44,7 @@ func New(message string, inputs []Input) (*FullProof, error) {
 
 	firstInput := inputs[0]
 	toSpend := craftToSpendTx(message, firstInput.WitnessUtxo.PkScript)
-	toSign, err := craftToSignTx(toSpend, inputs)
+	toSign, err := craftToSignTx(toSpend, inputs, outputs)
 	if err != nil {
 		return nil, err
 	}
@@ -121,7 +121,7 @@ func craftToSpendTx(message string, pkScript []byte) *wire.MsgTx {
 }
 
 // craftToSignTx creates the transaction that will be signed for the proof
-func craftToSignTx(toSpend *wire.MsgTx, inputs []Input) (*psbt.Packet, error) {
+func craftToSignTx(toSpend *wire.MsgTx, inputs []Input, outputs []*wire.TxOut) (*psbt.Packet, error) {
 	outpoints := make([]*wire.OutPoint, 0, len(inputs)+1)
 	sequences := make([]uint32, 0, len(inputs)+1)
 
@@ -137,14 +137,18 @@ func craftToSignTx(toSpend *wire.MsgTx, inputs []Input) (*psbt.Packet, error) {
 		sequences = append(sequences, input.Sequence)
 	}
 
-	toSign, err := psbt.New(
-		outpoints,
-		[]*wire.TxOut{
+	if len(outputs) == 0 {
+		outputs = []*wire.TxOut{
 			{
 				Value:    0,
 				PkScript: opReturnPkScript,
 			},
-		},
+		}
+	}
+
+	toSign, err := psbt.New(
+		outpoints,
+		outputs,
 		2, 0,
 		sequences,
 	)

@@ -135,9 +135,9 @@ func (h *handler) GetBoardingAddress(
 	}, nil
 }
 
-func (h *handler) RegisterInputsForNextRound(
-	ctx context.Context, req *arkv1.RegisterInputsForNextRoundRequest,
-) (*arkv1.RegisterInputsForNextRoundResponse, error) {
+func (h *handler) RegisterIntent(
+	ctx context.Context, req *arkv1.RegisterIntentRequest,
+) (*arkv1.RegisterIntentResponse, error) {
 	notesInputs := req.GetNotes()
 	bip322Signature := req.GetBip322Signature()
 
@@ -161,9 +161,12 @@ func (h *handler) RegisterInputsForNextRound(
 			return nil, status.Error(codes.InvalidArgument, "missing message")
 		}
 
-		tapscripts := parseTapscripts(req.GetTapscripts())
+		var message bip322.Message
+		if err := message.Decode(bip322Signature.Message); err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 message")
+		}
 
-		requestID, err = h.svc.SpendVtxos(ctx, *signature, bip322Signature.Message, tapscripts)
+		requestID, err = h.svc.RegisterIntent(ctx, *signature, message)
 		if err != nil {
 			return nil, err
 		}
@@ -180,7 +183,7 @@ func (h *handler) RegisterInputsForNextRound(
 		}
 	}
 
-	return &arkv1.RegisterInputsForNextRoundResponse{
+	return &arkv1.RegisterIntentResponse{
 		RequestId: requestID,
 	}, nil
 }

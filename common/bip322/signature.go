@@ -44,7 +44,7 @@ func (s Signature) Verify(message string, prevoutFetcher txscript.PrevOutputFetc
 		return ErrInvalidTxNumberOfInputs
 	}
 
-	if len(s.TxOut) != 1 {
+	if len(s.TxOut) == 0 {
 		return ErrInvalidTxNumberOfOutputs
 	}
 
@@ -71,11 +71,6 @@ func (s Signature) Verify(message string, prevoutFetcher txscript.PrevOutputFetc
 	}
 	if s.TxIn[0].PreviousOutPoint.Index != 0 {
 		return ErrInvalidTxWrongOutputIndex
-	}
-
-	// verify that the output of toSign is the OP_RETURN
-	if !bytes.Equal(s.TxOut[0].PkScript, opReturnPkScript) {
-		return ErrInvalidTxWrongOutput
 	}
 
 	tx := wire.MsgTx(s)
@@ -118,6 +113,16 @@ func (s *Signature) GetOutpoints() []wire.OutPoint {
 		outpoints = append(outpoints, input.PreviousOutPoint)
 	}
 	return outpoints
+}
+
+func (s *Signature) ContainsOutputs() bool {
+	if len(s.TxOut) > 0 {
+		firstOutput := s.TxOut[0]
+		// if the first output is not an OP_RETURN, then the signature contains outputs
+		return !bytes.Equal(firstOutput.PkScript, opReturnPkScript)
+	}
+
+	return false
 }
 
 type bip322PrevoutFetcher struct {

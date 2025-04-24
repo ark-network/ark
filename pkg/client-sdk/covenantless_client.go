@@ -1451,9 +1451,59 @@ func (a *covenantlessArkClient) sendOffchain(
 	return a.joinRoundWithRetry(ctx, nil, outputs, *options, vtxos, boardingUtxos)
 }
 
-func (a *covenantlessArkClient) makeBIP322Signature(inputs []bip322.Input, leafProofs []*common.TaprootMerkleProof) (string, string, error) {
-	message := fmt.Sprintf("%d", time.Now().Unix())
-	proof, err := bip322.New(message, inputs)
+func (a *covenantlessArkClient) makeBIP322Signature(
+	inputs []bip322.Input,
+	leafProofs []*common.TaprootMerkleProof,
+	tapscripts map[string][]string,
+	outputs []client.Output,
+	musig2Data *tree.Musig2,
+) (string, string, error) {
+	validAt := time.Now()
+	expireAt := validAt.Add(2 * time.Minute).Unix()
+	outputsTxOut := make([]*wire.TxOut, 0)
+	onchainOutputsIndexes := make([]int, 0)
+	inputTapTrees := make([]string, 0)
+
+	for _, input := range inputs {
+		outpointStr := input.OutPoint.String()
+		tapscripts, ok := tapscripts[outpointStr]
+		if !ok {
+			return "", "", fmt.Errorf("no tapscripts found for input %s", outpointStr)
+		}
+
+		encodedTapTree, err := bitcointree.TapTree(tapscripts).Encode()
+		if err != nil {
+			return "", "", err
+		}
+
+		inputTapTrees = append(inputTapTrees, hex.EncodeToString(encodedTapTree))
+	}
+
+	for i, output := range outputs {
+		txOut, isOnchain, err := output.ToTxOut()
+		if err != nil {
+			return "", "", err
+		}
+
+		if isOnchain {
+			onchainOutputsIndexes = append(onchainOutputsIndexes, i)
+		}
+
+		outputsTxOut = append(outputsTxOut, txOut)
+	}
+
+	message, err := bip322.Message{
+		InputTapTrees:        inputTapTrees,
+		OnchainOutputIndexes: onchainOutputsIndexes,
+		ExpireAt:             expireAt,
+		ValidAt:              validAt.Unix(),
+		Musig2Data:           musig2Data,
+	}.Encode()
+	if err != nil {
+		return "", "", err
+	}
+
+	proof, err := bip322.New(message, inputs, outputsTxOut)
 	if err != nil {
 		return "", "", err
 	}
@@ -1596,11 +1646,19 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 		return "", err
 	}
 
+	musig2Data := &tree.Musig2{
+		CosignersPublicKeys: signerPubKeys,
+		SigningType:         signingType,
+	}
+
 	var bip322Signature string
 	var bip322Message string
 
 	if len(inputs) > 0 {
-		bip322Signature, bip322Message, err = a.makeBIP322Signature(inputs, exitLeaves)
+		bip322Signature, bip322Message, err = a.makeBIP322Signature(
+			inputs, exitLeaves, tapscripts,
+			outputs, musig2Data,
+		)
 		if err != nil {
 			return "", err
 		}
@@ -1614,8 +1672,8 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 		var err error
 
 		if len(inputs) > 0 {
-			requestID, err = a.client.RegisterInputsForNextRound(
-				ctx, bip322Signature, bip322Message, tapscripts,
+			requestID, err = a.client.RegisterIntent(
+				ctx, bip322Signature, bip322Message,
 			)
 			if err != nil {
 				return "", err
@@ -1633,16 +1691,12 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 			if err != nil {
 				return "", err
 			}
-		}
 
-		if err := a.client.RegisterOutputsForNextRound(
-			ctx, requestID, outputs,
-			&tree.Musig2{
-				CosignersPublicKeys: signerPubKeys,
-				SigningType:         signingType,
-			},
-		); err != nil {
-			return "", err
+			if err := a.client.RegisterOutputsForNextRound(
+				ctx, requestID, outputs, musig2Data,
+			); err != nil {
+				return "", err
+			}
 		}
 
 		log.Infof("registered inputs and outputs with request id: %s", requestID)
@@ -3408,10 +3462,7 @@ func toBIP322Inputs(boardingUtxos []types.Utxo, vtxos []client.TapscriptsVtxo) (
 		}
 		outpoint := wire.NewOutPoint(hash, coin.VOut)
 
-		if !coin.IsRecoverable() {
-			// recoverable vtxos don't need to reveal tapscripts
-			tapscripts[outpoint.String()] = coin.Tapscripts
-		}
+		tapscripts[outpoint.String()] = coin.Tapscripts
 
 		pkScript, leafProof, vtxoSequence, err := extractExitPath(coin.Tapscripts)
 		if err != nil {

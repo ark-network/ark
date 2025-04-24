@@ -164,14 +164,14 @@
         ]
       }
     },
-    "/v1/round/registerInputs": {
+    "/v1/round/registerIntent": {
       "post": {
-        "operationId": "ArkService_RegisterInputsForNextRound",
+        "operationId": "ArkService_RegisterIntent",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1RegisterInputsForNextRoundResponse"
+              "$ref": "#/definitions/v1RegisterIntentResponse"
             }
           },
           "default": {
@@ -187,7 +187,7 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1RegisterInputsForNextRoundRequest"
+              "$ref": "#/definitions/v1RegisterIntentRequest"
             }
           }
         ],
@@ -617,16 +617,9 @@
         }
       }
     },
-    "v1RegisterInputsForNextRoundRequest": {
+    "v1RegisterIntentRequest": {
       "type": "object",
       "properties": {
-        "tapscripts": {
-          "type": "object",
-          "additionalProperties": {
-            "$ref": "#/definitions/v1Tapscripts"
-          },
-          "description": "Tapscripts aims to reveal the taproot tree of the unspent \u0026 unexpired VTXOs."
-        },
         "bip322Signature": {
           "$ref": "#/definitions/v1Bip322Signature",
           "title": "BIP322 signature embeds the outpoints and the proof of funds"
@@ -639,7 +632,7 @@
         }
       }
     },
-    "v1RegisterInputsForNextRoundResponse": {
+    "v1RegisterIntentResponse": {
       "type": "object",
       "properties": {
         "requestId": {

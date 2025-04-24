@@ -80,6 +80,7 @@ func (m *txRequestsQueue) push(
 	request domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
 	recoveredVtxos []domain.Vtxo,
+	musig2Data *tree.Musig2,
 ) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -119,7 +120,7 @@ func (m *txRequestsQueue) push(
 	}
 
 	now := time.Now()
-	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, make([]note.Note, 0), now, now, nil, recoveredVtxos}
+	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, make([]note.Note, 0), now, now, musig2Data, recoveredVtxos}
 	return nil
 }
 

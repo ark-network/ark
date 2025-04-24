@@ -10,6 +10,9 @@ import (
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -29,10 +32,9 @@ type RoundEvent interface {
 
 type TransportClient interface {
 	GetInfo(ctx context.Context) (*Info, error)
-	RegisterInputsForNextRound(
+	RegisterIntent(
 		ctx context.Context,
 		signature, message string,
-		tapscripts map[string][]string,
 	) (string, error)
 	RegisterNotesForNextRound(
 		ctx context.Context, notes []string,
@@ -148,6 +150,41 @@ type TapscriptsVtxo struct {
 type Output struct {
 	Address string // onchain or offchain address
 	Amount  uint64
+}
+
+func (o Output) ToTxOut() (*wire.TxOut, bool, error) {
+	var pkScript []byte
+	isOnchain := false
+
+	arkAddress, err := common.DecodeAddress(o.Address)
+	if err != nil {
+		// decode onchain address
+		btcAddress, err := btcutil.DecodeAddress(o.Address, nil)
+		if err != nil {
+			return nil, false, err
+		}
+
+		pkScript, err = txscript.PayToAddrScript(btcAddress)
+		if err != nil {
+			return nil, false, err
+		}
+
+		isOnchain = true
+	} else {
+		pkScript, err = common.P2TRScript(arkAddress.VtxoTapKey)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	if len(pkScript) == 0 {
+		return nil, false, fmt.Errorf("invalid address")
+	}
+
+	return &wire.TxOut{
+		Value:    int64(o.Amount),
+		PkScript: pkScript,
+	}, isOnchain, nil
 }
 
 type RoundStage int
