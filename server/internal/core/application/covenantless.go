@@ -51,8 +51,10 @@ type covenantlessService struct {
 	scanner     ports.BlockchainScanner
 	sweeper     *sweeper
 
-	txRequests *txRequestsQueue
-	forfeitTxs *forfeitTxsMap
+	txRequests     *txRequestsQueue
+	forfeitTxs     *forfeitTxsMap
+	redeemTxInputs *outpointMap
+	roundInputs    *outpointMap
 
 	eventsCh            chan domain.RoundEvent
 	transactionEventsCh chan TransactionEvent
@@ -146,6 +148,8 @@ func NewCovenantlessService(
 		sweeper:                   newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
 		txRequests:                newTxRequestsQueue(),
 		forfeitTxs:                newForfeitTxsMap(builder),
+		redeemTxInputs:            newOutpointMap(),
+		roundInputs:               newOutpointMap(),
 		eventsCh:                  make(chan domain.RoundEvent),
 		transactionEventsCh:       make(chan TransactionEvent),
 		currentRoundLock:          sync.Mutex{},
@@ -252,6 +256,13 @@ func (s *covenantlessService) SubmitRedeemTx(
 	if len(spentVtxos) != len(spentVtxoKeys) {
 		return "", "", fmt.Errorf("some vtxos not found")
 	}
+
+	if exists, vtxo := s.roundInputs.includesAny(spentVtxoKeys); exists {
+		return "", "", fmt.Errorf("vtxo %s is already registered for next round", vtxo)
+	}
+
+	s.redeemTxInputs.add(spentVtxoKeys)
+	defer s.redeemTxInputs.remove(spentVtxoKeys)
 
 	vtxoMap := make(map[wire.OutPoint]domain.Vtxo)
 	for _, vtxo := range spentVtxos {
@@ -460,13 +471,15 @@ func (s *covenantlessService) SubmitRedeemTx(
 			return "", "", fmt.Errorf("output value is less than dust threshold")
 		}
 
-		if s.vtxoMaxAmount > 0 {
+		if s.vtxoMaxAmount >= 0 {
 			if out.Value > s.vtxoMaxAmount {
 				return "", "", fmt.Errorf("output amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
 			}
 		}
-		if out.Value < s.vtxoMinAmount {
-			return "", "", fmt.Errorf("output amount is lower than min utxo amount:%d", s.vtxoMinAmount)
+		if s.vtxoMinAmount >= 0 {
+			if out.Value < s.vtxoMinAmount {
+				return "", "", fmt.Errorf("output amount is lower than min utxo amount:%d", s.vtxoMinAmount)
+			}
 		}
 	}
 
@@ -565,6 +578,11 @@ func (s *covenantlessService) SubmitRedeemTx(
 			log.Debugf("started watching %d vtxos", len(newVtxos))
 		}
 
+		for i := range spentVtxos {
+			spentVtxos[i].Spent = true
+			spentVtxos[i].SpentBy = redeemTxid
+		}
+
 		s.transactionEventsCh <- RedeemTransactionEvent{
 			RedeemTxid:     redeemTxid,
 			SpentVtxos:     spentVtxos,
@@ -643,6 +661,7 @@ func (s *covenantlessService) SpendNotes(ctx context.Context, notes []note.Note)
 }
 
 func (s *covenantlessService) SpendVtxos(ctx context.Context, bip322signature bip322.Signature, message string, tapscripts map[string][]string) (string, error) {
+	vtxoKeys := make([]domain.VtxoKey, 0)
 	// the vtxo to swap for new ones
 	vtxosInputs := make([]domain.Vtxo, 0)
 	// the boarding utxos to add in the commitment tx
@@ -675,6 +694,11 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, bip322signature bi
 			Txid: outpoint.Hash.String(),
 			VOut: outpoint.Index,
 		}
+
+		if s.redeemTxInputs.includes(vtxoKey) {
+			return "", fmt.Errorf("vtxo %s is currently being spent", vtxoKey.String())
+		}
+
 		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{vtxoKey})
 		if err != nil || len(vtxosResult) == 0 {
 			// vtxo not found in db, check if it exists on-chain
@@ -728,13 +752,15 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, bip322signature bi
 					return "", fmt.Errorf("tx %s expired", vtxoKey.Txid)
 				}
 
-				if s.utxoMaxAmount > 0 {
-					if tx.TxOut[vtxoKey.VOut].Value > s.utxoMaxAmount {
+				if s.utxoMaxAmount >= 0 {
+					if tx.TxOut[outpoint.Index].Value > s.utxoMaxAmount {
 						return "", fmt.Errorf("boarding input amount is higher than max utxo amount:%d", s.utxoMaxAmount)
 					}
 				}
-				if tx.TxOut[vtxoKey.VOut].Value < s.utxoMinAmount {
-					return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
+				if s.utxoMinAmount >= 0 {
+					if tx.TxOut[outpoint.Index].Value < s.utxoMinAmount {
+						return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
+					}
 				}
 
 				boardingTxs[vtxoKey.Txid] = tx
@@ -821,6 +847,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, bip322signature bi
 		}
 
 		vtxosInputs = append(vtxosInputs, vtxo)
+		vtxoKeys = append(vtxoKeys, vtxo.VtxoKey)
 	}
 
 	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
@@ -837,6 +864,9 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, bip322signature bi
 	if err := s.txRequests.push(*request, boardingInputs, recoveredVtxos); err != nil {
 		return "", err
 	}
+
+	s.roundInputs.add(vtxoKeys)
+
 	return request.Id, nil
 }
 
@@ -895,13 +925,15 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 			return fmt.Errorf("receiver amount must be greater than dust amount %d", dustAmount)
 		}
 
-		if s.vtxoMaxAmount > 0 {
+		if s.vtxoMaxAmount >= 0 {
 			if rcv.Amount > uint64(s.vtxoMaxAmount) {
 				return fmt.Errorf("receiver amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
 			}
 		}
-		if rcv.Amount < uint64(s.vtxoMinAmount) {
-			return fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
+		if s.vtxoMinAmount >= 0 {
+			if rcv.Amount < uint64(s.vtxoMinAmount) {
+				return fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
+			}
 		}
 
 		if !rcv.IsOnchain() {
@@ -1090,6 +1122,10 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 			Period:        marketHourConfig.Period,
 			RoundInterval: marketHourConfig.RoundInterval,
 		},
+		UtxoMinAmount: s.utxoMinAmount,
+		UtxoMaxAmount: s.utxoMaxAmount,
+		VtxoMinAmount: s.vtxoMinAmount,
+		VtxoMaxAmount: s.vtxoMaxAmount,
 	}, nil
 }
 
@@ -1356,6 +1392,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	var notes []note.Note
 	var recoveredVtxos []domain.Vtxo
 	var roundAborted bool
+	var vtxoKeys []domain.VtxoKey
 	defer func() {
 		delete(s.treeSigningSessions, round.Id)
 		if roundAborted {
@@ -1368,6 +1405,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		}
 
 		if round.IsFailed() {
+			s.roundInputs.remove(vtxoKeys)
 			s.startRound()
 			return
 		}
@@ -1378,6 +1416,9 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	if round.IsFailed() {
 		return
 	}
+
+	// nolint:all
+	availableBalance, _, _ := s.wallet.MainAccountBalance(ctx)
 
 	// TODO: understand how many tx requests must be popped from the queue and actually registered for the round
 	num := s.txRequests.len()
@@ -1395,9 +1436,25 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	// save notes and recovered vtxos for finalize function
 	notes = redeeemedNotes
 	recoveredVtxos = vtxosToRecover
+	for _, req := range requests {
+		for _, in := range req.Inputs {
+			vtxoKeys = append(vtxoKeys, in.VtxoKey)
+		}
+	}
 	s.numOfBoardingInputsMtx.Lock()
 	s.numOfBoardingInputs = len(boardingInputs)
 	s.numOfBoardingInputsMtx.Unlock()
+
+	totAmount := uint64(0)
+	for _, request := range requests {
+		totAmount += request.TotalOutputAmount()
+	}
+	if availableBalance <= totAmount {
+		err := fmt.Errorf("not enough liquidity")
+		round.Fail(err)
+		log.WithError(err).Debugf("round %s aborted, balance: %d", round.Id, availableBalance)
+		return
+	}
 
 	if _, err := round.RegisterTxRequests(requests); err != nil {
 		round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
@@ -1620,6 +1677,17 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, recoveredVtxos []
 	s.currentRoundLock.Lock()
 	round := s.currentRound
 	s.currentRoundLock.Unlock()
+
+	defer func() {
+		vtxoKeys := make([]domain.VtxoKey, 0)
+		for _, req := range round.TxRequests {
+			for _, in := range req.Inputs {
+				vtxoKeys = append(vtxoKeys, in.VtxoKey)
+			}
+		}
+		s.roundInputs.remove(vtxoKeys)
+	}()
+
 	if round.IsFailed() {
 		return
 	}
@@ -1768,9 +1836,14 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, recoveredVtxos []
 	}
 
 	go func() {
+		spentVtxos := append(s.getSpentVtxos(round.TxRequests), recoveredVtxos...)
+		for i := range spentVtxos {
+			spentVtxos[i].Spent = true
+			spentVtxos[i].SpentBy = round.Txid
+		}
 		s.transactionEventsCh <- RoundTransactionEvent{
 			RoundTxid:             round.Txid,
-			SpentVtxos:            append(s.getSpentVtxos(round.TxRequests), recoveredVtxos...),
+			SpentVtxos:            spentVtxos,
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
 			TxHex:                 signedRoundTx,
@@ -1936,7 +2009,9 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 		return nil
 	}
 
-	createdAt := time.Now().Unix()
+	now := time.Now()
+	createdAt := now.Unix()
+	expireAt := now.Add(time.Duration(s.vtxoTreeExpiry.Seconds()) * time.Second).Unix()
 
 	leaves := round.VtxoTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
@@ -1960,6 +2035,7 @@ func (s *covenantlessService) getNewVtxos(round *domain.Round) []domain.Vtxo {
 				Amount:    uint64(out.Value),
 				RoundTxid: round.Txid,
 				CreatedAt: createdAt,
+				ExpireAt:  expireAt,
 			})
 		}
 	}

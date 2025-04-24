@@ -90,6 +90,10 @@ message GetInfoResponse {
   string forfeit_address = 9;
   MarketHour market_hour = 10;
   string version = 11;
+  int64 utxo_min_amount = 12; // -1 means native dust limit (default)
+  int64 utxo_max_amount = 13; // -1 means no limit (default), 0 means boarding not allowed
+  int64 vtxo_min_amount = 14; // -1 means native dust limit (default)
+  int64 vtxo_max_amount = 15; // -1 means no limit (default)
 }
 
 message GetBoardingAddressRequest {

@@ -19,6 +19,10 @@ const (
 	RestClient = "rest"
 )
 
+var (
+	ErrConnectionClosedByServer = fmt.Errorf("connection closed by server")
+)
+
 type RoundEvent interface {
 	isRoundEvent()
 }
@@ -74,6 +78,10 @@ type Info struct {
 	MarketHourEndTime          int64
 	MarketHourPeriod           int64
 	MarketHourRoundInterval    int64
+	UtxoMinAmount              int64
+	UtxoMaxAmount              int64
+	VtxoMinAmount              int64
+	VtxoMaxAmount              int64
 }
 
 type RoundEventChannel struct {
