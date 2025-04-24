@@ -1596,6 +1596,16 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 		return "", err
 	}
 
+	var bip322Signature string
+	var bip322Message string
+
+	if len(inputs) > 0 {
+		bip322Signature, bip322Message, err = a.makeBIP322Signature(inputs, exitLeaves)
+		if err != nil {
+			return "", err
+		}
+	}
+
 	maxRetry := 3
 	retryCount := 0
 	var roundErr error
@@ -1603,16 +1613,26 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 		var requestID string
 		var err error
 
-		signature, message, err := a.makeBIP322Signature(inputs, exitLeaves)
-		if err != nil {
-			return "", err
+		if len(inputs) > 0 {
+			requestID, err = a.client.RegisterInputsForNextRound(
+				ctx, bip322Signature, bip322Message, tapscripts,
+			)
+			if err != nil {
+				return "", err
+			}
 		}
 
-		requestID, err = a.client.RegisterInputsForNextRound(
-			ctx, signature, message, tapscripts,
-		)
-		if err != nil {
-			return "", err
+		if len(notes) > 0 {
+			if len(requestID) > 0 {
+				return "", fmt.Errorf("cannot register notes and inputs at the same time")
+			}
+
+			requestID, err = a.client.RegisterNotesForNextRound(
+				ctx, notes,
+			)
+			if err != nil {
+				return "", err
+			}
 		}
 
 		if err := a.client.RegisterOutputsForNextRound(
