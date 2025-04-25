@@ -102,6 +102,13 @@ func (r *vtxoRepository) GetVtxosForRound(
 	return r.findVtxos(ctx, query)
 }
 
+func (r *vtxoRepository) GetLeafVtxosForRound(
+	ctx context.Context, txid string,
+) ([]domain.Vtxo, error) {
+	query := badgerhold.Where("RoundTx").Eq(txid).And("RedeemTx").Eq("")
+	return r.findVtxos(ctx, query)
+}
+
 func (r *vtxoRepository) GetAllNonRedeemedVtxos(
 	ctx context.Context, pubkey string,
 ) ([]domain.Vtxo, []domain.Vtxo, error) {

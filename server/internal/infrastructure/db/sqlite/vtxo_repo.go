@@ -175,6 +175,19 @@ func (v *vtxoRepository) GetVtxosForRound(ctx context.Context, txid string) ([]d
 	return readRows(rows)
 }
 
+func (v *vtxoRepository) GetLeafVtxosForRound(ctx context.Context, txid string) ([]domain.Vtxo, error) {
+	res, err := v.querier.SelectLeafVtxosByRoundTxid(ctx, txid)
+	if err != nil {
+		return nil, err
+	}
+	rows := make([]queries.Vtxo, 0, len(res))
+	for _, row := range res {
+		rows = append(rows, row.Vtxo)
+	}
+
+	return readRows(rows)
+}
+
 func (v *vtxoRepository) GetSpendableVtxosWithPubKey(ctx context.Context, pubkey string) ([]domain.Vtxo, error) {
 	rows, err := v.querier.GetSpendableVtxosWithPubKey(ctx, pubkey)
 	if err != nil {

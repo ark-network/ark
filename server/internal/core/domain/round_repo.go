@@ -25,6 +25,7 @@ type RoundRepository interface {
 	GetRoundsIds(ctx context.Context, startedAfter int64, startedBefore int64) ([]string, error)
 	GetSweptRoundsConnectorAddress(ctx context.Context) ([]string, error)
 	GetTxsWithTxids(ctx context.Context, txids []string) ([]string, error)
+	GetExistingRounds(ctx context.Context, txids []string) (map[string]any, error)
 	Close()
 }
 
@@ -41,6 +42,7 @@ type VtxoRepository interface {
 	GetAll(ctx context.Context) ([]Vtxo, error)
 	GetAllVtxosWithPubKey(ctx context.Context, pubkey string) ([]Vtxo, []Vtxo, error)
 	UpdateExpireAt(ctx context.Context, vtxos []VtxoKey, expireAt int64) error
+	GetLeafVtxosForRound(ctx context.Context, txid string) ([]Vtxo, error)
 	Close()
 }
 
