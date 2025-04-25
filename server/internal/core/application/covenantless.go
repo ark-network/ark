@@ -754,7 +754,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 				}
 
 				// if the exit path is available, forbid registering the boarding utxo
-				if blocktime+exitDelay.Seconds() < time.Now().Unix() {
+				if time.Unix(blocktime, 0).Add(time.Duration(exitDelay.Seconds()) * time.Second).Before(time.Now()) {
 					return "", fmt.Errorf("tx %s expired", vtxoKey.Txid)
 				}
 
