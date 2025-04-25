@@ -48,6 +48,7 @@ func (d storeData) decode() types.Config {
 	vtxoTreeExpiry, _ := strconv.Atoi(d.VtxoTreeExpiry)
 	roundInterval, _ := strconv.Atoi(d.RoundInterval)
 	unilateralExitDelay, _ := strconv.Atoi(d.UnilateralExitDelay)
+	boardingExitDelay, _ := strconv.Atoi(d.BoardingExitDelay)
 	withTransactionFeed, _ := strconv.ParseBool(d.WithTransactionFeed)
 	dust, _ := strconv.Atoi(d.Dust)
 	buf, _ := hex.DecodeString(d.ServerPubKey)
@@ -70,6 +71,11 @@ func (d storeData) decode() types.Config {
 	unilateralExitDelayType := common.LocktimeTypeBlock
 	if unilateralExitDelay >= 512 {
 		unilateralExitDelayType = common.LocktimeTypeSecond
+	}
+
+	boardingExitDelayType := common.LocktimeTypeBlock
+	if boardingExitDelay >= 512 {
+		boardingExitDelayType = common.LocktimeTypeSecond
 	}
 
 	return types.Config{

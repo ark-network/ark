@@ -744,10 +744,9 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 				}
 
 				// validate the vtxo script
-				// TODO: fix in PR #501
 				if err := vtxoScript.Validate(s.pubkey, common.RelativeLocktime{
-					Type:  s.unilateralExitDelay.Type,
-					Value: s.unilateralExitDelay.Value * 2,
+					Type:  s.boardingExitDelay.Type,
+					Value: s.boardingExitDelay.Value,
 				}); err != nil {
 					return "", fmt.Errorf("invalid vtxo script: %s", err)
 				}
