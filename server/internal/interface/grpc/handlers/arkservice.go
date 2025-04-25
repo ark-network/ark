@@ -82,11 +82,11 @@ func (h *handler) GetInfo(
 		Pubkey:                  info.PubKey,
 		VtxoTreeExpiry:          info.VtxoTreeExpiry,
 		UnilateralExitDelay:     info.UnilateralExitDelay,
+		BoardingExitDelay:       info.BoardingExitDelay,
 		RoundInterval:           info.RoundInterval,
 		Network:                 info.Network,
 		Dust:                    int64(info.Dust),
 		ForfeitAddress:          info.ForfeitAddress,
-		BoardingExitDelay:       info.BoardingExitDelay,
 		VtxoDescriptorTemplates: []string{desc},
 		MarketHour: &arkv1.MarketHour{
 			NextStartTime: info.NextMarketHour.StartTime.Unix(),
