@@ -16,7 +16,7 @@ var (
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 		0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
 	}
-	opReturnPkScript = []byte{txscript.OP_RETURN}
+	opReturnEmptyPkScript = []byte{txscript.OP_RETURN}
 )
 
 // BIP0322 full proof of funds is a special invalid psbt containing the inputs to prove ownership
@@ -141,7 +141,7 @@ func craftToSignTx(toSpend *wire.MsgTx, inputs []Input, outputs []*wire.TxOut) (
 		outputs = []*wire.TxOut{
 			{
 				Value:    0,
-				PkScript: opReturnPkScript,
+				PkScript: opReturnEmptyPkScript,
 			},
 		}
 	}

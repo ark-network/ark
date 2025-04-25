@@ -116,13 +116,13 @@ func (s *Signature) GetOutpoints() []wire.OutPoint {
 }
 
 func (s *Signature) ContainsOutputs() bool {
-	if len(s.TxOut) > 0 {
-		firstOutput := s.TxOut[0]
-		// if the first output is not an OP_RETURN, then the signature contains outputs
-		return !bytes.Equal(firstOutput.PkScript, opReturnPkScript)
+	if len(s.TxOut) == 0 {
+		return false
 	}
-
-	return false
+	if len(s.TxOut) == 1 && bytes.Equal(s.TxOut[0].PkScript, opReturnEmptyPkScript) {
+		return false
+	}
+	return true
 }
 
 type bip322PrevoutFetcher struct {
