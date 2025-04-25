@@ -112,7 +112,7 @@ func (m *txRequestsQueue) push(
 	for _, vtxo := range recoveredVtxos {
 		for _, request := range m.requests {
 			for _, pVtxo := range request.recoveredVtxos {
-				if vtxo == pVtxo {
+				if vtxo.Txid == pVtxo.Txid && vtxo.VOut == pVtxo.VOut {
 					return fmt.Errorf("duplicated vtxo recovery, %s:%d already used by tx request %s", vtxo.Txid, vtxo.VOut, request.Id)
 				}
 			}
