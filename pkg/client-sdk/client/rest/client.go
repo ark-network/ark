@@ -71,6 +71,10 @@ func (a *restClient) GetInfo(
 	if err != nil {
 		return nil, err
 	}
+	boardingExitDelay, err := strconv.Atoi(resp.Payload.BoardingExitDelay)
+	if err != nil {
+		return nil, err
+	}
 	roundInterval, err := strconv.Atoi(resp.Payload.RoundInterval)
 	if err != nil {
 		return nil, err
@@ -113,23 +117,23 @@ func (a *restClient) GetInfo(
 	}
 
 	return &client.Info{
-		PubKey:                     resp.Payload.Pubkey,
-		VtxoTreeExpiry:             int64(vtxoTreeExpiry),
-		UnilateralExitDelay:        int64(unilateralExitDelay),
-		RoundInterval:              int64(roundInterval),
-		Network:                    resp.Payload.Network,
-		Dust:                       uint64(dust),
-		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
-		ForfeitAddress:             resp.Payload.ForfeitAddress,
-		Version:                    resp.Payload.Version,
-		MarketHourStartTime:        int64(nextStartTime),
-		MarketHourEndTime:          int64(nextEndTime),
-		MarketHourPeriod:           int64(period),
-		MarketHourRoundInterval:    int64(mhRoundInterval),
-		UtxoMinAmount:              int64(utxoMinAmount),
-		UtxoMaxAmount:              int64(utxoMaxAmount),
-		VtxoMinAmount:              int64(vtxoMinAmount),
-		VtxoMaxAmount:              int64(vtxoMaxAmount),
+		PubKey:                  resp.Payload.Pubkey,
+		VtxoTreeExpiry:          int64(vtxoTreeExpiry),
+		UnilateralExitDelay:     int64(unilateralExitDelay),
+		RoundInterval:           int64(roundInterval),
+		Network:                 resp.Payload.Network,
+		Dust:                    uint64(dust),
+		BoardingExitDelay:       int64(boardingExitDelay),
+		ForfeitAddress:          resp.Payload.ForfeitAddress,
+		Version:                 resp.Payload.Version,
+		MarketHourStartTime:     int64(nextStartTime),
+		MarketHourEndTime:       int64(nextEndTime),
+		MarketHourPeriod:        int64(period),
+		MarketHourRoundInterval: int64(mhRoundInterval),
+		UtxoMinAmount:           int64(utxoMinAmount),
+		UtxoMaxAmount:           int64(utxoMaxAmount),
+		VtxoMinAmount:           int64(vtxoMinAmount),
+		VtxoMaxAmount:           int64(vtxoMaxAmount),
 	}, nil
 }
 

@@ -238,28 +238,33 @@ func (a *arkClient) initWithWallet(
 		unilateralExitDelayType = common.LocktimeTypeSecond
 	}
 
+	boardingExitDelayType := common.LocktimeTypeBlock
+	if info.BoardingExitDelay >= 512 {
+		boardingExitDelayType = common.LocktimeTypeSecond
+	}
+
 	storeData := types.Config{
-		ServerUrl:                  args.ServerUrl,
-		ServerPubKey:               serverPubkey,
-		WalletType:                 args.Wallet.GetType(),
-		ClientType:                 args.ClientType,
-		Network:                    network,
-		VtxoTreeExpiry:             common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
-		RoundInterval:              info.RoundInterval,
-		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
-		Dust:                       info.Dust,
-		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
-		ForfeitAddress:             info.ForfeitAddress,
-		WithTransactionFeed:        args.WithTransactionFeed,
-		MarketHourStartTime:        info.MarketHourStartTime,
-		MarketHourEndTime:          info.MarketHourEndTime,
-		MarketHourPeriod:           info.MarketHourPeriod,
-		MarketHourRoundInterval:    info.MarketHourRoundInterval,
-		ExplorerURL:                explorerSvc.BaseUrl(),
-		UtxoMinAmount:              info.UtxoMinAmount,
-		UtxoMaxAmount:              info.UtxoMaxAmount,
-		VtxoMinAmount:              info.VtxoMinAmount,
-		VtxoMaxAmount:              info.VtxoMaxAmount,
+		ServerUrl:               args.ServerUrl,
+		ServerPubKey:            serverPubkey,
+		WalletType:              args.Wallet.GetType(),
+		ClientType:              args.ClientType,
+		Network:                 network,
+		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
+		RoundInterval:           info.RoundInterval,
+		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
+		BoardingExitDelay:       common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
+		Dust:                    info.Dust,
+		ForfeitAddress:          info.ForfeitAddress,
+		WithTransactionFeed:     args.WithTransactionFeed,
+		MarketHourStartTime:     info.MarketHourStartTime,
+		MarketHourEndTime:       info.MarketHourEndTime,
+		MarketHourPeriod:        info.MarketHourPeriod,
+		MarketHourRoundInterval: info.MarketHourRoundInterval,
+		ExplorerURL:             explorerSvc.BaseUrl(),
+		UtxoMinAmount:           info.UtxoMinAmount,
+		UtxoMaxAmount:           info.UtxoMaxAmount,
+		VtxoMinAmount:           info.VtxoMinAmount,
+		VtxoMaxAmount:           info.VtxoMaxAmount,
 	}
 	if err := a.store.ConfigStore().AddData(ctx, storeData); err != nil {
 		return err
@@ -324,28 +329,33 @@ func (a *arkClient) init(
 		unilateralExitDelayType = common.LocktimeTypeSecond
 	}
 
+	boardingExitDelayType := common.LocktimeTypeBlock
+	if info.BoardingExitDelay >= 512 {
+		boardingExitDelayType = common.LocktimeTypeSecond
+	}
+
 	cfgData := types.Config{
-		ServerUrl:                  args.ServerUrl,
-		ServerPubKey:               serverPubkey,
-		WalletType:                 args.WalletType,
-		ClientType:                 args.ClientType,
-		Network:                    network,
-		VtxoTreeExpiry:             common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
-		RoundInterval:              info.RoundInterval,
-		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
-		Dust:                       info.Dust,
-		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
-		ExplorerURL:                explorerSvc.BaseUrl(),
-		ForfeitAddress:             info.ForfeitAddress,
-		WithTransactionFeed:        args.WithTransactionFeed,
-		MarketHourStartTime:        info.MarketHourStartTime,
-		MarketHourEndTime:          info.MarketHourEndTime,
-		MarketHourPeriod:           info.MarketHourPeriod,
-		MarketHourRoundInterval:    info.MarketHourRoundInterval,
-		UtxoMinAmount:              info.UtxoMinAmount,
-		UtxoMaxAmount:              info.UtxoMaxAmount,
-		VtxoMinAmount:              info.VtxoMinAmount,
-		VtxoMaxAmount:              info.VtxoMaxAmount,
+		ServerUrl:               args.ServerUrl,
+		ServerPubKey:            serverPubkey,
+		WalletType:              args.WalletType,
+		ClientType:              args.ClientType,
+		Network:                 network,
+		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
+		RoundInterval:           info.RoundInterval,
+		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
+		BoardingExitDelay:       common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
+		Dust:                    info.Dust,
+		ExplorerURL:             explorerSvc.BaseUrl(),
+		ForfeitAddress:          info.ForfeitAddress,
+		WithTransactionFeed:     args.WithTransactionFeed,
+		MarketHourStartTime:     info.MarketHourStartTime,
+		MarketHourEndTime:       info.MarketHourEndTime,
+		MarketHourPeriod:        info.MarketHourPeriod,
+		MarketHourRoundInterval: info.MarketHourRoundInterval,
+		UtxoMinAmount:           info.UtxoMinAmount,
+		UtxoMaxAmount:           info.UtxoMaxAmount,
+		VtxoMinAmount:           info.VtxoMinAmount,
+		VtxoMaxAmount:           info.VtxoMaxAmount,
 	}
 	walletSvc, err := getWallet(a.store.ConfigStore(), &cfgData, supportedWallets)
 	if err != nil {
