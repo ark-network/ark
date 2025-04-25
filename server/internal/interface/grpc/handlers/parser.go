@@ -52,17 +52,6 @@ func parseNotes(notes []string) ([]note.Note, error) {
 	return notesParsed, nil
 }
 
-func parseTapscripts(tapscripts map[string]*arkv1.Tapscripts) map[string][]string {
-	parsed := make(map[string][]string)
-	for outpointStr, tapscript := range tapscripts {
-		if len(tapscript.GetScripts()) <= 0 {
-			continue
-		}
-		parsed[outpointStr] = tapscript.GetScripts()
-	}
-	return parsed
-}
-
 func parseReceiver(out *arkv1.Output) (domain.Receiver, error) {
 	decodedAddr, err := common.DecodeAddress(out.GetAddress())
 	if err != nil {
