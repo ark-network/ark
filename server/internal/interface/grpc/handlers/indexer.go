@@ -38,19 +38,52 @@ func (e indexerService) GetCommitmentTx(
 	batches := make(map[uint32]*arkv1.IndexerBatch)
 	for vout, batch := range resp.Batches {
 		batches[uint32(vout)] = &arkv1.IndexerBatch{
-			TotalBatchAmount:   batch.TotalBatchAmount,
-			TotalForfeitAmount: batch.TotalForfeitAmount,
-			TotalInputVtxos:    batch.TotalInputVtxos,
-			TotalOutputVtxos:   batch.TotalOutputVtxos,
-			ExpiresAt:          batch.ExpiresAt,
-			Swept:              batch.Swept,
+			TotalBatchAmount: batch.TotalBatchAmount,
+			TotalOutputVtxos: batch.TotalOutputVtxos,
+			ExpiresAt:        batch.ExpiresAt,
+			Swept:            batch.Swept,
 		}
 	}
 
 	return &arkv1.GetCommitmentTxResponse{
-		StartedAt: resp.StartedAt,
-		EndedAt:   resp.EndAt,
-		Batches:   batches,
+		StartedAt:         resp.StartedAt,
+		EndedAt:           resp.EndAt,
+		Batches:           batches,
+		TotalInputAmount:  resp.TotalInputAmount,
+		TotalInputVtxos:   resp.TotalInputtVtxos,
+		TotalOutputAmount: resp.TotalOutputAmount,
+		TotalOutputVtxos:  resp.TotalOutputVtxos,
+	}, nil
+}
+
+func (e indexerService) GetCommitmentTxLeaves(
+	ctx context.Context, request *arkv1.GetCommitmentTxLeavesRequest,
+) (*arkv1.GetCommitmentTxLeavesResponse, error) {
+	txid, err := parseTxid(request.GetTxid())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	page, err := parsePage(request.GetPage())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	resp, err := e.indexerSvc.GetCommitmentTxLeaves(ctx, txid, page)
+	if err != nil {
+		return nil, err
+	}
+
+	leaves := make([]*arkv1.IndexerOutpoint, 0, len(resp.Leaves))
+	for _, leaf := range resp.Leaves {
+		leaves = append(leaves, &arkv1.IndexerOutpoint{
+			Txid: leaf.Txid,
+			Vout: leaf.VOut,
+		})
+	}
+
+	return &arkv1.GetCommitmentTxLeavesResponse{
+		Leaves: leaves,
+		Page:   protoPage(resp.Page),
 	}, nil
 }
 
@@ -81,11 +114,38 @@ func (e indexerService) GetVtxoTree(ctx context.Context, request *arkv1.GetVtxoT
 
 	return &arkv1.GetVtxoTreeResponse{
 		VtxoTree: nodes,
-		Page: &arkv1.IndexerPageResponse{
-			Current: int32(resp.Page.Current),
-			Next:    int32(resp.Page.Next),
-			Total:   int32(resp.Page.Total),
-		},
+		Page:     protoPage(resp.Page),
+	}, nil
+}
+
+func (e indexerService) GetVtxoTreeLeaves(
+	ctx context.Context, request *arkv1.GetVtxoTreeLeavesRequest,
+) (*arkv1.GetVtxoTreeLeavesResponse, error) {
+	outpoint, err := parseOutpoint(request.GetBatchOutpoint())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	page, err := parsePage(request.GetPage())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	resp, err := e.indexerSvc.GetVtxoTreeLeaves(ctx, *outpoint, page)
+	if err != nil {
+		return nil, err
+	}
+
+	leaves := make([]*arkv1.IndexerOutpoint, 0, len(resp.Leaves))
+	for _, leaf := range resp.Leaves {
+		leaves = append(leaves, &arkv1.IndexerOutpoint{
+			Txid: leaf.Txid,
+			Vout: leaf.VOut,
+		})
+	}
+
+	return &arkv1.GetVtxoTreeLeavesResponse{
+		Leaves: leaves,
+		Page:   protoPage(resp.Page),
 	}, nil
 }
 
@@ -105,12 +165,8 @@ func (e indexerService) GetForfeitTxs(ctx context.Context, request *arkv1.GetFor
 	}
 
 	return &arkv1.GetForfeitTxsResponse{
-		Txs: resp.Txs,
-		Page: &arkv1.IndexerPageResponse{
-			Current: int32(resp.Page.Current),
-			Next:    int32(resp.Page.Next),
-			Total:   int32(resp.Page.Total),
-		},
+		Txs:  resp.Txs,
+		Page: protoPage(resp.Page),
 	}, nil
 }
 
@@ -141,15 +197,11 @@ func (e indexerService) GetConnectors(ctx context.Context, request *arkv1.GetCon
 
 	return &arkv1.GetConnectorsResponse{
 		Connectors: connectors,
-		Page: &arkv1.IndexerPageResponse{
-			Current: int32(resp.Page.Current),
-			Next:    int32(resp.Page.Next),
-			Total:   int32(resp.Page.Total),
-		},
+		Page:       protoPage(resp.Page),
 	}, nil
 }
 
-func (e indexerService) GetSpendableVtxos(ctx context.Context, request *arkv1.GetSpendableVtxosRequest) (*arkv1.GetSpendableVtxosResponse, error) {
+func (e indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosRequest) (*arkv1.GetVtxosResponse, error) {
 	pubkey, err := parseArkAddress(request.GetAddress())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -158,10 +210,15 @@ func (e indexerService) GetSpendableVtxos(ctx context.Context, request *arkv1.Ge
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
+	if request.GetSpendableOnly() && request.GetSpentOnly() {
+		return nil, status.Error(codes.InvalidArgument, "spendable and spent only can't be true at the same time")
+	}
 
-	resp, err := e.indexerSvc.GetSpendableVtxos(ctx, pubkey, page)
+	resp, err := e.indexerSvc.GetVtxos(
+		ctx, pubkey, request.GetSpendableOnly(), request.GetSpentOnly(), page,
+	)
 	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get spendable vtxos: %v", err)
+		return nil, status.Errorf(codes.Internal, "failed to get vtxos: %v", err)
 	}
 
 	vtxos := make([]*arkv1.IndexerVtxo, len(resp.Vtxos))
@@ -171,24 +228,21 @@ func (e indexerService) GetSpendableVtxos(ctx context.Context, request *arkv1.Ge
 				Txid: vtxo.Txid,
 				Vout: vtxo.VOut,
 			},
-			CreatedAt: vtxo.CreatedAt,
-			ExpiresAt: vtxo.ExpireAt,
-			Amount:    vtxo.Amount,
-			Script:    vtxo.PubKey,
-			IsLeaf:    vtxo.RedeemTx == "",
-			IsSwept:   vtxo.Swept,
-			IsSpent:   vtxo.Spent,
-			SpentBy:   vtxo.SpentBy,
+			CreatedAt:      vtxo.CreatedAt,
+			ExpiresAt:      vtxo.ExpireAt,
+			Amount:         vtxo.Amount,
+			Script:         vtxo.PubKey,
+			IsLeaf:         vtxo.RedeemTx == "",
+			IsSwept:        vtxo.Swept,
+			IsSpent:        vtxo.Spent,
+			SpentBy:        vtxo.SpentBy,
+			CommitmentTxid: vtxo.RoundTxid,
 		}
 	}
 
-	return &arkv1.GetSpendableVtxosResponse{
+	return &arkv1.GetVtxosResponse{
 		Vtxos: vtxos,
-		Page: &arkv1.IndexerPageResponse{
-			Current: int32(resp.Page.Current),
-			Next:    int32(resp.Page.Next),
-			Total:   int32(resp.Page.Total),
-		},
+		Page:  protoPage(resp.Page),
 	}, nil
 }
 
@@ -220,11 +274,11 @@ func (e indexerService) GetTransactionHistory(
 	history := make([]*arkv1.IndexerTxHistoryRecord, 0, len(resp.Records))
 	for _, record := range resp.Records {
 		historyRecord := &arkv1.IndexerTxHistoryRecord{
-			Type:        arkv1.IndexerTxType(record.Type),
-			Amount:      record.Amount,
-			CreatedAt:   record.CreatedAt.Unix(),
-			ConfirmedAt: record.ConfirmedAt,
-			IsSettled:   record.Settled,
+			Type:      arkv1.IndexerTxType(record.Type),
+			Amount:    record.Amount,
+			CreatedAt: record.CreatedAt.Unix(),
+			IsSettled: record.Settled,
+			SettledBy: record.SettledBy,
 		}
 		if record.CommitmentTxid != "" {
 			historyRecord.Key = &arkv1.IndexerTxHistoryRecord_CommitmentTxid{
@@ -241,11 +295,7 @@ func (e indexerService) GetTransactionHistory(
 
 	return &arkv1.GetTransactionHistoryResponse{
 		History: history,
-		Page: &arkv1.IndexerPageResponse{
-			Current: int32(resp.Pagination.Current),
-			Next:    int32(resp.Pagination.Next),
-			Total:   int32(resp.Pagination.Total),
-		},
+		Page:    protoPage(resp.Page),
 	}, nil
 }
 
@@ -264,10 +314,10 @@ func (e indexerService) GetVtxoChain(ctx context.Context, request *arkv1.GetVtxo
 		return nil, status.Errorf(codes.Internal, "failed to get vtxo chain: %v", err)
 	}
 
-	graph := make(map[string]*arkv1.IndexerTransactions)
-	for key, chain := range resp.Transactions {
-		txs := make([]*arkv1.IndexerChain, 0, len(chain.Txs))
-		for _, tx := range chain.Txs {
+	chain := make([]*arkv1.IndexerChain, 0)
+	for _, c := range resp.Chain {
+		spends := make([]*arkv1.IndexerChainedTx, 0, len(c.Txs))
+		for _, tx := range c.Txs {
 			var txType arkv1.IndexerChainedTxType
 			switch strings.ToLower(tx.Type) {
 			case "commitment":
@@ -277,24 +327,23 @@ func (e indexerService) GetVtxoChain(ctx context.Context, request *arkv1.GetVtxo
 			default:
 				txType = arkv1.IndexerChainedTxType_INDEXER_CHAINED_TX_TYPE_UNSPECIFIED
 			}
-			txs = append(txs, &arkv1.IndexerChain{
+			spends = append(spends, &arkv1.IndexerChainedTx{
 				Txid: tx.Txid,
 				Type: txType,
 			})
 		}
-		graph[key] = &arkv1.IndexerTransactions{
-			Txs:       txs,
-			ExpiresAt: chain.ExpiresAt,
-		}
+		chain = append(chain, &arkv1.IndexerChain{
+			Txid:      c.Txid,
+			Spends:    spends,
+			ExpiresAt: c.ExpiresAt,
+		})
 	}
 
 	return &arkv1.GetVtxoChainResponse{
-		Graph: graph,
-		Page: &arkv1.IndexerPageResponse{
-			Current: int32(resp.Page.Current),
-			Next:    int32(resp.Page.Next),
-			Total:   int32(resp.Page.Total),
-		},
+		Chain:              chain,
+		RootCommitmentTxid: resp.RootCommitmentTxid,
+		Depth:              resp.Depth,
+		Page:               protoPage(resp.Page),
 	}, nil
 }
 
@@ -314,12 +363,8 @@ func (e indexerService) GetVirtualTxs(ctx context.Context, request *arkv1.GetVir
 	}
 
 	return &arkv1.GetVirtualTxsResponse{
-		Txs: resp.Transactions,
-		Page: &arkv1.IndexerPageResponse{
-			Current: int32(resp.Page.Current),
-			Next:    int32(resp.Page.Next),
-			Total:   int32(resp.Page.Total),
-		},
+		Txs:  resp.Transactions,
+		Page: protoPage(resp.Page),
 	}, nil
 }
 
@@ -378,8 +423,8 @@ func parsePage(page *arkv1.IndexerPageRequest) (*application.Page, error) {
 		return nil, fmt.Errorf("invalid page index")
 	}
 	return &application.Page{
-		PageSize: int(page.Size),
-		PageNum:  int(page.Index),
+		PageSize: page.Size,
+		PageNum:  page.Index,
 	}, nil
 }
 
@@ -400,4 +445,16 @@ func parseTimestamp(timestamp int64) (int64, error) {
 		return 0, nil
 	}
 	return timestamp, nil
+}
+
+func protoPage(page application.PageResp) *arkv1.IndexerPageResponse {
+	emptyPage := application.PageResp{}
+	if page == emptyPage {
+		return nil
+	}
+	return &arkv1.IndexerPageResponse{
+		Current: page.Current,
+		Next:    page.Next,
+		Total:   page.Total,
+	}
 }
