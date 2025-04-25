@@ -6,7 +6,7 @@ import (
 
 type IntentMessage struct {
 	// InputTapTrees is the list of taproot trees associated with the spent inputs
-	// the index of the taproot tree in the list corresponds to the index of the input - 1
+	// the index of the taproot tree in the list corresponds to the index of the input + 1
 	// (we ignore the first bip322 input, as it is duplicate of the second one)
 	InputTapTrees []string `json:"input_tap_trees"`
 	// OnchainOutputIndexes specifies what are the outputs in the proof tx
