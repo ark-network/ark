@@ -28,6 +28,10 @@ type storeData struct {
 	MarketHourEndTime       string `json:"market_hour_end_time"`
 	MarketHourPeriod        string `json:"market_hour_period"`
 	MarketHourRoundInterval string `json:"market_hour_round_interval"`
+	UtxoMinAmount           string `json:"utxo_min_amount"`
+	UtxoMaxAmount           string `json:"utxo_max_amount"`
+	VtxoMinAmount           string `json:"vtxo_min_amount"`
+	VtxoMaxAmount           string `json:"vtxo_max_amount"`
 }
 
 func (d storeData) isEmpty() bool {
@@ -54,6 +58,10 @@ func (d storeData) decode() types.Config {
 	nextEndTime, _ := strconv.Atoi(d.MarketHourEndTime)
 	period, _ := strconv.Atoi(d.MarketHourPeriod)
 	mhRoundInterval, _ := strconv.Atoi(d.MarketHourRoundInterval)
+	utxoMinAmount, _ := strconv.Atoi(d.UtxoMinAmount)
+	utxoMaxAmount, _ := strconv.Atoi(d.UtxoMaxAmount)
+	vtxoMinAmount, _ := strconv.Atoi(d.VtxoMinAmount)
+	vtxoMaxAmount, _ := strconv.Atoi(d.VtxoMaxAmount)
 
 	vtxoTreeExpiryType := common.LocktimeTypeBlock
 	if vtxoTreeExpiry >= 512 {
@@ -77,8 +85,8 @@ func (d storeData) decode() types.Config {
 		ClientType:              d.ClientType,
 		Network:                 network,
 		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(vtxoTreeExpiry)},
-		RoundInterval:           int64(roundInterval),
 		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(unilateralExitDelay)},
+		RoundInterval:           int64(roundInterval),
 		BoardingExitDelay:       common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(boardingExitDelay)},
 		Dust:                    uint64(dust),
 		ExplorerURL:             explorerURL,
@@ -88,6 +96,10 @@ func (d storeData) decode() types.Config {
 		MarketHourEndTime:       int64(nextEndTime),
 		MarketHourPeriod:        int64(period),
 		MarketHourRoundInterval: int64(mhRoundInterval),
+		UtxoMinAmount:           int64(utxoMinAmount),
+		UtxoMaxAmount:           int64(utxoMaxAmount),
+		VtxoMinAmount:           int64(vtxoMinAmount),
+		VtxoMaxAmount:           int64(vtxoMaxAmount),
 	}
 }
 
@@ -110,5 +122,9 @@ func (d storeData) asMap() map[string]string {
 		"market_hour_end_time":       d.MarketHourEndTime,
 		"market_hour_period":         d.MarketHourPeriod,
 		"market_hour_round_interval": d.MarketHourRoundInterval,
+		"utxo_min_amount":            d.UtxoMinAmount,
+		"utxo_max_amount":            d.UtxoMaxAmount,
+		"vtxo_min_amount":            d.VtxoMinAmount,
+		"vtxo_max_amount":            d.VtxoMaxAmount,
 	}
 }

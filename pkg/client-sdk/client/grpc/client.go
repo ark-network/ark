@@ -80,6 +80,10 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		MarketHourEndTime:       resp.GetMarketHour().GetNextEndTime(),
 		MarketHourPeriod:        resp.GetMarketHour().GetPeriod(),
 		MarketHourRoundInterval: resp.GetMarketHour().GetRoundInterval(),
+		UtxoMinAmount:           resp.GetUtxoMinAmount(),
+		UtxoMaxAmount:           resp.GetUtxoMaxAmount(),
+		VtxoMinAmount:           resp.GetVtxoMinAmount(),
+		VtxoMaxAmount:           resp.GetVtxoMaxAmount(),
 	}, nil
 }
 

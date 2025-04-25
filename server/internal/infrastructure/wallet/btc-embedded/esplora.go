@@ -45,7 +45,7 @@ func (f *esploraClient) broadcast(txhex string) error {
 			return err
 		}
 
-		if strings.Contains(strings.ToLower(string(content)), "non-BIP68-final") {
+		if strings.Contains(strings.ToLower(string(content)), "non-bip68-final") {
 			return ports.ErrNonFinalBIP68
 		}
 

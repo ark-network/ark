@@ -60,6 +60,10 @@ type ServiceInfo struct {
 	Dust                uint64
 	ForfeitAddress      string
 	NextMarketHour      *NextMarketHour
+	UtxoMinAmount       int64
+	UtxoMaxAmount       int64
+	VtxoMinAmount       int64
+	VtxoMaxAmount       int64
 }
 
 type NextMarketHour struct {

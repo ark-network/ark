@@ -165,7 +165,7 @@ var (
 	VtxoMinAmount             = "VTXO_MIN_AMOUNT"
 
 	defaultDatadir             = common.AppDataDir("arkd", false)
-	defaultRoundInterval       = 15
+	defaultRoundInterval       = 30
 	DefaultPort                = 7070
 	defaultDbType              = "sqlite"
 	defaultEventDbType         = "badger"
@@ -173,17 +173,21 @@ var (
 	defaultTxBuilderType       = "covenantless"
 	defaultNetwork             = "bitcoin"
 	defaultEsploraURL          = "https://blockstream.info/api"
-	defaultLogLevel            = 5
-	defaultVtxoTreeExpiry      = 604672
-	defaultUnilateralExitDelay = 1024
-	defaultBoardingExitDelay   = 604672
+	defaultLogLevel            = 4
+	defaultVtxoTreeExpiry      = 604672  // 7 days
+	defaultUnilateralExitDelay = 86400   // 24 hours
+	defaultBoardingExitDelay   = 7776000 // 3 months
 	defaultNoMacaroons         = false
 	defaultNoTLS               = true
 	defaultNostrDefaultRelays  = []string{"wss://relay.primal.net", "wss://relay.damus.io"}
 	defaultMarketHourStartTime = time.Now()
-	defaultMarketHourEndTime   = defaultMarketHourStartTime.Add(time.Duration(defaultRoundInterval) * time.Second)
-	defaultMarketHourPeriod    = time.Duration(24) * time.Hour
+	defaultMarketHourEndTime   = defaultMarketHourStartTime.Add(time.Hour)
+	defaultMarketHourPeriod    = 24 * time.Hour
 	defaultMarketHourInterval  = time.Duration(defaultRoundInterval) * time.Second
+	defaultUtxoMaxAmount       = -1 // -1 means no limit (default), 0 means boarding not allowed
+	defaultUtxoMinAmount       = -1 // -1 means native dust limit (default)
+	defaultVtxoMinAmount       = -1 // -1 means native dust limit (default)
+	defaultVtxoMaxAmount       = -1 // -1 means no limit (default)
 
 	defaultAllowZeroFees             = false
 	defaultRoundMaxParticipantsCount = 128
@@ -215,6 +219,11 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(MarketHourRoundInterval, defaultMarketHourInterval)
 	viper.SetDefault(AllowZeroFees, defaultAllowZeroFees)
 	viper.SetDefault(RoundMaxParticipantsCount, defaultRoundMaxParticipantsCount)
+	viper.SetDefault(UtxoMaxAmount, defaultUtxoMaxAmount)
+	viper.SetDefault(UtxoMinAmount, defaultUtxoMinAmount)
+	viper.SetDefault(VtxoMaxAmount, defaultVtxoMaxAmount)
+	viper.SetDefault(VtxoMinAmount, defaultVtxoMinAmount)
+
 	net, err := getNetwork()
 	if err != nil {
 		return nil, fmt.Errorf("error while getting network: %s", err)
