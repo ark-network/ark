@@ -31,10 +31,7 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
-const (
-	marketHourDelta   = 5 * time.Minute
-	proofOfFundsDelta = 15 * time.Second
-)
+const marketHourDelta = 5 * time.Minute
 
 type covenantlessService struct {
 	network             common.Network
