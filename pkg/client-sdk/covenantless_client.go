@@ -739,7 +739,7 @@ func (a *covenantlessArkClient) CollaborativeExit(
 		},
 	}
 
-	boardingUtxos, vtxos, changeAmount, err := a.Select(ctx, withExpiryCoinselect, options.SelectRecoverableVtxos, amount)
+	boardingUtxos, vtxos, changeAmount, err := a.selectFunds(ctx, withExpiryCoinselect, options.SelectRecoverableVtxos, amount)
 	if err != nil {
 		return "", err
 	}
@@ -1299,7 +1299,7 @@ func (a *covenantlessArkClient) completeUnilateralExit(
 	return ptx.B64Encode()
 }
 
-func (a *covenantlessArkClient) Select(
+func (a *covenantlessArkClient) selectFunds(
 	ctx context.Context,
 	withExpiryCoinselect bool,
 	selectRecoverableVtxos bool,
@@ -1414,7 +1414,7 @@ func (a *covenantlessArkClient) sendOffchain(
 	}
 
 	// coinselect boarding utxos and vtxos
-	boardingUtxos, vtxos, changeAmount, err := a.Select(ctx, withExpiryCoinselect, options.SelectRecoverableVtxos, sumOfReceivers)
+	boardingUtxos, vtxos, changeAmount, err := a.selectFunds(ctx, withExpiryCoinselect, options.SelectRecoverableVtxos, sumOfReceivers)
 	if err != nil {
 		return "", err
 	}
