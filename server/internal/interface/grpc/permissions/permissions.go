@@ -110,7 +110,7 @@ func Whitelist() map[string][]bakery.Op {
 			Entity: EntityWallet,
 			Action: "read",
 		}},
-		fmt.Sprintf("/%s/RegisterInputsForNextRound", arkv1.ArkService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/RegisterIntent", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
 		}},
