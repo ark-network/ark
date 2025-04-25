@@ -1492,7 +1492,7 @@ func (a *covenantlessArkClient) makeBIP322Signature(
 		outputsTxOut = append(outputsTxOut, txOut)
 	}
 
-	message, err := bip322.Message{
+	message, err := tree.IntentMessage{
 		InputTapTrees:        inputTapTrees,
 		OnchainOutputIndexes: onchainOutputsIndexes,
 		ExpireAt:             expireAt,

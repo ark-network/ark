@@ -161,7 +161,7 @@ func (h *handler) RegisterIntent(
 			return nil, status.Error(codes.InvalidArgument, "missing message")
 		}
 
-		var message bip322.Message
+		var message tree.IntentMessage
 		if err := message.Decode(bip322Signature.Message); err != nil {
 			return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 message")
 		}

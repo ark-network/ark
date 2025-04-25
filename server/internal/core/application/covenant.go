@@ -226,7 +226,7 @@ func (s *covenantService) SpendNotes(_ context.Context, _ []note.Note) (string, 
 	return "", fmt.Errorf("unimplemented")
 }
 
-func (s *covenantService) RegisterIntent(ctx context.Context, bip322signature bip322.Signature, message bip322.Message) (string, error) {
+func (s *covenantService) RegisterIntent(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) (string, error) {
 	// the vtxo to swap for new ones
 	vtxosInputs := make([]domain.Vtxo, 0)
 	// the boarding utxos to add in the commitment tx

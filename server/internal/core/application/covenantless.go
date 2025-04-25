@@ -659,7 +659,7 @@ func (s *covenantlessService) SpendNotes(ctx context.Context, notes []note.Note)
 	return request.Id, nil
 }
 
-func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signature bip322.Signature, message bip322.Message) (string, error) {
+func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) (string, error) {
 	vtxoKeys := make([]domain.VtxoKey, 0)
 	// the vtxo to swap for new ones
 	vtxosInputs := make([]domain.Vtxo, 0)

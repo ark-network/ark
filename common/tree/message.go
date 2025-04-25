@@ -1,12 +1,10 @@
-package bip322
+package tree
 
 import (
 	"encoding/json"
-
-	"github.com/ark-network/ark/common/tree"
 )
 
-type Message struct {
+type IntentMessage struct {
 	// InputTapTrees is the list of taproot trees associated with the spent inputs
 	// the index of the taproot tree in the list corresponds to the index of the input - 1
 	// (we ignore the first bip322 input, as it is duplicate of the second one)
@@ -22,10 +20,10 @@ type Message struct {
 	ExpireAt int64 `json:"expire_at"`
 	// Musig2Data contains the related information about the vtxo tree signing
 	// if the outputs are not registered in the proof or all the outputs are onchain, this field is not required
-	Musig2Data *tree.Musig2 `json:"musig2_data"`
+	Musig2Data *Musig2 `json:"musig2_data"`
 }
 
-func (m Message) Encode() (string, error) {
+func (m IntentMessage) Encode() (string, error) {
 	encoded, err := json.Marshal(m)
 	if err != nil {
 		return "", err
@@ -33,6 +31,6 @@ func (m Message) Encode() (string, error) {
 	return string(encoded), nil
 }
 
-func (m *Message) Decode(data string) error {
+func (m *IntentMessage) Decode(data string) error {
 	return json.Unmarshal([]byte(data), m)
 }
