@@ -107,7 +107,7 @@ message GetForfeitTxsRequest {
   IndexerPageRequest page = 2;
 }
 message GetForfeitTxsResponse {
-  repeated string txs = 1;
+  repeated string txids = 1;
   IndexerPageResponse page = 2;
 }
 
@@ -179,7 +179,7 @@ message SubscribeForAddressesResponse {
 }
 
 message IndexerBatch {
-  uint64 total_batch_amount = 1;
+  uint64 total_output_amount = 1;
   int32 total_output_vtxos = 2;
   int64 expires_at = 3;
   bool swept = 4;

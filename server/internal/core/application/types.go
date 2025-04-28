@@ -170,10 +170,10 @@ type CommitmentTxLeavesResp struct {
 }
 
 type Batch struct {
-	TotalBatchAmount uint64
-	TotalOutputVtxos int32
-	ExpiresAt        int64
-	Swept            bool
+	TotalOutputAmount uint64
+	TotalOutputVtxos  int32
+	ExpiresAt         int64
+	Swept             bool
 }
 
 type VtxoTreeResp struct {

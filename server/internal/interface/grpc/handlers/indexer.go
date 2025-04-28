@@ -38,10 +38,10 @@ func (e indexerService) GetCommitmentTx(
 	batches := make(map[uint32]*arkv1.IndexerBatch)
 	for vout, batch := range resp.Batches {
 		batches[uint32(vout)] = &arkv1.IndexerBatch{
-			TotalBatchAmount: batch.TotalBatchAmount,
-			TotalOutputVtxos: batch.TotalOutputVtxos,
-			ExpiresAt:        batch.ExpiresAt,
-			Swept:            batch.Swept,
+			TotalOutputAmount: batch.TotalOutputAmount,
+			TotalOutputVtxos:  batch.TotalOutputVtxos,
+			ExpiresAt:         batch.ExpiresAt,
+			Swept:             batch.Swept,
 		}
 	}
 
@@ -165,8 +165,8 @@ func (e indexerService) GetForfeitTxs(ctx context.Context, request *arkv1.GetFor
 	}
 
 	return &arkv1.GetForfeitTxsResponse{
-		Txs:  resp.Txs,
-		Page: protoPage(resp.Page),
+		Txids: resp.Txs,
+		Page:  protoPage(resp.Page),
 	}, nil
 }
 

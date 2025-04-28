@@ -636,7 +636,7 @@
     "v1GetForfeitTxsResponse": {
       "type": "object",
       "properties": {
-        "txs": {
+        "txids": {
           "type": "array",
           "items": {
             "type": "string"
@@ -757,7 +757,7 @@
     "v1IndexerBatch": {
       "type": "object",
       "properties": {
-        "totalBatchAmount": {
+        "totalOutputAmount": {
           "type": "string",
           "format": "uint64"
         },

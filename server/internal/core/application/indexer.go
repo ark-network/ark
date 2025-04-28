@@ -66,10 +66,10 @@ func (i *indexerService) GetCommitmentTxInfo(
 	batches := make(map[VOut]Batch)
 	// TODO: currently commitment tx has only one batch, in future multiple batches will be supported
 	batches[0] = Batch{
-		TotalBatchAmount: roundStats.TotalBatchAmount,
-		TotalOutputVtxos: roundStats.TotalOutputVtxos,
-		ExpiresAt:        roundStats.ExpiresAt,
-		Swept:            roundStats.Swept,
+		TotalOutputAmount: roundStats.TotalBatchAmount,
+		TotalOutputVtxos:  roundStats.TotalOutputVtxos,
+		ExpiresAt:         roundStats.ExpiresAt,
+		Swept:             roundStats.Swept,
 	}
 
 	return &CommitmentTxResp{
