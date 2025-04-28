@@ -14,10 +14,10 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1GetSpendableVtxosResponse v1 get spendable vtxos response
+// V1GetVtxosResponse v1 get vtxos response
 //
-// swagger:model v1GetSpendableVtxosResponse
-type V1GetSpendableVtxosResponse struct {
+// swagger:model v1GetVtxosResponse
+type V1GetVtxosResponse struct {
 
 	// page
 	Page *V1IndexerPageResponse `json:"page,omitempty"`
@@ -26,8 +26,8 @@ type V1GetSpendableVtxosResponse struct {
 	Vtxos []*V1IndexerVtxo `json:"vtxos"`
 }
 
-// Validate validates this v1 get spendable vtxos response
-func (m *V1GetSpendableVtxosResponse) Validate(formats strfmt.Registry) error {
+// Validate validates this v1 get vtxos response
+func (m *V1GetVtxosResponse) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validatePage(formats); err != nil {
@@ -44,7 +44,7 @@ func (m *V1GetSpendableVtxosResponse) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1GetSpendableVtxosResponse) validatePage(formats strfmt.Registry) error {
+func (m *V1GetVtxosResponse) validatePage(formats strfmt.Registry) error {
 	if swag.IsZero(m.Page) { // not required
 		return nil
 	}
@@ -63,7 +63,7 @@ func (m *V1GetSpendableVtxosResponse) validatePage(formats strfmt.Registry) erro
 	return nil
 }
 
-func (m *V1GetSpendableVtxosResponse) validateVtxos(formats strfmt.Registry) error {
+func (m *V1GetVtxosResponse) validateVtxos(formats strfmt.Registry) error {
 	if swag.IsZero(m.Vtxos) { // not required
 		return nil
 	}
@@ -89,8 +89,8 @@ func (m *V1GetSpendableVtxosResponse) validateVtxos(formats strfmt.Registry) err
 	return nil
 }
 
-// ContextValidate validate this v1 get spendable vtxos response based on the context it is used
-func (m *V1GetSpendableVtxosResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+// ContextValidate validate this v1 get vtxos response based on the context it is used
+func (m *V1GetVtxosResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.contextValidatePage(ctx, formats); err != nil {
@@ -107,7 +107,7 @@ func (m *V1GetSpendableVtxosResponse) ContextValidate(ctx context.Context, forma
 	return nil
 }
 
-func (m *V1GetSpendableVtxosResponse) contextValidatePage(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1GetVtxosResponse) contextValidatePage(ctx context.Context, formats strfmt.Registry) error {
 
 	if m.Page != nil {
 
@@ -128,7 +128,7 @@ func (m *V1GetSpendableVtxosResponse) contextValidatePage(ctx context.Context, f
 	return nil
 }
 
-func (m *V1GetSpendableVtxosResponse) contextValidateVtxos(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1GetVtxosResponse) contextValidateVtxos(ctx context.Context, formats strfmt.Registry) error {
 
 	for i := 0; i < len(m.Vtxos); i++ {
 
@@ -154,7 +154,7 @@ func (m *V1GetSpendableVtxosResponse) contextValidateVtxos(ctx context.Context, 
 }
 
 // MarshalBinary interface implementation
-func (m *V1GetSpendableVtxosResponse) MarshalBinary() ([]byte, error) {
+func (m *V1GetVtxosResponse) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -162,8 +162,8 @@ func (m *V1GetSpendableVtxosResponse) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *V1GetSpendableVtxosResponse) UnmarshalBinary(b []byte) error {
-	var res V1GetSpendableVtxosResponse
+func (m *V1GetVtxosResponse) UnmarshalBinary(b []byte) error {
+	var res V1GetVtxosResponse
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

@@ -13,35 +13,20 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1IndexerTxHistoryRecord v1 indexer tx history record
+// V1IndexerChainedTx v1 indexer chained tx
 //
-// swagger:model v1IndexerTxHistoryRecord
-type V1IndexerTxHistoryRecord struct {
+// swagger:model v1IndexerChainedTx
+type V1IndexerChainedTx struct {
 
-	// amount
-	Amount string `json:"amount,omitempty"`
-
-	// commitment txid
-	CommitmentTxid string `json:"commitmentTxid,omitempty"`
-
-	// confirmed at
-	ConfirmedAt string `json:"confirmedAt,omitempty"`
-
-	// created at
-	CreatedAt string `json:"createdAt,omitempty"`
-
-	// is settled
-	IsSettled bool `json:"isSettled,omitempty"`
+	// txid
+	Txid string `json:"txid,omitempty"`
 
 	// type
-	Type *V1IndexerTxType `json:"type,omitempty"`
-
-	// virtual txid
-	VirtualTxid string `json:"virtualTxid,omitempty"`
+	Type *V1IndexerChainedTxType `json:"type,omitempty"`
 }
 
-// Validate validates this v1 indexer tx history record
-func (m *V1IndexerTxHistoryRecord) Validate(formats strfmt.Registry) error {
+// Validate validates this v1 indexer chained tx
+func (m *V1IndexerChainedTx) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateType(formats); err != nil {
@@ -54,7 +39,7 @@ func (m *V1IndexerTxHistoryRecord) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1IndexerTxHistoryRecord) validateType(formats strfmt.Registry) error {
+func (m *V1IndexerChainedTx) validateType(formats strfmt.Registry) error {
 	if swag.IsZero(m.Type) { // not required
 		return nil
 	}
@@ -73,8 +58,8 @@ func (m *V1IndexerTxHistoryRecord) validateType(formats strfmt.Registry) error {
 	return nil
 }
 
-// ContextValidate validate this v1 indexer tx history record based on the context it is used
-func (m *V1IndexerTxHistoryRecord) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+// ContextValidate validate this v1 indexer chained tx based on the context it is used
+func (m *V1IndexerChainedTx) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.contextValidateType(ctx, formats); err != nil {
@@ -87,7 +72,7 @@ func (m *V1IndexerTxHistoryRecord) ContextValidate(ctx context.Context, formats 
 	return nil
 }
 
-func (m *V1IndexerTxHistoryRecord) contextValidateType(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1IndexerChainedTx) contextValidateType(ctx context.Context, formats strfmt.Registry) error {
 
 	if m.Type != nil {
 
@@ -109,7 +94,7 @@ func (m *V1IndexerTxHistoryRecord) contextValidateType(ctx context.Context, form
 }
 
 // MarshalBinary interface implementation
-func (m *V1IndexerTxHistoryRecord) MarshalBinary() ([]byte, error) {
+func (m *V1IndexerChainedTx) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -117,8 +102,8 @@ func (m *V1IndexerTxHistoryRecord) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *V1IndexerTxHistoryRecord) UnmarshalBinary(b []byte) error {
-	var res V1IndexerTxHistoryRecord
+func (m *V1IndexerChainedTx) UnmarshalBinary(b []byte) error {
+	var res V1IndexerChainedTx
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

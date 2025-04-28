@@ -21,8 +21,8 @@ type V1GetForfeitTxsResponse struct {
 	// page
 	Page *V1IndexerPageResponse `json:"page,omitempty"`
 
-	// txs
-	Txs []string `json:"txs"`
+	// txids
+	Txids []string `json:"txids"`
 }
 
 // Validate validates this v1 get forfeit txs response

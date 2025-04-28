@@ -7,11 +7,11 @@ package models
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
-	"github.com/go-openapi/validate"
 )
 
 // V1GetVtxoChainResponse v1 get vtxo chain response
@@ -19,18 +19,24 @@ import (
 // swagger:model v1GetVtxoChainResponse
 type V1GetVtxoChainResponse struct {
 
-	// graph
-	Graph map[string]V1IndexerTransactions `json:"graph,omitempty"`
+	// chain
+	Chain []*V1IndexerChain `json:"chain"`
+
+	// depth
+	Depth int32 `json:"depth,omitempty"`
 
 	// page
 	Page *V1IndexerPageResponse `json:"page,omitempty"`
+
+	// root commitment txid
+	RootCommitmentTxid string `json:"rootCommitmentTxid,omitempty"`
 }
 
 // Validate validates this v1 get vtxo chain response
 func (m *V1GetVtxoChainResponse) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateGraph(formats); err != nil {
+	if err := m.validateChain(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -44,22 +50,22 @@ func (m *V1GetVtxoChainResponse) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1GetVtxoChainResponse) validateGraph(formats strfmt.Registry) error {
-	if swag.IsZero(m.Graph) { // not required
+func (m *V1GetVtxoChainResponse) validateChain(formats strfmt.Registry) error {
+	if swag.IsZero(m.Chain) { // not required
 		return nil
 	}
 
-	for k := range m.Graph {
-
-		if err := validate.Required("graph"+"."+k, "body", m.Graph[k]); err != nil {
-			return err
+	for i := 0; i < len(m.Chain); i++ {
+		if swag.IsZero(m.Chain[i]) { // not required
+			continue
 		}
-		if val, ok := m.Graph[k]; ok {
-			if err := val.Validate(formats); err != nil {
+
+		if m.Chain[i] != nil {
+			if err := m.Chain[i].Validate(formats); err != nil {
 				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("graph" + "." + k)
+					return ve.ValidateName("chain" + "." + strconv.Itoa(i))
 				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("graph" + "." + k)
+					return ce.ValidateName("chain" + "." + strconv.Itoa(i))
 				}
 				return err
 			}
@@ -93,7 +99,7 @@ func (m *V1GetVtxoChainResponse) validatePage(formats strfmt.Registry) error {
 func (m *V1GetVtxoChainResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateGraph(ctx, formats); err != nil {
+	if err := m.contextValidateChain(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -107,12 +113,22 @@ func (m *V1GetVtxoChainResponse) ContextValidate(ctx context.Context, formats st
 	return nil
 }
 
-func (m *V1GetVtxoChainResponse) contextValidateGraph(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1GetVtxoChainResponse) contextValidateChain(ctx context.Context, formats strfmt.Registry) error {
 
-	for k := range m.Graph {
+	for i := 0; i < len(m.Chain); i++ {
 
-		if val, ok := m.Graph[k]; ok {
-			if err := val.ContextValidate(ctx, formats); err != nil {
+		if m.Chain[i] != nil {
+
+			if swag.IsZero(m.Chain[i]) { // not required
+				return nil
+			}
+
+			if err := m.Chain[i].ContextValidate(ctx, formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("chain" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("chain" + "." + strconv.Itoa(i))
+				}
 				return err
 			}
 		}

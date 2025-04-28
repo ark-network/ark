@@ -23,14 +23,8 @@ type V1IndexerBatch struct {
 	// swept
 	Swept bool `json:"swept,omitempty"`
 
-	// total batch amount
-	TotalBatchAmount string `json:"totalBatchAmount,omitempty"`
-
-	// total forfeit amount
-	TotalForfeitAmount string `json:"totalForfeitAmount,omitempty"`
-
-	// total input vtxos
-	TotalInputVtxos int32 `json:"totalInputVtxos,omitempty"`
+	// total output amount
+	TotalOutputAmount string `json:"totalOutputAmount,omitempty"`
 
 	// total output vtxos
 	TotalOutputVtxos int32 `json:"totalOutputVtxos,omitempty"`

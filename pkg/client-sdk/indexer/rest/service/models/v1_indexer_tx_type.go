@@ -38,9 +38,6 @@ const (
 
 	// V1IndexerTxTypeINDEXERTXTYPESENT captures enum value "INDEXER_TX_TYPE_SENT"
 	V1IndexerTxTypeINDEXERTXTYPESENT V1IndexerTxType = "INDEXER_TX_TYPE_SENT"
-
-	// V1IndexerTxTypeINDEXERTXTYPESWEEP captures enum value "INDEXER_TX_TYPE_SWEEP"
-	V1IndexerTxTypeINDEXERTXTYPESWEEP V1IndexerTxType = "INDEXER_TX_TYPE_SWEEP"
 )
 
 // for schema
@@ -48,7 +45,7 @@ var v1IndexerTxTypeEnum []interface{}
 
 func init() {
 	var res []V1IndexerTxType
-	if err := json.Unmarshal([]byte(`["INDEXER_TX_TYPE_UNSPECIFIED","INDEXER_TX_TYPE_RECEIVED","INDEXER_TX_TYPE_SENT","INDEXER_TX_TYPE_SWEEP"]`), &res); err != nil {
+	if err := json.Unmarshal([]byte(`["INDEXER_TX_TYPE_UNSPECIFIED","INDEXER_TX_TYPE_RECEIVED","INDEXER_TX_TYPE_SENT"]`), &res); err != nil {
 		panic(err)
 	}
 	for _, v := range res {

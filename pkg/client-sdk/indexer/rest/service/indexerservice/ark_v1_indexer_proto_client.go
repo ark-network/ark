@@ -10,7 +10,7 @@ import (
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 
-	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/indexerservice/indexer_service"
+	"github.com/ark-network/ark/pkg/client-sdk/indexer/rest/service/indexerservice/indexer_service"
 )
 
 // Default ark v1 indexer proto HTTP client.

@@ -56,11 +56,11 @@ type ClientOption func(*runtime.ClientOperation)
 type ClientService interface {
 	IndexerServiceGetCommitmentTx(params *IndexerServiceGetCommitmentTxParams, opts ...ClientOption) (*IndexerServiceGetCommitmentTxOK, error)
 
+	IndexerServiceGetCommitmentTxLeaves(params *IndexerServiceGetCommitmentTxLeavesParams, opts ...ClientOption) (*IndexerServiceGetCommitmentTxLeavesOK, error)
+
 	IndexerServiceGetConnectors(params *IndexerServiceGetConnectorsParams, opts ...ClientOption) (*IndexerServiceGetConnectorsOK, error)
 
 	IndexerServiceGetForfeitTxs(params *IndexerServiceGetForfeitTxsParams, opts ...ClientOption) (*IndexerServiceGetForfeitTxsOK, error)
-
-	IndexerServiceGetSpendableVtxos(params *IndexerServiceGetSpendableVtxosParams, opts ...ClientOption) (*IndexerServiceGetSpendableVtxosOK, error)
 
 	IndexerServiceGetSweptCommitmentTx(params *IndexerServiceGetSweptCommitmentTxParams, opts ...ClientOption) (*IndexerServiceGetSweptCommitmentTxOK, error)
 
@@ -71,6 +71,10 @@ type ClientService interface {
 	IndexerServiceGetVtxoChain(params *IndexerServiceGetVtxoChainParams, opts ...ClientOption) (*IndexerServiceGetVtxoChainOK, error)
 
 	IndexerServiceGetVtxoTree(params *IndexerServiceGetVtxoTreeParams, opts ...ClientOption) (*IndexerServiceGetVtxoTreeOK, error)
+
+	IndexerServiceGetVtxoTreeLeaves(params *IndexerServiceGetVtxoTreeLeavesParams, opts ...ClientOption) (*IndexerServiceGetVtxoTreeLeavesOK, error)
+
+	IndexerServiceGetVtxos(params *IndexerServiceGetVtxosParams, opts ...ClientOption) (*IndexerServiceGetVtxosOK, error)
 
 	SetTransport(transport runtime.ClientTransport)
 }
@@ -109,6 +113,43 @@ func (a *Client) IndexerServiceGetCommitmentTx(params *IndexerServiceGetCommitme
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*IndexerServiceGetCommitmentTxDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+IndexerServiceGetCommitmentTxLeaves indexer service get commitment tx leaves API
+*/
+func (a *Client) IndexerServiceGetCommitmentTxLeaves(params *IndexerServiceGetCommitmentTxLeavesParams, opts ...ClientOption) (*IndexerServiceGetCommitmentTxLeavesOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewIndexerServiceGetCommitmentTxLeavesParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "IndexerService_GetCommitmentTxLeaves",
+		Method:             "GET",
+		PathPattern:        "/v1/commitmentTx/{txid}/leaves",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &IndexerServiceGetCommitmentTxLeavesReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*IndexerServiceGetCommitmentTxLeavesOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*IndexerServiceGetCommitmentTxLeavesDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
@@ -183,43 +224,6 @@ func (a *Client) IndexerServiceGetForfeitTxs(params *IndexerServiceGetForfeitTxs
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*IndexerServiceGetForfeitTxsDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-IndexerServiceGetSpendableVtxos indexer service get spendable vtxos API
-*/
-func (a *Client) IndexerServiceGetSpendableVtxos(params *IndexerServiceGetSpendableVtxosParams, opts ...ClientOption) (*IndexerServiceGetSpendableVtxosOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewIndexerServiceGetSpendableVtxosParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "IndexerService_GetSpendableVtxos",
-		Method:             "GET",
-		PathPattern:        "/v1/spendableVtxos/{address}",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &IndexerServiceGetSpendableVtxosReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*IndexerServiceGetSpendableVtxosOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*IndexerServiceGetSpendableVtxosDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
@@ -405,6 +409,80 @@ func (a *Client) IndexerServiceGetVtxoTree(params *IndexerServiceGetVtxoTreePara
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*IndexerServiceGetVtxoTreeDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+IndexerServiceGetVtxoTreeLeaves indexer service get vtxo tree leaves API
+*/
+func (a *Client) IndexerServiceGetVtxoTreeLeaves(params *IndexerServiceGetVtxoTreeLeavesParams, opts ...ClientOption) (*IndexerServiceGetVtxoTreeLeavesOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewIndexerServiceGetVtxoTreeLeavesParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "IndexerService_GetVtxoTreeLeaves",
+		Method:             "GET",
+		PathPattern:        "/v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/tree/leaves",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &IndexerServiceGetVtxoTreeLeavesReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*IndexerServiceGetVtxoTreeLeavesOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*IndexerServiceGetVtxoTreeLeavesDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+IndexerServiceGetVtxos indexer service get vtxos API
+*/
+func (a *Client) IndexerServiceGetVtxos(params *IndexerServiceGetVtxosParams, opts ...ClientOption) (*IndexerServiceGetVtxosOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewIndexerServiceGetVtxosParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "IndexerService_GetVtxos",
+		Method:             "GET",
+		PathPattern:        "/v1/getVtxos/{address}",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &IndexerServiceGetVtxosReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*IndexerServiceGetVtxosOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*IndexerServiceGetVtxosDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

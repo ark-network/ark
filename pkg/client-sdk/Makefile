@@ -1,16 +1,17 @@
 .PHONY: genrest test vet lint prepare-wasm-test
 
-client_dir = $(or $(REST_DIR),$(PWD)/client/rest/service)
+ark_client_dir = $(or $(REST_DIR),$(PWD)/client/rest/service)
+indexer_client_dir = $(or $(REST_DIR),$(PWD)/indexer/rest/service)
 
 ## genrest: compiles rest client from stub with https://github.com/go-swagger/go-swagger
 genrest:
 	@echo "Cleaning existing files..."
-	@rm -rf $(client_dir)
+	@rm -rf $(ark_client_dir) $(indexer_client_dir)
 	@echo "Generating rest client from stub..."
-	@mkdir -p $(client_dir)
-	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/service.swagger.json -t $(client_dir) --client-package=arkservice
-	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/explorer.swagger.json -t $(client_dir) --client-package=explorerservice
-	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/indexer.swagger.json -t $(client_dir) --client-package=indexerservice
+	@mkdir -p $(ark_client_dir) $(indexer_client_dir)
+	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/service.swagger.json -t $(ark_client_dir) --client-package=arkservice
+	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/explorer.swagger.json -t $(ark_client_dir) --client-package=explorerservice
+	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/indexer.swagger.json -t $(indexer_client_dir) --client-package=indexerservice
 
 ## test: runs unit tests
 test:

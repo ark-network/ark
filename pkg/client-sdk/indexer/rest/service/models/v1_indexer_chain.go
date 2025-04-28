@@ -7,6 +7,7 @@ package models
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
@@ -18,18 +19,21 @@ import (
 // swagger:model v1IndexerChain
 type V1IndexerChain struct {
 
+	// expires at
+	ExpiresAt string `json:"expiresAt,omitempty"`
+
+	// spends
+	Spends []*V1IndexerChainedTx `json:"spends"`
+
 	// txid
 	Txid string `json:"txid,omitempty"`
-
-	// type
-	Type *V1IndexerChainedTxType `json:"type,omitempty"`
 }
 
 // Validate validates this v1 indexer chain
 func (m *V1IndexerChain) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateType(formats); err != nil {
+	if err := m.validateSpends(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -39,20 +43,27 @@ func (m *V1IndexerChain) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1IndexerChain) validateType(formats strfmt.Registry) error {
-	if swag.IsZero(m.Type) { // not required
+func (m *V1IndexerChain) validateSpends(formats strfmt.Registry) error {
+	if swag.IsZero(m.Spends) { // not required
 		return nil
 	}
 
-	if m.Type != nil {
-		if err := m.Type.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("type")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("type")
-			}
-			return err
+	for i := 0; i < len(m.Spends); i++ {
+		if swag.IsZero(m.Spends[i]) { // not required
+			continue
 		}
+
+		if m.Spends[i] != nil {
+			if err := m.Spends[i].Validate(formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("spends" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("spends" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
+		}
+
 	}
 
 	return nil
@@ -62,7 +73,7 @@ func (m *V1IndexerChain) validateType(formats strfmt.Registry) error {
 func (m *V1IndexerChain) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateType(ctx, formats); err != nil {
+	if err := m.contextValidateSpends(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -72,22 +83,26 @@ func (m *V1IndexerChain) ContextValidate(ctx context.Context, formats strfmt.Reg
 	return nil
 }
 
-func (m *V1IndexerChain) contextValidateType(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1IndexerChain) contextValidateSpends(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.Type != nil {
+	for i := 0; i < len(m.Spends); i++ {
 
-		if swag.IsZero(m.Type) { // not required
-			return nil
-		}
+		if m.Spends[i] != nil {
 
-		if err := m.Type.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("type")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("type")
+			if swag.IsZero(m.Spends[i]) { // not required
+				return nil
 			}
-			return err
+
+			if err := m.Spends[i].ContextValidate(ctx, formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("spends" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("spends" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
 		}
+
 	}
 
 	return nil

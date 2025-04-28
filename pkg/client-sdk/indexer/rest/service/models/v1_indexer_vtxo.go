@@ -21,6 +21,9 @@ type V1IndexerVtxo struct {
 	// amount
 	Amount string `json:"amount,omitempty"`
 
+	// commitment txid
+	CommitmentTxid string `json:"commitmentTxid,omitempty"`
+
 	// created at
 	CreatedAt string `json:"createdAt,omitempty"`
 

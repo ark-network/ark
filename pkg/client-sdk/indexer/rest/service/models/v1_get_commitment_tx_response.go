@@ -27,6 +27,18 @@ type V1GetCommitmentTxResponse struct {
 
 	// started at
 	StartedAt string `json:"startedAt,omitempty"`
+
+	// total input amount
+	TotalInputAmount string `json:"totalInputAmount,omitempty"`
+
+	// total input vtxos
+	TotalInputVtxos int32 `json:"totalInputVtxos,omitempty"`
+
+	// total output amount
+	TotalOutputAmount string `json:"totalOutputAmount,omitempty"`
+
+	// total output vtxos
+	TotalOutputVtxos int32 `json:"totalOutputVtxos,omitempty"`
 }
 
 // Validate validates this v1 get commitment tx response
