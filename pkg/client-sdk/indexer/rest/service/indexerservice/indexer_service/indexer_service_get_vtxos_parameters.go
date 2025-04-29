@@ -62,8 +62,8 @@ IndexerServiceGetVtxosParams contains all the parameters to send to the API endp
 */
 type IndexerServiceGetVtxosParams struct {
 
-	// Address.
-	Address string
+	// Addresses.
+	Addresses []string
 
 	// PageIndex.
 	//
@@ -134,15 +134,15 @@ func (o *IndexerServiceGetVtxosParams) SetHTTPClient(client *http.Client) {
 	o.HTTPClient = client
 }
 
-// WithAddress adds the address to the indexer service get vtxos params
-func (o *IndexerServiceGetVtxosParams) WithAddress(address string) *IndexerServiceGetVtxosParams {
-	o.SetAddress(address)
+// WithAddresses adds the addresses to the indexer service get vtxos params
+func (o *IndexerServiceGetVtxosParams) WithAddresses(addresses []string) *IndexerServiceGetVtxosParams {
+	o.SetAddresses(addresses)
 	return o
 }
 
-// SetAddress adds the address to the indexer service get vtxos params
-func (o *IndexerServiceGetVtxosParams) SetAddress(address string) {
-	o.Address = address
+// SetAddresses adds the addresses to the indexer service get vtxos params
+func (o *IndexerServiceGetVtxosParams) SetAddresses(addresses []string) {
+	o.Addresses = addresses
 }
 
 // WithPageIndex adds the pageIndex to the indexer service get vtxos params
@@ -197,9 +197,20 @@ func (o *IndexerServiceGetVtxosParams) WriteToRequest(r runtime.ClientRequest, r
 	}
 	var res []error
 
-	// path param address
-	if err := r.SetPathParam("address", o.Address); err != nil {
-		return err
+	if o.Addresses != nil {
+
+		// binding items for addresses
+		joinedAddresses := o.bindParamAddresses(reg)
+
+		// path array param addresses
+		// SetPathParam does not support variadic arguments, since we used JoinByFormat
+		// we can send the first item in the array as it's all the items of the previous
+		// array joined together
+		if len(joinedAddresses) > 0 {
+			if err := r.SetPathParam("addresses", joinedAddresses[0]); err != nil {
+				return err
+			}
+		}
 	}
 
 	if o.PageIndex != nil {
@@ -274,4 +285,21 @@ func (o *IndexerServiceGetVtxosParams) WriteToRequest(r runtime.ClientRequest, r
 		return errors.CompositeValidationError(res...)
 	}
 	return nil
+}
+
+// bindParamIndexerServiceGetVtxos binds the parameter addresses
+func (o *IndexerServiceGetVtxosParams) bindParamAddresses(formats strfmt.Registry) []string {
+	addressesIR := o.Addresses
+
+	var addressesIC []string
+	for _, addressesIIR := range addressesIR { // explode []string
+
+		addressesIIV := addressesIIR // string as string
+		addressesIC = append(addressesIC, addressesIIV)
+	}
+
+	// items.CollectionFormat: "csv"
+	addressesIS := swag.JoinByFormat(addressesIC, "csv")
+
+	return addressesIS
 }

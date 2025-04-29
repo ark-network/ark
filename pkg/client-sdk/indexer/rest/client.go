@@ -196,11 +196,10 @@ func (a *restClient) GetVtxoTreeLeaves(
 }
 
 func (a *restClient) GetForfeitTxs(
-	ctx context.Context, batchOutpoint indexer.Outpoint, opts ...indexer.RequestOption,
+	ctx context.Context, txid string, opts ...indexer.RequestOption,
 ) (*indexer.ForfeitTxsResponse, error) {
 	params := indexer_service.NewIndexerServiceGetForfeitTxsParams().
-		WithBatchOutpointTxid(batchOutpoint.Txid).
-		WithBatchOutpointVout(int64(batchOutpoint.VOut))
+		WithTxid(txid)
 
 	if len(opts) > 0 {
 		page := opts[0].GetPage()
@@ -219,11 +218,10 @@ func (a *restClient) GetForfeitTxs(
 }
 
 func (a *restClient) GetConnectors(
-	ctx context.Context, batchOutpoint indexer.Outpoint, opts ...indexer.RequestOption,
+	ctx context.Context, txid string, opts ...indexer.RequestOption,
 ) (*indexer.ConnectorsResponse, error) {
 	params := indexer_service.NewIndexerServiceGetConnectorsParams().
-		WithBatchOutpointTxid(batchOutpoint.Txid).
-		WithBatchOutpointVout(int64(batchOutpoint.VOut))
+		WithTxid(txid)
 
 	if len(opts) > 0 {
 		page := opts[0].GetPage()
@@ -252,10 +250,10 @@ func (a *restClient) GetConnectors(
 }
 
 func (a *restClient) GetVtxos(
-	ctx context.Context, address string, opts ...indexer.GetVtxosRequestOption,
+	ctx context.Context, addresses []string, opts ...indexer.GetVtxosRequestOption,
 ) (*indexer.VtxosResponse, error) {
 	params := indexer_service.NewIndexerServiceGetVtxosParams().
-		WithAddress(address)
+		WithAddresses(addresses)
 
 	if len(opts) > 0 {
 		if page := opts[0].GetPage(); page != nil {

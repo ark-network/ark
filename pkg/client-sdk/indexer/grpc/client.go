@@ -197,7 +197,7 @@ func (a *grpcClient) GetVtxoTreeLeaves(
 }
 
 func (a *grpcClient) GetForfeitTxs(
-	ctx context.Context, batchOutpoint indexer.Outpoint, opts ...indexer.RequestOption,
+	ctx context.Context, txid string, opts ...indexer.RequestOption,
 ) (*indexer.ForfeitTxsResponse, error) {
 	var page *arkv1.IndexerPageRequest
 	if len(opts) > 0 {
@@ -209,10 +209,7 @@ func (a *grpcClient) GetForfeitTxs(
 	}
 
 	req := &arkv1.GetForfeitTxsRequest{
-		BatchOutpoint: &arkv1.IndexerOutpoint{
-			Txid: batchOutpoint.Txid,
-			Vout: batchOutpoint.VOut,
-		},
+		Txid: txid,
 		Page: page,
 	}
 
@@ -228,7 +225,7 @@ func (a *grpcClient) GetForfeitTxs(
 }
 
 func (a *grpcClient) GetConnectors(
-	ctx context.Context, batchOutpoint indexer.Outpoint, opts ...indexer.RequestOption,
+	ctx context.Context, txid string, opts ...indexer.RequestOption,
 ) (*indexer.ConnectorsResponse, error) {
 	var page *arkv1.IndexerPageRequest
 	if len(opts) > 0 {
@@ -240,10 +237,7 @@ func (a *grpcClient) GetConnectors(
 	}
 
 	req := &arkv1.GetConnectorsRequest{
-		BatchOutpoint: &arkv1.IndexerOutpoint{
-			Txid: batchOutpoint.Txid,
-			Vout: batchOutpoint.VOut,
-		},
+		Txid: txid,
 		Page: page,
 	}
 
@@ -269,7 +263,7 @@ func (a *grpcClient) GetConnectors(
 }
 
 func (a *grpcClient) GetVtxos(
-	ctx context.Context, address string, opts ...indexer.GetVtxosRequestOption,
+	ctx context.Context, addresses []string, opts ...indexer.GetVtxosRequestOption,
 ) (*indexer.VtxosResponse, error) {
 	var page *arkv1.IndexerPageRequest
 	var spendableOnly, spentOnly bool
@@ -288,7 +282,7 @@ func (a *grpcClient) GetVtxos(
 		return nil, status.Errorf(codes.InvalidArgument, "spendableOnly and spentOnly cannot be both true")
 	}
 	req := &arkv1.GetVtxosRequest{
-		Address:       address,
+		Addresses:     addresses,
 		SpendableOnly: spendableOnly,
 		SpentOnly:     spentOnly,
 		Page:          page,

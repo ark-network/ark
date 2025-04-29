@@ -88,12 +88,12 @@ func (o *IndexerServiceGetConnectorsOK) Code() int {
 
 func (o *IndexerServiceGetConnectorsOK) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/connectors][%d] indexerServiceGetConnectorsOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/commitmentTx/{txid}/connectors][%d] indexerServiceGetConnectorsOK %s", 200, payload)
 }
 
 func (o *IndexerServiceGetConnectorsOK) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/connectors][%d] indexerServiceGetConnectorsOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/commitmentTx/{txid}/connectors][%d] indexerServiceGetConnectorsOK %s", 200, payload)
 }
 
 func (o *IndexerServiceGetConnectorsOK) GetPayload() *models.V1GetConnectorsResponse {
@@ -162,12 +162,12 @@ func (o *IndexerServiceGetConnectorsDefault) Code() int {
 
 func (o *IndexerServiceGetConnectorsDefault) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/connectors][%d] IndexerService_GetConnectors default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/commitmentTx/{txid}/connectors][%d] IndexerService_GetConnectors default %s", o._statusCode, payload)
 }
 
 func (o *IndexerServiceGetConnectorsDefault) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/connectors][%d] IndexerService_GetConnectors default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/commitmentTx/{txid}/connectors][%d] IndexerService_GetConnectors default %s", o._statusCode, payload)
 }
 
 func (o *IndexerServiceGetConnectorsDefault) GetPayload() *models.RPCStatus {

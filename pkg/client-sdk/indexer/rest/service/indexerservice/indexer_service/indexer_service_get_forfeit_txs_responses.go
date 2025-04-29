@@ -88,12 +88,12 @@ func (o *IndexerServiceGetForfeitTxsOK) Code() int {
 
 func (o *IndexerServiceGetForfeitTxsOK) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/forfeitTxs][%d] indexerServiceGetForfeitTxsOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/commitmentTx/{txid}/forfeitTxs][%d] indexerServiceGetForfeitTxsOK %s", 200, payload)
 }
 
 func (o *IndexerServiceGetForfeitTxsOK) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/forfeitTxs][%d] indexerServiceGetForfeitTxsOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/commitmentTx/{txid}/forfeitTxs][%d] indexerServiceGetForfeitTxsOK %s", 200, payload)
 }
 
 func (o *IndexerServiceGetForfeitTxsOK) GetPayload() *models.V1GetForfeitTxsResponse {
@@ -162,12 +162,12 @@ func (o *IndexerServiceGetForfeitTxsDefault) Code() int {
 
 func (o *IndexerServiceGetForfeitTxsDefault) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/forfeitTxs][%d] IndexerService_GetForfeitTxs default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/commitmentTx/{txid}/forfeitTxs][%d] IndexerService_GetForfeitTxs default %s", o._statusCode, payload)
 }
 
 func (o *IndexerServiceGetForfeitTxsDefault) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/forfeitTxs][%d] IndexerService_GetForfeitTxs default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/commitmentTx/{txid}/forfeitTxs][%d] IndexerService_GetForfeitTxs default %s", o._statusCode, payload)
 }
 
 func (o *IndexerServiceGetForfeitTxsDefault) GetPayload() *models.RPCStatus {

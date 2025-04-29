@@ -164,7 +164,7 @@ func (a *Client) IndexerServiceGetConnectors(params *IndexerServiceGetConnectors
 	op := &runtime.ClientOperation{
 		ID:                 "IndexerService_GetConnectors",
 		Method:             "GET",
-		PathPattern:        "/v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/connectors",
+		PathPattern:        "/v1/commitmentTx/{txid}/connectors",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
@@ -201,7 +201,7 @@ func (a *Client) IndexerServiceGetForfeitTxs(params *IndexerServiceGetForfeitTxs
 	op := &runtime.ClientOperation{
 		ID:                 "IndexerService_GetForfeitTxs",
 		Method:             "GET",
-		PathPattern:        "/v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/forfeitTxs",
+		PathPattern:        "/v1/commitmentTx/{txid}/forfeitTxs",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
@@ -460,7 +460,7 @@ func (a *Client) IndexerServiceGetVtxos(params *IndexerServiceGetVtxosParams, op
 	op := &runtime.ClientOperation{
 		ID:                 "IndexerService_GetVtxos",
 		Method:             "GET",
-		PathPattern:        "/v1/getVtxos/{address}",
+		PathPattern:        "/v1/getVtxos/{addresses}",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},

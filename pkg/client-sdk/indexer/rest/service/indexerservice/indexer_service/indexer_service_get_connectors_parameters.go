@@ -62,14 +62,6 @@ IndexerServiceGetConnectorsParams contains all the parameters to send to the API
 */
 type IndexerServiceGetConnectorsParams struct {
 
-	// BatchOutpointTxid.
-	BatchOutpointTxid string
-
-	// BatchOutpointVout.
-	//
-	// Format: int64
-	BatchOutpointVout int64
-
 	// PageIndex.
 	//
 	// Format: int32
@@ -79,6 +71,9 @@ type IndexerServiceGetConnectorsParams struct {
 	//
 	// Format: int32
 	PageSize *int32
+
+	// Txid.
+	Txid string
 
 	timeout    time.Duration
 	Context    context.Context
@@ -133,28 +128,6 @@ func (o *IndexerServiceGetConnectorsParams) SetHTTPClient(client *http.Client) {
 	o.HTTPClient = client
 }
 
-// WithBatchOutpointTxid adds the batchOutpointTxid to the indexer service get connectors params
-func (o *IndexerServiceGetConnectorsParams) WithBatchOutpointTxid(batchOutpointTxid string) *IndexerServiceGetConnectorsParams {
-	o.SetBatchOutpointTxid(batchOutpointTxid)
-	return o
-}
-
-// SetBatchOutpointTxid adds the batchOutpointTxid to the indexer service get connectors params
-func (o *IndexerServiceGetConnectorsParams) SetBatchOutpointTxid(batchOutpointTxid string) {
-	o.BatchOutpointTxid = batchOutpointTxid
-}
-
-// WithBatchOutpointVout adds the batchOutpointVout to the indexer service get connectors params
-func (o *IndexerServiceGetConnectorsParams) WithBatchOutpointVout(batchOutpointVout int64) *IndexerServiceGetConnectorsParams {
-	o.SetBatchOutpointVout(batchOutpointVout)
-	return o
-}
-
-// SetBatchOutpointVout adds the batchOutpointVout to the indexer service get connectors params
-func (o *IndexerServiceGetConnectorsParams) SetBatchOutpointVout(batchOutpointVout int64) {
-	o.BatchOutpointVout = batchOutpointVout
-}
-
 // WithPageIndex adds the pageIndex to the indexer service get connectors params
 func (o *IndexerServiceGetConnectorsParams) WithPageIndex(pageIndex *int32) *IndexerServiceGetConnectorsParams {
 	o.SetPageIndex(pageIndex)
@@ -177,6 +150,17 @@ func (o *IndexerServiceGetConnectorsParams) SetPageSize(pageSize *int32) {
 	o.PageSize = pageSize
 }
 
+// WithTxid adds the txid to the indexer service get connectors params
+func (o *IndexerServiceGetConnectorsParams) WithTxid(txid string) *IndexerServiceGetConnectorsParams {
+	o.SetTxid(txid)
+	return o
+}
+
+// SetTxid adds the txid to the indexer service get connectors params
+func (o *IndexerServiceGetConnectorsParams) SetTxid(txid string) {
+	o.Txid = txid
+}
+
 // WriteToRequest writes these params to a swagger request
 func (o *IndexerServiceGetConnectorsParams) WriteToRequest(r runtime.ClientRequest, reg strfmt.Registry) error {
 
@@ -184,16 +168,6 @@ func (o *IndexerServiceGetConnectorsParams) WriteToRequest(r runtime.ClientReque
 		return err
 	}
 	var res []error
-
-	// path param batchOutpoint.txid
-	if err := r.SetPathParam("batchOutpoint.txid", o.BatchOutpointTxid); err != nil {
-		return err
-	}
-
-	// path param batchOutpoint.vout
-	if err := r.SetPathParam("batchOutpoint.vout", swag.FormatInt64(o.BatchOutpointVout)); err != nil {
-		return err
-	}
 
 	if o.PageIndex != nil {
 
@@ -227,6 +201,11 @@ func (o *IndexerServiceGetConnectorsParams) WriteToRequest(r runtime.ClientReque
 				return err
 			}
 		}
+	}
+
+	// path param txid
+	if err := r.SetPathParam("txid", o.Txid); err != nil {
+		return err
 	}
 
 	if len(res) > 0 {
