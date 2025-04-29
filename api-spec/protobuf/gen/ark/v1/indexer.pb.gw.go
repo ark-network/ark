@@ -359,7 +359,7 @@ func local_request_IndexerService_GetVtxoTreeLeaves_0(ctx context.Context, marsh
 	return msg, metadata, err
 }
 
-var filter_IndexerService_GetVtxos_0 = &utilities.DoubleArray{Encoding: map[string]int{"address": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+var filter_IndexerService_GetVtxos_0 = &utilities.DoubleArray{Encoding: map[string]int{"addresses": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 
 func request_IndexerService_GetVtxos_0(ctx context.Context, marshaler runtime.Marshaler, client IndexerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
@@ -368,13 +368,13 @@ func request_IndexerService_GetVtxos_0(ctx context.Context, marshaler runtime.Ma
 		err      error
 	)
 	io.Copy(io.Discard, req.Body)
-	val, ok := pathParams["address"]
+	val, ok := pathParams["addresses"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "address")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "addresses")
 	}
-	protoReq.Address, err = runtime.String(val)
+	protoReq.Addresses, err = runtime.StringSlice(val, ",")
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "address", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "addresses", err)
 	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
@@ -392,13 +392,13 @@ func local_request_IndexerService_GetVtxos_0(ctx context.Context, marshaler runt
 		metadata runtime.ServerMetadata
 		err      error
 	)
-	val, ok := pathParams["address"]
+	val, ok := pathParams["addresses"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "address")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "addresses")
 	}
-	protoReq.Address, err = runtime.String(val)
+	protoReq.Addresses, err = runtime.StringSlice(val, ",")
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "address", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "addresses", err)
 	}
 	if err := req.ParseForm(); err != nil {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
@@ -748,7 +748,7 @@ func RegisterIndexerServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxos", runtime.WithHTTPPathPattern("/v1/getVtxos/{address}"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxos", runtime.WithHTTPPathPattern("/v1/getVtxos/{addresses}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -988,7 +988,7 @@ func RegisterIndexerServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxos", runtime.WithHTTPPathPattern("/v1/getVtxos/{address}"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxos", runtime.WithHTTPPathPattern("/v1/getVtxos/{addresses}"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
@@ -1079,7 +1079,7 @@ var (
 	pattern_IndexerService_GetCommitmentTxLeaves_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 2, 3}, []string{"v1", "commitmentTx", "txid", "leaves"}, ""))
 	pattern_IndexerService_GetVtxoTree_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "batch", "batch_outpoint.txid", "batch_outpoint.vout", "tree"}, ""))
 	pattern_IndexerService_GetVtxoTreeLeaves_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4, 2, 5}, []string{"v1", "batch", "batch_outpoint.txid", "batch_outpoint.vout", "tree", "leaves"}, ""))
-	pattern_IndexerService_GetVtxos_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "getVtxos", "address"}, ""))
+	pattern_IndexerService_GetVtxos_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "getVtxos", "addresses"}, ""))
 	pattern_IndexerService_GetTransactionHistory_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "history", "address"}, ""))
 	pattern_IndexerService_GetVtxoChain_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "vtxo", "outpoint.txid", "outpoint.vout", "chain"}, ""))
 	pattern_IndexerService_GetVirtualTxs_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "virtualTx", "txids"}, ""))

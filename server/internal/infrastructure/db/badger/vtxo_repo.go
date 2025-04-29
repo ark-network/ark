@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -207,6 +208,47 @@ func (r *vtxoRepository) GetAllVtxosWithPubKey(
 		}
 	}
 	return unspentVtxos, spentVtxos, nil
+}
+
+func (r *vtxoRepository) GetAllVtxosWithPubKeys(
+	ctx context.Context, pubkeys []string, spendableOnly, spentOnly bool,
+) ([]domain.Vtxo, error) {
+	if spendableOnly && spendableOnly == spentOnly {
+		return nil, fmt.Errorf("spendable and spent only can't be true at the same time")
+	}
+
+	allVtxos := make([]domain.Vtxo, 0)
+	for _, pubkey := range pubkeys {
+		query := badgerhold.Where("PubKey").Eq(pubkey)
+		vtxos, err := r.findVtxos(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		sort.SliceStable(vtxos, func(i, j int) bool {
+			return vtxos[i].CreatedAt > vtxos[j].CreatedAt
+		})
+
+		if spendableOnly {
+			spendableVtxos := make([]domain.Vtxo, 0, len(vtxos))
+			for _, vtxo := range vtxos {
+				if !vtxo.Spent && !vtxo.Swept && !vtxo.Redeemed {
+					spendableVtxos = append(spendableVtxos, vtxo)
+				}
+			}
+			vtxos = spendableVtxos
+		}
+		if spentOnly {
+			spentVtxos := make([]domain.Vtxo, 0, len(vtxos))
+			for _, vtxo := range vtxos {
+				if vtxo.Spent || vtxo.Swept || vtxo.Redeemed {
+					spentVtxos = append(spentVtxos, vtxo)
+				}
+			}
+			vtxos = spentVtxos
+		}
+		allVtxos = append(allVtxos, vtxos...)
+	}
+	return allVtxos, nil
 }
 
 func (r *vtxoRepository) Close() {

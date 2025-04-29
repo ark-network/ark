@@ -32,7 +32,7 @@ type IndexerService interface {
 	GetVtxoTreeLeaves(ctx context.Context, batchOutpoint Outpoint, page *Page) (*VtxoTreeLeavesResp, error)
 	GetForfeitTxs(ctx context.Context, txid string, page *Page) (*ForfeitTxsResp, error)
 	GetConnectors(ctx context.Context, txid string, page *Page) (*ConnectorResp, error)
-	GetVtxos(ctx context.Context, pubkey string, spendableOnly, spendOnly bool, page *Page) (*SpendableVtxosResp, error)
+	GetVtxos(ctx context.Context, pubkeys []string, spendableOnly, spendOnly bool, page *Page) (*SpendableVtxosResp, error)
 	GetTransactionHistory(ctx context.Context, pubkey string, start, end int64, page *Page) (*TxHistoryResp, error)
 	GetVtxoChain(ctx context.Context, vtxoKey Outpoint, page *Page) (*VtxoChainResp, error)
 	GetVirtualTxs(ctx context.Context, txids []string, page *Page) (*VirtualTxsResp, error)
@@ -160,28 +160,23 @@ func (i *indexerService) GetConnectors(ctx context.Context, txid string, page *P
 }
 
 func (i *indexerService) GetVtxos(
-	ctx context.Context, pubkey string, spendableOnly, spentOnly bool, page *Page,
+	ctx context.Context, pubkeys []string, spendableOnly, spentOnly bool, page *Page,
 ) (*SpendableVtxosResp, error) {
 	if spendableOnly && spentOnly {
 		return nil, fmt.Errorf("spendable and spent only can't be true at the same time")
 	}
-	spendable, spent, err := i.repoManager.Vtxos().GetAllVtxosWithPubKey(ctx, pubkey)
+
+	vtxos, err := i.repoManager.Vtxos().GetAllVtxosWithPubKeys(
+		ctx, pubkeys, spendableOnly, spentOnly,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	vtxos := append(spendable, spent...)
-	if spendableOnly {
-		vtxos = spendable
-	}
-	if spentOnly {
-		vtxos = spent
-	}
-
-	spendableVtxosPaged, pageResp := paginate(vtxos, page, maxPageSizeSpendableVtxos)
+	pagedVtxos, pageResp := paginate(vtxos, page, maxPageSizeSpendableVtxos)
 
 	return &SpendableVtxosResp{
-		Vtxos: spendableVtxosPaged,
+		Vtxos: pagedVtxos,
 		Page:  pageResp,
 	}, nil
 }

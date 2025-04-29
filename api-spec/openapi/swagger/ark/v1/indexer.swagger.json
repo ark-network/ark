@@ -310,7 +310,7 @@
         ]
       }
     },
-    "/v1/getVtxos/{address}": {
+    "/v1/getVtxos/{addresses}": {
       "get": {
         "operationId": "IndexerService_GetVtxos",
         "responses": {
@@ -329,10 +329,15 @@
         },
         "parameters": [
           {
-            "name": "address",
+            "name": "addresses",
             "in": "path",
             "required": true,
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "csv",
+            "minItems": 1
           },
           {
             "name": "spendableOnly",

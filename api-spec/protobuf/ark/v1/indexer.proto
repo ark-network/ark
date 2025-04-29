@@ -37,7 +37,7 @@ service IndexerService {
   };
   rpc GetVtxos(GetVtxosRequest) returns (GetVtxosResponse) {
     option (google.api.http) = {
-      get: "/v1/getVtxos/{address}"
+      get: "/v1/getVtxos/{addresses}"
     };
   };
   rpc GetTransactionHistory(GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse) {
@@ -121,7 +121,7 @@ message GetVtxoTreeLeavesResponse {
 }
 
 message GetVtxosRequest {
-  string address = 1;
+  repeated string addresses = 1;
   bool spendable_only = 2;
   bool spent_only = 3;
   IndexerPageRequest page = 4;

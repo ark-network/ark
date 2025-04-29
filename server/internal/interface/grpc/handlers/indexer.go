@@ -202,7 +202,7 @@ func (e indexerService) GetConnectors(ctx context.Context, request *arkv1.GetCon
 }
 
 func (e indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosRequest) (*arkv1.GetVtxosResponse, error) {
-	pubkey, err := parseArkAddress(request.GetAddress())
+	pubkeys, err := parseArkAddresses(request.GetAddresses())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -215,7 +215,7 @@ func (e indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosReq
 	}
 
 	resp, err := e.indexerSvc.GetVtxos(
-		ctx, pubkey, request.GetSpendableOnly(), request.GetSpentOnly(), page,
+		ctx, pubkeys, request.GetSpendableOnly(), request.GetSpentOnly(), page,
 	)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get vtxos: %v", err)
@@ -457,4 +457,19 @@ func protoPage(page application.PageResp) *arkv1.IndexerPageResponse {
 		Next:    page.Next,
 		Total:   page.Total,
 	}
+}
+
+func parseArkAddresses(addresses []string) ([]string, error) {
+	if len(addresses) == 0 {
+		return nil, fmt.Errorf("missing addresses")
+	}
+	pubkeys := make([]string, 0, len(addresses))
+	for _, address := range addresses {
+		pubkey, err := parseArkAddress(address)
+		if err != nil {
+			return nil, err
+		}
+		pubkeys = append(pubkeys, pubkey)
+	}
+	return pubkeys, nil
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/infrastructure/db/sqlite/sqlc/queries"
@@ -328,6 +329,58 @@ func (v *vtxoRepository) GetAllVtxosWithPubKey(
 	}
 
 	return unspentVtxos, spentVtxos, nil
+}
+
+func (v *vtxoRepository) GetAllVtxosWithPubKeys(
+	ctx context.Context, pubkeys []string, spendableOnly, spentOnly bool,
+) ([]domain.Vtxo, error) {
+	if spendableOnly && spendableOnly == spentOnly {
+		return nil, fmt.Errorf("spendable and spent only can't be true at the same time")
+	}
+
+	allVtxos := make([]domain.Vtxo, 0)
+	// TODO: make this a proper sql query
+	for _, pubkey := range pubkeys {
+		res, err := v.querier.SelectVtxosWithPubkey(ctx, pubkey)
+		if err != nil {
+			return nil, err
+		}
+		rows := make([]queries.Vtxo, 0, len(res))
+		for _, row := range res {
+			rows = append(rows, row.Vtxo)
+		}
+
+		vtxos, err := readRows(rows)
+		if err != nil {
+			return nil, err
+		}
+		sort.SliceStable(vtxos, func(i, j int) bool {
+			return vtxos[i].CreatedAt > vtxos[j].CreatedAt
+		})
+
+		if spendableOnly {
+			spendableVtxos := make([]domain.Vtxo, 0, len(vtxos))
+			for _, vtxo := range vtxos {
+				if !vtxo.Spent && !vtxo.Swept && !vtxo.Redeemed {
+					spendableVtxos = append(spendableVtxos, vtxo)
+				}
+			}
+			vtxos = spendableVtxos
+		}
+		if spentOnly {
+			spentVtxos := make([]domain.Vtxo, 0, len(vtxos))
+			for _, vtxo := range vtxos {
+				if vtxo.Spent || vtxo.Swept || vtxo.Redeemed {
+					spentVtxos = append(spentVtxos, vtxo)
+				}
+			}
+			vtxos = spentVtxos
+		}
+
+		allVtxos = append(allVtxos, vtxos...)
+	}
+
+	return allVtxos, nil
 }
 
 func rowToVtxo(row queries.Vtxo) domain.Vtxo {
