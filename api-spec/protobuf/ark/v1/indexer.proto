@@ -10,6 +10,16 @@ service IndexerService {
       get: "/v1/commitmentTx/{txid}"
     };
   };
+  rpc GetForfeitTxs(GetForfeitTxsRequest) returns (GetForfeitTxsResponse) {
+    option (google.api.http) = {
+      get: "/v1/commitmentTx/{txid}/forfeitTxs"
+    };
+  };
+  rpc GetConnectors(GetConnectorsRequest) returns (GetConnectorsResponse) {
+    option (google.api.http) = {
+      get: "/v1/commitmentTx/{txid}/connectors"
+    };
+  };
   rpc GetCommitmentTxLeaves(GetCommitmentTxLeavesRequest) returns (GetCommitmentTxLeavesResponse) {
     option (google.api.http) = {
       get: "/v1/commitmentTx/{txid}/leaves"
@@ -23,16 +33,6 @@ service IndexerService {
   rpc GetVtxoTreeLeaves(GetVtxoTreeLeavesRequest) returns (GetVtxoTreeLeavesResponse) {
     option (google.api.http) = {
       get: "/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/tree/leaves"
-    };
-  };
-  rpc GetForfeitTxs(GetForfeitTxsRequest) returns (GetForfeitTxsResponse) {
-    option (google.api.http) = {
-      get: "/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/forfeitTxs"
-    };
-  };
-  rpc GetConnectors(GetConnectorsRequest) returns (GetConnectorsResponse) {
-    option (google.api.http) = {
-      get: "/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/connectors"
     };
   };
   rpc GetVtxos(GetVtxosRequest) returns (GetVtxosResponse) {
@@ -75,6 +75,24 @@ message GetCommitmentTxResponse {
   int32 total_output_vtxos = 7;
 }
 
+message GetForfeitTxsRequest {
+  string txid = 1;
+  IndexerPageRequest page = 2;
+}
+message GetForfeitTxsResponse {
+  repeated string txids = 1;
+  IndexerPageResponse page = 2;
+}
+
+message GetConnectorsRequest {
+  string txid = 1;
+  IndexerPageRequest page = 2;
+}
+message GetConnectorsResponse {
+  repeated IndexerNode connectors = 1;
+  IndexerPageResponse page = 2;
+}
+
 message GetCommitmentTxLeavesRequest {
   string txid = 1;
   IndexerPageRequest page = 2;
@@ -99,24 +117,6 @@ message GetVtxoTreeLeavesRequest {
 }
 message GetVtxoTreeLeavesResponse {
   repeated IndexerOutpoint leaves = 1;
-  IndexerPageResponse page = 2;
-}
-
-message GetForfeitTxsRequest {
-  IndexerOutpoint batch_outpoint = 1;
-  IndexerPageRequest page = 2;
-}
-message GetForfeitTxsResponse {
-  repeated string txids = 1;
-  IndexerPageResponse page = 2;
-}
-
-message GetConnectorsRequest {
-  IndexerOutpoint batch_outpoint = 1;
-  IndexerPageRequest page = 2;
-}
-message GetConnectorsResponse {
-  repeated IndexerNode connectors = 1;
   IndexerPageResponse page = 2;
 }
 

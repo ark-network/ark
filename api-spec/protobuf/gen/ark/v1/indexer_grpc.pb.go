@@ -19,11 +19,11 @@ const _ = grpc.SupportPackageIsVersion7
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type IndexerServiceClient interface {
 	GetCommitmentTx(ctx context.Context, in *GetCommitmentTxRequest, opts ...grpc.CallOption) (*GetCommitmentTxResponse, error)
+	GetForfeitTxs(ctx context.Context, in *GetForfeitTxsRequest, opts ...grpc.CallOption) (*GetForfeitTxsResponse, error)
+	GetConnectors(ctx context.Context, in *GetConnectorsRequest, opts ...grpc.CallOption) (*GetConnectorsResponse, error)
 	GetCommitmentTxLeaves(ctx context.Context, in *GetCommitmentTxLeavesRequest, opts ...grpc.CallOption) (*GetCommitmentTxLeavesResponse, error)
 	GetVtxoTree(ctx context.Context, in *GetVtxoTreeRequest, opts ...grpc.CallOption) (*GetVtxoTreeResponse, error)
 	GetVtxoTreeLeaves(ctx context.Context, in *GetVtxoTreeLeavesRequest, opts ...grpc.CallOption) (*GetVtxoTreeLeavesResponse, error)
-	GetForfeitTxs(ctx context.Context, in *GetForfeitTxsRequest, opts ...grpc.CallOption) (*GetForfeitTxsResponse, error)
-	GetConnectors(ctx context.Context, in *GetConnectorsRequest, opts ...grpc.CallOption) (*GetConnectorsResponse, error)
 	GetVtxos(ctx context.Context, in *GetVtxosRequest, opts ...grpc.CallOption) (*GetVtxosResponse, error)
 	GetTransactionHistory(ctx context.Context, in *GetTransactionHistoryRequest, opts ...grpc.CallOption) (*GetTransactionHistoryResponse, error)
 	GetVtxoChain(ctx context.Context, in *GetVtxoChainRequest, opts ...grpc.CallOption) (*GetVtxoChainResponse, error)
@@ -42,6 +42,24 @@ func NewIndexerServiceClient(cc grpc.ClientConnInterface) IndexerServiceClient {
 func (c *indexerServiceClient) GetCommitmentTx(ctx context.Context, in *GetCommitmentTxRequest, opts ...grpc.CallOption) (*GetCommitmentTxResponse, error) {
 	out := new(GetCommitmentTxResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/GetCommitmentTx", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *indexerServiceClient) GetForfeitTxs(ctx context.Context, in *GetForfeitTxsRequest, opts ...grpc.CallOption) (*GetForfeitTxsResponse, error) {
+	out := new(GetForfeitTxsResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/GetForfeitTxs", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *indexerServiceClient) GetConnectors(ctx context.Context, in *GetConnectorsRequest, opts ...grpc.CallOption) (*GetConnectorsResponse, error) {
+	out := new(GetConnectorsResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/GetConnectors", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -69,24 +87,6 @@ func (c *indexerServiceClient) GetVtxoTree(ctx context.Context, in *GetVtxoTreeR
 func (c *indexerServiceClient) GetVtxoTreeLeaves(ctx context.Context, in *GetVtxoTreeLeavesRequest, opts ...grpc.CallOption) (*GetVtxoTreeLeavesResponse, error) {
 	out := new(GetVtxoTreeLeavesResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/GetVtxoTreeLeaves", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *indexerServiceClient) GetForfeitTxs(ctx context.Context, in *GetForfeitTxsRequest, opts ...grpc.CallOption) (*GetForfeitTxsResponse, error) {
-	out := new(GetForfeitTxsResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/GetForfeitTxs", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *indexerServiceClient) GetConnectors(ctx context.Context, in *GetConnectorsRequest, opts ...grpc.CallOption) (*GetConnectorsResponse, error) {
-	out := new(GetConnectorsResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/GetConnectors", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -143,11 +143,11 @@ func (c *indexerServiceClient) GetSweptCommitmentTx(ctx context.Context, in *Get
 // for forward compatibility
 type IndexerServiceServer interface {
 	GetCommitmentTx(context.Context, *GetCommitmentTxRequest) (*GetCommitmentTxResponse, error)
+	GetForfeitTxs(context.Context, *GetForfeitTxsRequest) (*GetForfeitTxsResponse, error)
+	GetConnectors(context.Context, *GetConnectorsRequest) (*GetConnectorsResponse, error)
 	GetCommitmentTxLeaves(context.Context, *GetCommitmentTxLeavesRequest) (*GetCommitmentTxLeavesResponse, error)
 	GetVtxoTree(context.Context, *GetVtxoTreeRequest) (*GetVtxoTreeResponse, error)
 	GetVtxoTreeLeaves(context.Context, *GetVtxoTreeLeavesRequest) (*GetVtxoTreeLeavesResponse, error)
-	GetForfeitTxs(context.Context, *GetForfeitTxsRequest) (*GetForfeitTxsResponse, error)
-	GetConnectors(context.Context, *GetConnectorsRequest) (*GetConnectorsResponse, error)
 	GetVtxos(context.Context, *GetVtxosRequest) (*GetVtxosResponse, error)
 	GetTransactionHistory(context.Context, *GetTransactionHistoryRequest) (*GetTransactionHistoryResponse, error)
 	GetVtxoChain(context.Context, *GetVtxoChainRequest) (*GetVtxoChainResponse, error)
@@ -162,6 +162,12 @@ type UnimplementedIndexerServiceServer struct {
 func (UnimplementedIndexerServiceServer) GetCommitmentTx(context.Context, *GetCommitmentTxRequest) (*GetCommitmentTxResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCommitmentTx not implemented")
 }
+func (UnimplementedIndexerServiceServer) GetForfeitTxs(context.Context, *GetForfeitTxsRequest) (*GetForfeitTxsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetForfeitTxs not implemented")
+}
+func (UnimplementedIndexerServiceServer) GetConnectors(context.Context, *GetConnectorsRequest) (*GetConnectorsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetConnectors not implemented")
+}
 func (UnimplementedIndexerServiceServer) GetCommitmentTxLeaves(context.Context, *GetCommitmentTxLeavesRequest) (*GetCommitmentTxLeavesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetCommitmentTxLeaves not implemented")
 }
@@ -170,12 +176,6 @@ func (UnimplementedIndexerServiceServer) GetVtxoTree(context.Context, *GetVtxoTr
 }
 func (UnimplementedIndexerServiceServer) GetVtxoTreeLeaves(context.Context, *GetVtxoTreeLeavesRequest) (*GetVtxoTreeLeavesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVtxoTreeLeaves not implemented")
-}
-func (UnimplementedIndexerServiceServer) GetForfeitTxs(context.Context, *GetForfeitTxsRequest) (*GetForfeitTxsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetForfeitTxs not implemented")
-}
-func (UnimplementedIndexerServiceServer) GetConnectors(context.Context, *GetConnectorsRequest) (*GetConnectorsResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetConnectors not implemented")
 }
 func (UnimplementedIndexerServiceServer) GetVtxos(context.Context, *GetVtxosRequest) (*GetVtxosResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVtxos not implemented")
@@ -218,6 +218,42 @@ func _IndexerService_GetCommitmentTx_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(IndexerServiceServer).GetCommitmentTx(ctx, req.(*GetCommitmentTxRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IndexerService_GetForfeitTxs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetForfeitTxsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IndexerServiceServer).GetForfeitTxs(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.IndexerService/GetForfeitTxs",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IndexerServiceServer).GetForfeitTxs(ctx, req.(*GetForfeitTxsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IndexerService_GetConnectors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetConnectorsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IndexerServiceServer).GetConnectors(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.IndexerService/GetConnectors",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IndexerServiceServer).GetConnectors(ctx, req.(*GetConnectorsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -272,42 +308,6 @@ func _IndexerService_GetVtxoTreeLeaves_Handler(srv interface{}, ctx context.Cont
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(IndexerServiceServer).GetVtxoTreeLeaves(ctx, req.(*GetVtxoTreeLeavesRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _IndexerService_GetForfeitTxs_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetForfeitTxsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(IndexerServiceServer).GetForfeitTxs(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.IndexerService/GetForfeitTxs",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IndexerServiceServer).GetForfeitTxs(ctx, req.(*GetForfeitTxsRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _IndexerService_GetConnectors_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetConnectorsRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(IndexerServiceServer).GetConnectors(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.IndexerService/GetConnectors",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IndexerServiceServer).GetConnectors(ctx, req.(*GetConnectorsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -414,6 +414,14 @@ var IndexerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _IndexerService_GetCommitmentTx_Handler,
 		},
 		{
+			MethodName: "GetForfeitTxs",
+			Handler:    _IndexerService_GetForfeitTxs_Handler,
+		},
+		{
+			MethodName: "GetConnectors",
+			Handler:    _IndexerService_GetConnectors_Handler,
+		},
+		{
 			MethodName: "GetCommitmentTxLeaves",
 			Handler:    _IndexerService_GetCommitmentTxLeaves_Handler,
 		},
@@ -424,14 +432,6 @@ var IndexerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetVtxoTreeLeaves",
 			Handler:    _IndexerService_GetVtxoTreeLeaves_Handler,
-		},
-		{
-			MethodName: "GetForfeitTxs",
-			Handler:    _IndexerService_GetForfeitTxs_Handler,
-		},
-		{
-			MethodName: "GetConnectors",
-			Handler:    _IndexerService_GetConnectors_Handler,
 		},
 		{
 			MethodName: "GetVtxos",

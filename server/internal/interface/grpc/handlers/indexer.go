@@ -150,7 +150,7 @@ func (e indexerService) GetVtxoTreeLeaves(
 }
 
 func (e indexerService) GetForfeitTxs(ctx context.Context, request *arkv1.GetForfeitTxsRequest) (*arkv1.GetForfeitTxsResponse, error) {
-	batchOutpoint, err := parseOutpoint(request.GetBatchOutpoint())
+	txid, err := parseTxid(request.GetTxid())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -159,7 +159,7 @@ func (e indexerService) GetForfeitTxs(ctx context.Context, request *arkv1.GetFor
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	resp, err := e.indexerSvc.GetForfeitTxs(ctx, *batchOutpoint, page)
+	resp, err := e.indexerSvc.GetForfeitTxs(ctx, txid, page)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get forfeit txs: %v", err)
 	}
@@ -171,7 +171,7 @@ func (e indexerService) GetForfeitTxs(ctx context.Context, request *arkv1.GetFor
 }
 
 func (e indexerService) GetConnectors(ctx context.Context, request *arkv1.GetConnectorsRequest) (*arkv1.GetConnectorsResponse, error) {
-	batchOutpoint, err := parseOutpoint(request.GetBatchOutpoint())
+	txid, err := parseTxid(request.GetTxid())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
@@ -180,7 +180,7 @@ func (e indexerService) GetConnectors(ctx context.Context, request *arkv1.GetCon
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	resp, err := e.indexerSvc.GetConnectors(ctx, *batchOutpoint, page)
+	resp, err := e.indexerSvc.GetConnectors(ctx, txid, page)
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get connectors: %v", err)
 	}

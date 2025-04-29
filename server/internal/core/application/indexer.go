@@ -30,8 +30,8 @@ type IndexerService interface {
 	GetCommitmentTxLeaves(ctx context.Context, txid string, page *Page) (*CommitmentTxLeavesResp, error)
 	GetVtxoTree(ctx context.Context, batchOutpoint Outpoint, page *Page) (*VtxoTreeResp, error)
 	GetVtxoTreeLeaves(ctx context.Context, batchOutpoint Outpoint, page *Page) (*VtxoTreeLeavesResp, error)
-	GetForfeitTxs(ctx context.Context, batchOutpoint Outpoint, page *Page) (*ForfeitTxsResp, error)
-	GetConnectors(ctx context.Context, batchOutpoint Outpoint, page *Page) (*ConnectorResp, error)
+	GetForfeitTxs(ctx context.Context, txid string, page *Page) (*ForfeitTxsResp, error)
+	GetConnectors(ctx context.Context, txid string, page *Page) (*ConnectorResp, error)
 	GetVtxos(ctx context.Context, pubkey string, spendableOnly, spendOnly bool, page *Page) (*SpendableVtxosResp, error)
 	GetTransactionHistory(ctx context.Context, pubkey string, start, end int64, page *Page) (*TxHistoryResp, error)
 	GetVtxoChain(ctx context.Context, vtxoKey Outpoint, page *Page) (*VtxoChainResp, error)
@@ -125,8 +125,8 @@ func (i *indexerService) GetVtxoTreeLeaves(ctx context.Context, outpoint Outpoin
 	}, nil
 }
 
-func (i *indexerService) GetForfeitTxs(ctx context.Context, batchOutpoint Outpoint, page *Page) (*ForfeitTxsResp, error) {
-	forfeitTxs, err := i.repoManager.Rounds().GetRoundForfeitTxs(ctx, batchOutpoint.Txid) //TODO batch thing
+func (i *indexerService) GetForfeitTxs(ctx context.Context, txid string, page *Page) (*ForfeitTxsResp, error) {
+	forfeitTxs, err := i.repoManager.Rounds().GetRoundForfeitTxs(ctx, txid)
 	if err != nil {
 		return nil, err
 	}
@@ -145,8 +145,8 @@ func (i *indexerService) GetForfeitTxs(ctx context.Context, batchOutpoint Outpoi
 
 }
 
-func (i *indexerService) GetConnectors(ctx context.Context, batchOutpoint Outpoint, page *Page) (*ConnectorResp, error) {
-	connectorTree, err := i.repoManager.Rounds().GetRoundConnectorTree(ctx, batchOutpoint.Txid) //TODO batch thing
+func (i *indexerService) GetConnectors(ctx context.Context, txid string, page *Page) (*ConnectorResp, error) {
+	connectorTree, err := i.repoManager.Rounds().GetRoundConnectorTree(ctx, txid)
 	if err != nil {
 		return nil, err
 	}
