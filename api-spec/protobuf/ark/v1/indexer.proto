@@ -1,0 +1,222 @@
+syntax = "proto3";
+
+package ark.v1;
+
+import "google/api/annotations.proto";
+
+service IndexerService {
+  rpc GetCommitmentTx(GetCommitmentTxRequest) returns (GetCommitmentTxResponse) {
+    option (google.api.http) = {
+      get: "/v1/commitmentTx/{txid}"
+    };
+  };
+  rpc GetVtxoTree(GetVtxoTreeRequest) returns (GetVtxoTreeResponse) {
+    option (google.api.http) = {
+      get: "/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/tree"
+    };
+  };
+  rpc GetForfeitTxs(GetForfeitTxsRequest) returns (GetForfeitTxsResponse) {
+    option (google.api.http) = {
+      get: "/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/forfeitTxs"
+    };
+  };
+  rpc GetConnectors(GetConnectorsRequest) returns (GetConnectorsResponse) {
+    option (google.api.http) = {
+      get: "/v1/batch/{batch_outpoint.txid}/{batch_outpoint.vout}/connectors"
+    };
+  };
+  rpc GetSpendableVtxos(GetSpendableVtxosRequest) returns (GetSpendableVtxosResponse) {
+    option (google.api.http) = {
+      get: "/v1/spendableVtxos/{address}"
+    };
+  };
+  rpc GetTransactionHistory(GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse) {
+    option (google.api.http) = {
+      get: "/v1/history/{address}"
+    };
+  };
+  rpc GetVtxoChain(GetVtxoChainRequest) returns (GetVtxoChainResponse) {
+    option (google.api.http) = {
+      get: "/v1/vtxo/{outpoint.txid}/{outpoint.vout}/chain"
+    };
+  }
+  rpc GetVirtualTxs(GetVirtualTxsRequest) returns (GetVirtualTxsResponse) {
+    option (google.api.http) = {
+      get: "/v1/virtualTx/{txids}"
+    };
+  }
+  rpc GetSweptCommitmentTx(GetSweptCommitmentTxRequest) returns (GetSweptCommitmentTxResponse) {
+    option (google.api.http) = {
+      get: "/v1/commitmentTx/{txid}/swept"
+    };
+  }
+}
+
+message GetCommitmentTxRequest {
+  string txid = 1;
+}
+message GetCommitmentTxResponse {
+  int64 started_at = 1;
+  int64 ended_at = 2;
+  map<uint32, IndexerBatch> batches = 3;
+}
+
+message GetVtxoTreeRequest {
+  IndexerOutpoint batch_outpoint = 1;
+  IndexerPageRequest page = 2;
+}
+message GetVtxoTreeResponse {
+  repeated IndexerNode vtxo_tree = 1;
+  IndexerPageResponse page = 2;
+}
+
+message GetForfeitTxsRequest {
+  IndexerOutpoint batch_outpoint = 1;
+  IndexerPageRequest page = 2;
+}
+message GetForfeitTxsResponse {
+  repeated string txs = 1;
+  IndexerPageResponse page = 2;
+}
+
+message GetConnectorsRequest {
+  IndexerOutpoint batch_outpoint = 1;
+  IndexerPageRequest page = 2;
+}
+message GetConnectorsResponse {
+  repeated IndexerNode connectors = 1;
+  IndexerPageResponse page = 2;
+}
+
+message GetSpendableVtxosRequest {
+  string address = 1;
+  IndexerPageRequest page = 2;
+}
+message GetSpendableVtxosResponse {
+  repeated IndexerVtxo vtxos = 1;
+  IndexerPageResponse page = 2;
+}
+
+message GetTransactionHistoryRequest {
+  string address = 1;
+  int64 start_time = 2;
+  int64 end_time = 3;
+  IndexerPageRequest page = 4;
+}
+message GetTransactionHistoryResponse {
+  repeated IndexerTxHistoryRecord history = 1;
+  IndexerPageResponse page = 2;
+}
+
+message GetVtxoChainRequest {
+  IndexerOutpoint outpoint = 1;
+  IndexerPageRequest page = 2;
+}
+message GetVtxoChainResponse {
+  map<string, IndexerTransactions> graph = 1;
+  IndexerPageResponse page = 2;
+}
+
+message GetVirtualTxsRequest {
+  repeated string txids = 1;
+  IndexerPageRequest page = 2;
+}
+message GetVirtualTxsResponse {
+  repeated string txs = 1;
+  IndexerPageResponse page = 2;
+}
+
+message GetSweptCommitmentTxRequest {
+  string txid = 1;
+}
+message GetSweptCommitmentTxResponse {
+  repeated string swept_by = 1;
+}
+
+message SubscribeForAddressesRequest {
+  repeated string addresses = 1;
+}
+message SubscribeForAddressesResponse {
+  string address = 1;
+  repeated IndexerVtxo new_vtxos = 2;
+  repeated IndexerVtxo spent_vtxos = 3;
+}
+
+message IndexerTransactions {
+  repeated IndexerChain txs = 1;
+  int64 expires_at = 2;
+}
+
+message IndexerBatch {
+  uint64 total_batch_amount = 1;
+  uint64 total_forfeit_amount = 2;
+  int32 total_input_vtxos = 3;
+  int32 total_output_vtxos = 4;
+  int64 expires_at = 5;
+  bool swept = 6;
+}
+
+message IndexerOutpoint {
+  string txid = 1;
+  uint32 vout = 2;
+}
+
+message IndexerNode {
+  string txid = 1;
+  string parent_txid = 3;
+  int32 level = 4;
+  int32 level_index = 5;
+}
+
+message IndexerVtxo {
+  IndexerOutpoint outpoint = 1;
+  int64 created_at = 2;
+  int64 expires_at = 3;
+  uint64 amount = 4;
+  string script = 5;
+  bool is_leaf = 6;
+  bool is_swept = 7;
+  bool is_spent = 8;
+  string spent_by = 9;
+}
+
+message IndexerChain {
+  string txid = 1;
+  IndexerChainedTxType type = 2;
+}
+
+message IndexerTxHistoryRecord {
+  oneof key {
+    string commitment_txid = 1;
+    string virtual_txid = 2;
+  }
+  IndexerTxType type = 3;
+  uint64 amount = 4;
+  int64 created_at = 5;
+  int64 confirmed_at = 6;
+  bool is_settled = 7;
+}
+
+enum IndexerTxType {
+  INDEXER_TX_TYPE_UNSPECIFIED = 0;
+  INDEXER_TX_TYPE_RECEIVED = 1;
+  INDEXER_TX_TYPE_SENT = 2;
+  INDEXER_TX_TYPE_SWEEP = 3;
+}
+
+enum IndexerChainedTxType {
+  INDEXER_CHAINED_TX_TYPE_UNSPECIFIED = 0;
+  INDEXER_CHAINED_TX_TYPE_VIRTUAL = 1;
+  INDEXER_CHAINED_TX_TYPE_COMMITMENT = 2;
+}
+
+message IndexerPageRequest {
+  int32 size = 1;
+  int32 index = 2;
+}
+
+message IndexerPageResponse {
+  int32 current = 1;
+  int32 next = 2;
+  int32 total = 3;
+}

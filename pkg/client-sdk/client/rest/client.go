@@ -21,6 +21,8 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice/ark_service"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/explorerservice"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/explorerservice/explorer_service"
+	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/indexerservice"
+	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/indexerservice/indexer_service"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	httptransport "github.com/go-openapi/runtime/client"
@@ -28,14 +30,17 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
+// restClient implements the TransportClient interface for REST communication
 type restClient struct {
 	serverURL      string
 	svc            ark_service.ClientService
 	explorerSvc    explorer_service.ClientService
+	indexerSvc     indexer_service.ClientService
 	requestTimeout time.Duration
 	treeCache      *utils.Cache[tree.TxTree]
 }
 
+// NewClient creates a new REST client for the Ark service
 func NewClient(serverURL string) (client.TransportClient, error) {
 	if len(serverURL) <= 0 {
 		return nil, fmt.Errorf("missing server url")
@@ -48,11 +53,15 @@ func NewClient(serverURL string) (client.TransportClient, error) {
 	if err != nil {
 		return nil, err
 	}
+	indexerSvc, err := newRestIndexerClient(serverURL)
+	if err != nil {
+		return nil, err
+	}
 	// TODO: use twice the round interval.
 	reqTimeout := 15 * time.Second
 	treeCache := utils.NewCache[tree.TxTree]()
 
-	return &restClient{serverURL, svc, explorerSvc, reqTimeout, treeCache}, nil
+	return &restClient{serverURL, svc, explorerSvc, indexerSvc, reqTimeout, treeCache}, nil
 }
 
 func (a *restClient) GetInfo(
@@ -731,6 +740,33 @@ func newRestExplorerClient(
 	return svc.ExplorerService, nil
 }
 
+func newRestIndexerClient(
+	serviceURL string,
+) (indexer_service.ClientService, error) {
+	parsedURL, err := url.Parse(serviceURL)
+	if err != nil {
+		return nil, err
+	}
+
+	schemes := []string{parsedURL.Scheme}
+	host := parsedURL.Host
+	basePath := parsedURL.Path
+
+	if basePath == "" {
+		basePath = indexerservice.DefaultBasePath
+	}
+
+	cfg := &indexerservice.TransportConfig{
+		Host:     host,
+		BasePath: basePath,
+		Schemes:  schemes,
+	}
+
+	transport := httptransport.New(cfg.Host, cfg.BasePath, cfg.Schemes)
+	svc := indexerservice.New(transport, strfmt.Default)
+	return svc.IndexerService, nil
+}
+
 func toRoundStage(stage models.V1RoundStage) client.RoundStage {
 	switch stage {
 	case models.V1RoundStageROUNDSTAGEREGISTRATION:
@@ -746,26 +782,16 @@ func toRoundStage(stage models.V1RoundStage) client.RoundStage {
 	}
 }
 
-type connectorsIndexFromProto struct {
-	connectorsIndex map[string]models.V1Outpoint
-}
-
-func (c connectorsIndexFromProto) parse() map[string]client.Outpoint {
-	connectorsIndex := make(map[string]client.Outpoint)
-	for vtxoOutpointStr, connectorOutpoint := range c.connectorsIndex {
-		connectorsIndex[vtxoOutpointStr] = client.Outpoint{
-			Txid: connectorOutpoint.Txid,
-			VOut: uint32(connectorOutpoint.Vout),
-		}
-	}
-	return connectorsIndex
-}
-
+// treeFromProto is a wrapper type for V1Tree
 type treeFromProto struct {
 	*models.V1Tree
 }
 
 func (t treeFromProto) parse() tree.TxTree {
+	if t.V1Tree == nil || t.Levels == nil {
+		return tree.TxTree{}
+	}
+
 	vtxoTree := make(tree.TxTree, 0, len(t.Levels))
 	for _, l := range t.Levels {
 		level := make([]tree.Node, 0, len(l.Nodes))
@@ -793,6 +819,22 @@ func (t treeFromProto) parse() tree.TxTree {
 	}
 
 	return vtxoTree
+}
+
+// connectorsIndexFromProto is a wrapper type for map[string]models.V1Outpoint
+type connectorsIndexFromProto struct {
+	connectorsIndex map[string]models.V1Outpoint
+}
+
+func (c connectorsIndexFromProto) parse() map[string]client.Outpoint {
+	connectorsIndex := make(map[string]client.Outpoint)
+	for vtxoOutpointStr, connectorOutpoint := range c.connectorsIndex {
+		connectorsIndex[vtxoOutpointStr] = client.Outpoint{
+			Txid: connectorOutpoint.Txid,
+			VOut: uint32(connectorOutpoint.Vout),
+		}
+	}
+	return connectorsIndex
 }
 
 func outpointsFromRest(restOutpoints []*models.V1Outpoint) []client.Outpoint {
@@ -904,4 +946,376 @@ func listenToStream(url string, chunkCh chan chunk) {
 		msg = bytes.Trim(msg, "\n")
 		chunkCh <- chunk{msg: msg}
 	}
+}
+
+// IndexerService methods
+
+func (a *restClient) GetCommitmentTx(ctx context.Context, txid string) (*client.CommitmentTxInfo, error) {
+	params := indexer_service.NewIndexerServiceGetCommitmentTxParams().WithTxid(txid)
+	resp, err := a.indexerSvc.IndexerServiceGetCommitmentTx(params)
+	if err != nil {
+		return nil, err
+	}
+
+	batches := make(map[uint32]*client.Batch)
+	for vout, batch := range resp.Payload.Batches {
+		voutUint32, err := strconv.ParseUint(vout, 10, 32)
+		if err != nil {
+			return nil, err
+		}
+
+		totalBatchAmount, err := strconv.ParseUint(batch.TotalBatchAmount, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		totalForfeitAmount, err := strconv.ParseUint(batch.TotalForfeitAmount, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		totalInputVtxos := int(batch.TotalInputVtxos)
+		totalOutputVtxos := int(batch.TotalOutputVtxos)
+
+		expiresAt, err := strconv.ParseInt(batch.ExpiresAt, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		batches[uint32(voutUint32)] = &client.Batch{
+			TotalBatchAmount:   totalBatchAmount,
+			TotalForfeitAmount: totalForfeitAmount,
+			TotalInputVtxos:    int32(totalInputVtxos),
+			TotalOutputVtxos:   int32(totalOutputVtxos),
+			ExpiresAt:          expiresAt,
+			Swept:              batch.Swept,
+		}
+	}
+
+	startedAt, err := strconv.ParseInt(resp.Payload.StartedAt, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	endedAt, err := strconv.ParseInt(resp.Payload.EndedAt, 10, 64)
+	if err != nil {
+		return nil, err
+	}
+
+	return &client.CommitmentTxInfo{
+		StartedAt: startedAt,
+		EndedAt:   endedAt,
+		Batches:   batches,
+	}, nil
+}
+
+func (a *restClient) GetVtxoTree(ctx context.Context, batchOutpoint client.Outpoint, page client.PageRequest) (*client.VtxoTreeResponse, error) {
+	pageSize := page.Size
+	pageIndex := page.Index
+
+	params := indexer_service.NewIndexerServiceGetVtxoTreeParams().
+		WithBatchOutpointTxid(batchOutpoint.Txid).
+		WithBatchOutpointVout(int64(batchOutpoint.VOut)).
+		WithPageSize(&pageSize).
+		WithPageIndex(&pageIndex)
+
+	resp, err := a.indexerSvc.IndexerServiceGetVtxoTree(params)
+	if err != nil {
+		return nil, err
+	}
+
+	nodes := make([]client.IndexerNode, 0, len(resp.Payload.VtxoTree))
+	for _, node := range resp.Payload.VtxoTree {
+		nodes = append(nodes, client.IndexerNode{
+			Txid:       node.Txid,
+			ParentTxid: node.ParentTxid,
+			Level:      node.Level,
+			LevelIndex: node.LevelIndex,
+		})
+	}
+
+	return &client.VtxoTreeResponse{
+		VtxoTree: nodes,
+		Page: client.PageResponse{
+			Current: resp.Payload.Page.Current,
+			Next:    resp.Payload.Page.Next,
+			Total:   resp.Payload.Page.Total,
+		},
+	}, nil
+}
+
+func (a *restClient) GetForfeitTxs(ctx context.Context, batchOutpoint client.Outpoint, page client.PageRequest) (*client.ForfeitTxsResponse, error) {
+	pageSize := page.Size
+	pageIndex := page.Index
+
+	params := indexer_service.NewIndexerServiceGetForfeitTxsParams().
+		WithBatchOutpointTxid(batchOutpoint.Txid).
+		WithBatchOutpointVout(int64(batchOutpoint.VOut)).
+		WithPageSize(&pageSize).
+		WithPageIndex(&pageIndex)
+
+	resp, err := a.indexerSvc.IndexerServiceGetForfeitTxs(params)
+	if err != nil {
+		return nil, err
+	}
+
+	return &client.ForfeitTxsResponse{
+		Txs: resp.Payload.Txs,
+		Page: client.PageResponse{
+			Current: resp.Payload.Page.Current,
+			Next:    resp.Payload.Page.Next,
+			Total:   resp.Payload.Page.Total,
+		},
+	}, nil
+}
+
+func (a *restClient) GetConnectors(ctx context.Context, batchOutpoint client.Outpoint, page client.PageRequest) (*client.ConnectorsResponse, error) {
+	pageSize := page.Size
+	pageIndex := page.Index
+
+	params := indexer_service.NewIndexerServiceGetConnectorsParams().
+		WithBatchOutpointTxid(batchOutpoint.Txid).
+		WithBatchOutpointVout(int64(batchOutpoint.VOut)).
+		WithPageSize(&pageSize).
+		WithPageIndex(&pageIndex)
+
+	resp, err := a.indexerSvc.IndexerServiceGetConnectors(params)
+	if err != nil {
+		return nil, err
+	}
+
+	connectors := make([]client.IndexerNode, 0, len(resp.Payload.Connectors))
+	for _, connector := range resp.Payload.Connectors {
+		connectors = append(connectors, client.IndexerNode{
+			Txid:       connector.Txid,
+			ParentTxid: connector.ParentTxid,
+			Level:      connector.Level,
+			LevelIndex: connector.LevelIndex,
+		})
+	}
+
+	return &client.ConnectorsResponse{
+		Connectors: connectors,
+		Page: client.PageResponse{
+			Current: resp.Payload.Page.Current,
+			Next:    resp.Payload.Page.Next,
+			Total:   resp.Payload.Page.Total,
+		},
+	}, nil
+}
+
+func (a *restClient) GetSpendableVtxos(ctx context.Context, address string, page client.PageRequest) (*client.SpendableVtxosResponse, error) {
+	pageSize := page.Size
+	pageIndex := page.Index
+
+	params := indexer_service.NewIndexerServiceGetSpendableVtxosParams().
+		WithAddress(address).
+		WithPageSize(&pageSize).
+		WithPageIndex(&pageIndex)
+
+	resp, err := a.indexerSvc.IndexerServiceGetSpendableVtxos(params)
+	if err != nil {
+		return nil, err
+	}
+
+	vtxos := make([]client.IndexerVtxo, 0, len(resp.Payload.Vtxos))
+	for _, vtxo := range resp.Payload.Vtxos {
+		createdAt, err := strconv.ParseInt(vtxo.CreatedAt, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		expiresAt, err := strconv.ParseInt(vtxo.ExpiresAt, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		amount, err := strconv.ParseUint(vtxo.Amount, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		vtxos = append(vtxos, client.IndexerVtxo{
+			Outpoint: client.Outpoint{
+				Txid: vtxo.Outpoint.Txid,
+				VOut: uint32(vtxo.Outpoint.Vout),
+			},
+			CreatedAt: createdAt,
+			ExpiresAt: expiresAt,
+			Amount:    amount,
+			Script:    vtxo.Script,
+			IsLeaf:    vtxo.IsLeaf,
+			IsSwept:   vtxo.IsSwept,
+			IsSpent:   vtxo.IsSpent,
+			SpentBy:   vtxo.SpentBy,
+		})
+	}
+
+	return &client.SpendableVtxosResponse{
+		Vtxos: vtxos,
+		Page: client.PageResponse{
+			Current: resp.Payload.Page.Current,
+			Next:    resp.Payload.Page.Next,
+			Total:   resp.Payload.Page.Total,
+		},
+	}, nil
+}
+
+func (a *restClient) GetTransactionHistory(ctx context.Context, address string, startTime, endTime int64, page client.PageRequest) (*client.TransactionHistoryResponse, error) {
+	startTimeStr := strconv.FormatInt(startTime, 10)
+	endTimeStr := strconv.FormatInt(endTime, 10)
+	pageSize := page.Size
+	pageIndex := page.Index
+
+	params := indexer_service.NewIndexerServiceGetTransactionHistoryParams().
+		WithAddress(address).
+		WithStartTime(&startTimeStr).
+		WithEndTime(&endTimeStr).
+		WithPageSize(&pageSize).
+		WithPageIndex(&pageIndex)
+
+	resp, err := a.indexerSvc.IndexerServiceGetTransactionHistory(params)
+	if err != nil {
+		return nil, err
+	}
+
+	history := make([]client.TxHistoryRecord, 0, len(resp.Payload.History))
+	for _, record := range resp.Payload.History {
+		amount, err := strconv.ParseUint(record.Amount, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		createdAt, err := strconv.ParseInt(record.CreatedAt, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		confirmedAt, err := strconv.ParseInt(record.ConfirmedAt, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+
+		// Use a zero value for TxType if Type is nil, otherwise use a numeric conversion
+		var txType client.TxType
+		if record.Type != nil {
+			// Convert the string enum to a numeric value
+			typeStr := string(*record.Type)
+			switch typeStr {
+			case "INDEXER_TX_TYPE_RECEIVED":
+				txType = client.TxTypeReceived
+			case "INDEXER_TX_TYPE_SENT":
+				txType = client.TxTypeSent
+			case "INDEXER_TX_TYPE_SWEEP":
+				txType = client.TxTypeSweep
+			default:
+				// Default to unspecified for unknown types
+				txType = client.TxTypeUnspecified
+			}
+		}
+
+		history = append(history, client.TxHistoryRecord{
+			CommitmentTxid: record.CommitmentTxid,
+			VirtualTxid:    record.VirtualTxid,
+			Type:           txType,
+			Amount:         amount,
+			CreatedAt:      createdAt,
+			ConfirmedAt:    confirmedAt,
+			IsSettled:      record.IsSettled,
+		})
+	}
+
+	return &client.TransactionHistoryResponse{
+		History: history,
+		Page: client.PageResponse{
+			Current: resp.Payload.Page.Current,
+			Next:    resp.Payload.Page.Next,
+			Total:   resp.Payload.Page.Total,
+		},
+	}, nil
+}
+
+func (a *restClient) GetVtxoChain(ctx context.Context, outpoint client.Outpoint, page client.PageRequest) (*client.VtxoChainResponse, error) {
+	pageSize := page.Size
+	pageIndex := page.Index
+
+	params := indexer_service.NewIndexerServiceGetVtxoChainParams().
+		WithOutpointTxid(outpoint.Txid).
+		WithOutpointVout(int64(outpoint.VOut)).
+		WithPageSize(&pageSize).
+		WithPageIndex(&pageIndex)
+
+	resp, err := a.indexerSvc.IndexerServiceGetVtxoChain(params)
+	if err != nil {
+		return nil, err
+	}
+
+	graph := make(map[string]*client.ChainWithExpiry)
+	for k, v := range resp.Payload.Graph {
+		txs := make([]client.ChainTx, 0, len(v.Txs))
+		for _, tx := range v.Txs {
+			txType := "virtual"
+			if *tx.Type == models.V1IndexerChainedTxTypeINDEXERCHAINEDTXTYPECOMMITMENT {
+				txType = "commitment"
+			}
+			txs = append(txs, client.ChainTx{
+				Txid: tx.Txid,
+				Type: txType,
+			})
+		}
+		expiresAt, err := strconv.ParseInt(v.ExpiresAt, 10, 64)
+		if err != nil {
+			return nil, err
+		}
+		graph[k] = &client.ChainWithExpiry{
+			Txs:       txs,
+			ExpiresAt: expiresAt,
+		}
+	}
+
+	return &client.VtxoChainResponse{
+		Graph: graph,
+		Page: client.PageResponse{
+			Current: resp.Payload.Page.Current,
+			Next:    resp.Payload.Page.Next,
+			Total:   resp.Payload.Page.Total,
+		},
+	}, nil
+}
+
+func (a *restClient) GetVirtualTxs(ctx context.Context, txids []string, page client.PageRequest) (*client.VirtualTxsResponse, error) {
+	pageSize := page.Size
+	pageIndex := page.Index
+
+	params := indexer_service.NewIndexerServiceGetVirtualTxsParams().
+		WithTxids(txids).
+		WithPageSize(&pageSize).
+		WithPageIndex(&pageIndex)
+
+	resp, err := a.indexerSvc.IndexerServiceGetVirtualTxs(params)
+	if err != nil {
+		return nil, err
+	}
+
+	return &client.VirtualTxsResponse{
+		Txs: resp.Payload.Txs,
+		Page: client.PageResponse{
+			Current: resp.Payload.Page.Current,
+			Next:    resp.Payload.Page.Next,
+			Total:   resp.Payload.Page.Total,
+		},
+	}, nil
+}
+
+func (a *restClient) GetSweptCommitmentTx(ctx context.Context, txid string) (*client.SweptCommitmentTxResponse, error) {
+	params := indexer_service.NewIndexerServiceGetSweptCommitmentTxParams().WithTxid(txid)
+
+	resp, err := a.indexerSvc.IndexerServiceGetSweptCommitmentTx(params)
+	if err != nil {
+		return nil, err
+	}
+
+	return &client.SweptCommitmentTxResponse{
+		SweptBy: resp.Payload.SweptBy,
+	}, nil
 }

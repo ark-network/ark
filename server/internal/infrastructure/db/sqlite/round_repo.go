@@ -239,6 +239,106 @@ func (r *roundRepository) GetRoundWithTxid(ctx context.Context, txid string) (*d
 	return nil, errors.New("round not found")
 }
 
+func (r *roundRepository) GetRoundStats(ctx context.Context, id string) (*domain.RoundStats, error) {
+	rs, err := r.querier.GetRoundStats(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	var totalForfeitAmount uint64
+	if rs.TotalForfeitAmount != nil {
+		switch v := rs.TotalForfeitAmount.(type) {
+		case int64:
+			totalForfeitAmount = uint64(v)
+		case int:
+			totalForfeitAmount = uint64(v)
+		}
+	}
+
+	var totalInputVtxo int32
+	if rs.TotalInputVtxos != nil {
+		switch v := rs.TotalInputVtxos.(type) {
+		case int64:
+			totalInputVtxo = int32(v)
+		case int:
+			totalInputVtxo = int32(v)
+		}
+	}
+
+	var totalBatchAmount uint64
+	if rs.TotalBatchAmount != nil {
+		switch v := rs.TotalBatchAmount.(type) {
+		case int64:
+			totalBatchAmount = uint64(v)
+		case int:
+			totalBatchAmount = uint64(v)
+		}
+	}
+
+	var expiresAt int64
+	if rs.ExpiresAt != nil {
+		switch v := rs.ExpiresAt.(type) {
+		case int64:
+			expiresAt = v
+		case int:
+			expiresAt = int64(v)
+		}
+	}
+
+	return &domain.RoundStats{
+		Swept:              rs.Swept,
+		TotalForfeitAmount: totalForfeitAmount,
+		TotalInputVtxos:    totalInputVtxo,
+		TotalBatchAmount:   totalBatchAmount,
+		TotalOutputVtxos:   int32(rs.TotalOutputVtxos),
+		ExpiresAt:          expiresAt,
+		Started:            rs.StartingTimestamp,
+		Ended:              rs.EndingTimestamp,
+	}, nil
+}
+
+func (r *roundRepository) GetRoundForfeitTxs(ctx context.Context, roundTxid string) ([]domain.ForfeitTx, error) {
+	rows, err := r.querier.GetRoundForfeitTxs(ctx, roundTxid)
+	if err != nil {
+		return nil, err
+	}
+
+	forfeits := make([]domain.ForfeitTx, 0, len(rows))
+	for _, row := range rows {
+		forfeits = append(forfeits, domain.ForfeitTx{
+			Txid: row.Txid.String,
+			Tx:   row.Tx.String,
+		})
+	}
+
+	return forfeits, nil
+}
+
+func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid string) (tree.TxTree, error) {
+	rows, err := r.querier.GetRoundConnectorTreeTxs(ctx, roundTxid)
+	if err != nil {
+		return nil, err
+	}
+
+	vtxoTree := make(tree.TxTree, 0)
+
+	for _, tx := range rows {
+		level := tx.TreeLevel
+		vtxoTree = extendArray(vtxoTree, int(level.Int64))
+		vtxoTree[int(level.Int64)] = extendArray(vtxoTree[int(level.Int64)], int(tx.Position.Int64))
+		if vtxoTree[int(level.Int64)][tx.Position.Int64] == (tree.Node{}) {
+			vtxoTree[int(level.Int64)][tx.Position.Int64] = tree.Node{
+				Tx:         tx.Tx.String,
+				Txid:       tx.Txid.String,
+				ParentTxid: tx.ParentTxid.String,
+				Leaf:       tx.IsLeaf.Bool,
+			}
+		}
+	}
+
+	return vtxoTree, nil
+}
+
 func (r *roundRepository) GetExpiredRoundsTxid(ctx context.Context) ([]string, error) {
 	return r.querier.SelectExpiredRoundsTxid(ctx)
 }
@@ -270,6 +370,23 @@ func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) 
 	}
 
 	return vtxoTree, nil
+}
+
+func (r *roundRepository) GetTxsWithTxids(ctx context.Context, txids []string) ([]string, error) {
+	rows, err := r.querier.GetTxsByTxid(ctx, queries.GetTxsByTxidParams{
+		Ids1: txids,
+		Ids2: txids,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	resp := make([]string, 0, len(rows))
+	for _, row := range rows {
+		resp = append(resp, row.Data)
+	}
+
+	return resp, nil
 }
 
 func rowToReceiver(row queries.RequestReceiverVw) domain.Receiver {

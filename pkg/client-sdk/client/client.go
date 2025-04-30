@@ -62,6 +62,17 @@ type TransportClient interface {
 	SetNostrRecipient(ctx context.Context, nostrRecipient string, vtxos []SignedVtxoOutpoint) error
 	DeleteNostrRecipient(ctx context.Context, vtxos []SignedVtxoOutpoint) error
 	SubscribeForAddress(ctx context.Context, address string) (<-chan AddressEvent, func(), error)
+
+	// IndexerService methods
+	GetCommitmentTx(ctx context.Context, txid string) (*CommitmentTxInfo, error)
+	GetVtxoTree(ctx context.Context, batchOutpoint Outpoint, page PageRequest) (*VtxoTreeResponse, error)
+	GetForfeitTxs(ctx context.Context, batchOutpoint Outpoint, page PageRequest) (*ForfeitTxsResponse, error)
+	GetConnectors(ctx context.Context, batchOutpoint Outpoint, page PageRequest) (*ConnectorsResponse, error)
+	GetSpendableVtxos(ctx context.Context, address string, page PageRequest) (*SpendableVtxosResponse, error)
+	GetTransactionHistory(ctx context.Context, address string, startTime, endTime int64, page PageRequest) (*TransactionHistoryResponse, error)
+	GetVtxoChain(ctx context.Context, outpoint Outpoint, page PageRequest) (*VtxoChainResponse, error)
+	GetVirtualTxs(ctx context.Context, txids []string, page PageRequest) (*VirtualTxsResponse, error)
+	GetSweptCommitmentTx(ctx context.Context, txid string) (*SweptCommitmentTxResponse, error)
 }
 
 type Info struct {
@@ -261,5 +272,127 @@ type OwnershipProof struct {
 type AddressEvent struct {
 	NewVtxos   []Vtxo
 	SpentVtxos []Vtxo
+	Err        error
+}
+
+// IndexerService types
+
+type PageRequest struct {
+	Size  int32
+	Index int32
+}
+
+type PageResponse struct {
+	Current int32
+	Next    int32
+	Total   int32
+}
+
+type IndexerNode struct {
+	Txid       string
+	ParentTxid string
+	Level      int32
+	LevelIndex int32
+}
+
+type Batch struct {
+	TotalBatchAmount   uint64
+	TotalForfeitAmount uint64
+	TotalInputVtxos    int32
+	TotalOutputVtxos   int32
+	ExpiresAt          int64
+	Swept              bool
+}
+
+type CommitmentTxInfo struct {
+	StartedAt int64
+	EndedAt   int64
+	Batches   map[uint32]*Batch
+}
+
+type VtxoTreeResponse struct {
+	VtxoTree []IndexerNode
+	Page     PageResponse
+}
+
+type ForfeitTxsResponse struct {
+	Txs  []string
+	Page PageResponse
+}
+
+type ConnectorsResponse struct {
+	Connectors []IndexerNode
+	Page       PageResponse
+}
+
+type IndexerVtxo struct {
+	Outpoint  Outpoint
+	CreatedAt int64
+	ExpiresAt int64
+	Amount    uint64
+	Script    string
+	IsLeaf    bool
+	IsSwept   bool
+	IsSpent   bool
+	SpentBy   string
+}
+
+type SpendableVtxosResponse struct {
+	Vtxos []IndexerVtxo
+	Page  PageResponse
+}
+
+type TxType int
+
+const (
+	TxTypeUnspecified TxType = iota
+	TxTypeReceived
+	TxTypeSent
+	TxTypeSweep
+)
+
+type TxHistoryRecord struct {
+	CommitmentTxid string
+	VirtualTxid    string
+	Type           TxType
+	Amount         uint64
+	CreatedAt      int64
+	ConfirmedAt    int64
+	IsSettled      bool
+}
+
+type TransactionHistoryResponse struct {
+	History []TxHistoryRecord
+	Page    PageResponse
+}
+
+type ChainWithExpiry struct {
+	Txs       []ChainTx
+	ExpiresAt int64
+}
+
+type ChainTx struct {
+	Txid string
+	Type string
+}
+
+type VtxoChainResponse struct {
+	Graph map[string]*ChainWithExpiry
+	Page  PageResponse
+}
+
+type VirtualTxsResponse struct {
+	Txs  []string
+	Page PageResponse
+}
+
+type SweptCommitmentTxResponse struct {
+	SweptBy []string
+}
+
+type AddressesSubscriptionEvent struct {
+	Address    string
+	NewVtxos   []IndexerVtxo
+	SpentVtxos []IndexerVtxo
 	Err        error
 }

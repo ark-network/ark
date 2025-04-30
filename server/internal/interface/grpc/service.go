@@ -201,8 +201,14 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		}
 		appSvc = svc
 		appHandler := handlers.NewHandler(s.version, appSvc, s.stopCh)
+		indexerSvc, err := s.appConfig.IndexerService()
+		if err != nil {
+			return err
+		}
+		indexerHandler := handlers.NewIndexerService(indexerSvc)
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
 		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
+		arkv1.RegisterIndexerServiceServer(grpcServer, indexerHandler)
 	}
 
 	adminHandler := handlers.NewAdminHandler(s.appConfig.AdminService(), appSvc, s.appConfig.NoteUriPrefix)
@@ -279,6 +285,11 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 			return err
 		}
 		if err := arkv1.RegisterExplorerServiceHandler(
+			ctx, gwmux, conn,
+		); err != nil {
+			return err
+		}
+		if err := arkv1.RegisterIndexerServiceHandler(
 			ctx, gwmux, conn,
 		); err != nil {
 			return err
