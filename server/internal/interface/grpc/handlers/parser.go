@@ -10,6 +10,7 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 )
@@ -50,6 +51,25 @@ func parseNotes(notes []string) ([]note.Note, error) {
 	}
 
 	return notesParsed, nil
+}
+
+func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
+	if len(ins) <= 0 {
+		return nil, fmt.Errorf("missing inputs")
+	}
+
+	inputs := make([]ports.Input, 0, len(ins))
+	for _, input := range ins {
+		inputs = append(inputs, ports.Input{
+			VtxoKey: domain.VtxoKey{
+				Txid: input.GetOutpoint().GetTxid(),
+				VOut: input.GetOutpoint().GetVout(),
+			},
+			Tapscripts: input.GetTapscripts().GetScripts(),
+		})
+	}
+
+	return inputs, nil
 }
 
 func parseReceiver(out *arkv1.Output) (domain.Receiver, error) {

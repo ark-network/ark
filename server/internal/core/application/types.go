@@ -17,6 +17,7 @@ type Service interface {
 	Stop()
 	SpendNotes(ctx context.Context, notes []note.Note) (string, error)
 	RegisterIntent(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) (string, error)
+	SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
 	SignRoundTx(ctx context.Context, roundTx string) error

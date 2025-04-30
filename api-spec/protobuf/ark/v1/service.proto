@@ -26,6 +26,12 @@ service ArkService {
       body: "*"
     };
   };
+  rpc RegisterInputsForNextRound(RegisterInputsForNextRoundRequest) returns (RegisterInputsForNextRoundResponse) {
+    option (google.api.http) = {
+      post: "/v1/round/registerInputs"
+      body: "*"
+    };
+  };
   rpc RegisterOutputsForNextRound(RegisterOutputsForNextRoundRequest) returns (RegisterOutputsForNextRoundResponse) {
     option (google.api.http) = {
       post: "/v1/round/registerOutputs"
@@ -115,8 +121,15 @@ message RegisterIntentRequest {
   Bip322Signature bip322_signature = 1;
   repeated string notes = 2;
 }
-
 message RegisterIntentResponse {
+  string request_id = 1;
+}
+
+message RegisterInputsForNextRoundRequest {
+  repeated Input inputs = 1;
+  repeated string notes = 2;
+}
+message RegisterInputsForNextRoundResponse {
   string request_id = 1;
 }
 

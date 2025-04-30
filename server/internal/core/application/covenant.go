@@ -409,6 +409,125 @@ func (s *covenantService) RegisterIntent(ctx context.Context, bip322signature bi
 	return request.Id, nil
 }
 
+func (s *covenantService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
+	vtxosInputs := make([]domain.Vtxo, 0)
+	boardingInputs := make([]ports.BoardingInput, 0)
+
+	now := time.Now().Unix()
+
+	boardingTxs := make(map[string]*transaction.Transaction, 0) // txid -> txhex
+
+	for _, input := range inputs {
+		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{input.VtxoKey})
+		if err != nil || len(vtxosResult) == 0 {
+			// vtxo not found in db, check if it exists on-chain
+			if _, ok := boardingTxs[input.Txid]; !ok {
+				// check if the tx exists and is confirmed
+				txhex, err := s.wallet.GetTransaction(ctx, input.Txid)
+				if err != nil {
+					return "", fmt.Errorf("failed to get tx %s: %s", input.Txid, err)
+				}
+
+				tx, err := transaction.NewTxFromHex(txhex)
+				if err != nil {
+					return "", fmt.Errorf("failed to parse tx %s: %s", input.Txid, err)
+				}
+
+				confirmed, _, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, input.Txid)
+				if err != nil {
+					return "", fmt.Errorf("failed to check tx %s: %s", input.Txid, err)
+				}
+
+				if !confirmed {
+					return "", fmt.Errorf("tx %s not confirmed", input.Txid)
+				}
+
+				vtxoScript, err := tree.ParseVtxoScript(input.Tapscripts)
+				if err != nil {
+					return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+				}
+
+				exitDelay, err := vtxoScript.SmallestExitDelay()
+				if err != nil {
+					return "", fmt.Errorf("failed to get exit delay: %s", err)
+				}
+
+				// if the exit path is available, forbid registering the boarding utxo
+				if blocktime+exitDelay.Seconds() < now {
+					return "", fmt.Errorf("tx %s expired", input.Txid)
+				}
+
+				inputValue, err := elementsutil.ValueFromBytes(tx.Outputs[input.VOut].Value)
+				if err != nil {
+					return "", err
+				}
+				if s.utxoMaxAmount > 0 {
+					if inputValue > uint64(s.utxoMaxAmount) {
+						return "", fmt.Errorf("boarding input amount is higher than max utxo amount:%d", s.utxoMaxAmount)
+					}
+				}
+				if inputValue < uint64(s.utxoMinAmount) {
+					return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
+				}
+
+				boardingTxs[input.Txid] = tx
+			}
+
+			tx := boardingTxs[input.Txid]
+			boardingInput, err := s.newBoardingInput(tx, input)
+			if err != nil {
+				return "", err
+			}
+
+			boardingInputs = append(boardingInputs, *boardingInput)
+			continue
+		}
+
+		vtxo := vtxosResult[0]
+		if vtxo.Spent {
+			return "", fmt.Errorf("input %s:%d already spent", vtxo.Txid, vtxo.VOut)
+		}
+
+		if vtxo.Redeemed {
+			return "", fmt.Errorf("input %s:%d already redeemed", vtxo.Txid, vtxo.VOut)
+		}
+
+		if vtxo.Swept {
+			return "", fmt.Errorf("input %s:%d already swept", vtxo.Txid, vtxo.VOut)
+		}
+
+		vtxoScript, err := tree.ParseVtxoScript(input.Tapscripts)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+		}
+
+		tapKey, _, err := vtxoScript.TapTree()
+		if err != nil {
+			return "", fmt.Errorf("failed to get taproot key: %s", err)
+		}
+
+		expectedTapKey, err := vtxo.TapKey()
+		if err != nil {
+			return "", fmt.Errorf("failed to get taproot key: %s", err)
+		}
+
+		if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey)) {
+			return "", fmt.Errorf("descriptor does not match vtxo pubkey")
+		}
+
+		vtxosInputs = append(vtxosInputs, vtxo)
+	}
+
+	request, err := domain.NewTxRequest(vtxosInputs)
+	if err != nil {
+		return "", err
+	}
+	if err := s.txRequests.push(*request, boardingInputs, nil, nil); err != nil {
+		return "", err
+	}
+	return request.Id, nil
+}
+
 func (s *covenantService) newBoardingInput(tx *transaction.Transaction, input ports.Input) (*ports.BoardingInput, error) {
 	if len(tx.Outputs) <= int(input.VtxoKey.VOut) {
 		return nil, fmt.Errorf("output not found")

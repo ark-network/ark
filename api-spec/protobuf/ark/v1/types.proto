@@ -28,6 +28,14 @@ message Outpoint {
   uint32 vout = 2;
 }
 
+message Input {
+  Outpoint outpoint = 1;
+  oneof taproot_tree {
+    string descriptor = 2;
+    Tapscripts tapscripts = 3;
+  }
+}
+
 message Output {
   string address = 1; // onchain or off-chain
   uint64 amount = 2; // Amount to send in satoshis.

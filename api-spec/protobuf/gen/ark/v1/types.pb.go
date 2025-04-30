@@ -233,6 +233,95 @@ func (x *Outpoint) GetVout() uint32 {
 	return 0
 }
 
+type Input struct {
+	state         protoimpl.MessageState
+	sizeCache     protoimpl.SizeCache
+	unknownFields protoimpl.UnknownFields
+
+	Outpoint *Outpoint `protobuf:"bytes,1,opt,name=outpoint,proto3" json:"outpoint,omitempty"`
+	// Types that are assignable to TaprootTree:
+	//
+	//	*Input_Descriptor_
+	//	*Input_Tapscripts
+	TaprootTree isInput_TaprootTree `protobuf_oneof:"taproot_tree"`
+}
+
+func (x *Input) Reset() {
+	*x = Input{}
+	if protoimpl.UnsafeEnabled {
+		mi := &file_ark_v1_types_proto_msgTypes[2]
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		ms.StoreMessageInfo(mi)
+	}
+}
+
+func (x *Input) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*Input) ProtoMessage() {}
+
+func (x *Input) ProtoReflect() protoreflect.Message {
+	mi := &file_ark_v1_types_proto_msgTypes[2]
+	if protoimpl.UnsafeEnabled && x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use Input.ProtoReflect.Descriptor instead.
+func (*Input) Descriptor() ([]byte, []int) {
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{2}
+}
+
+func (x *Input) GetOutpoint() *Outpoint {
+	if x != nil {
+		return x.Outpoint
+	}
+	return nil
+}
+
+func (m *Input) GetTaprootTree() isInput_TaprootTree {
+	if m != nil {
+		return m.TaprootTree
+	}
+	return nil
+}
+
+func (x *Input) GetDescriptor_() string {
+	if x, ok := x.GetTaprootTree().(*Input_Descriptor_); ok {
+		return x.Descriptor_
+	}
+	return ""
+}
+
+func (x *Input) GetTapscripts() *Tapscripts {
+	if x, ok := x.GetTaprootTree().(*Input_Tapscripts); ok {
+		return x.Tapscripts
+	}
+	return nil
+}
+
+type isInput_TaprootTree interface {
+	isInput_TaprootTree()
+}
+
+type Input_Descriptor_ struct {
+	Descriptor_ string `protobuf:"bytes,2,opt,name=descriptor,proto3,oneof"`
+}
+
+type Input_Tapscripts struct {
+	Tapscripts *Tapscripts `protobuf:"bytes,3,opt,name=tapscripts,proto3,oneof"`
+}
+
+func (*Input_Descriptor_) isInput_TaprootTree() {}
+
+func (*Input_Tapscripts) isInput_TaprootTree() {}
+
 type Output struct {
 	state         protoimpl.MessageState
 	sizeCache     protoimpl.SizeCache
@@ -245,7 +334,7 @@ type Output struct {
 func (x *Output) Reset() {
 	*x = Output{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[2]
+		mi := &file_ark_v1_types_proto_msgTypes[3]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -258,7 +347,7 @@ func (x *Output) String() string {
 func (*Output) ProtoMessage() {}
 
 func (x *Output) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[2]
+	mi := &file_ark_v1_types_proto_msgTypes[3]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -271,7 +360,7 @@ func (x *Output) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Output.ProtoReflect.Descriptor instead.
 func (*Output) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{2}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *Output) GetAddress() string {
@@ -299,7 +388,7 @@ type Tree struct {
 func (x *Tree) Reset() {
 	*x = Tree{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[3]
+		mi := &file_ark_v1_types_proto_msgTypes[4]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -312,7 +401,7 @@ func (x *Tree) String() string {
 func (*Tree) ProtoMessage() {}
 
 func (x *Tree) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[3]
+	mi := &file_ark_v1_types_proto_msgTypes[4]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -325,7 +414,7 @@ func (x *Tree) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Tree.ProtoReflect.Descriptor instead.
 func (*Tree) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{3}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *Tree) GetLevels() []*TreeLevel {
@@ -346,7 +435,7 @@ type TreeLevel struct {
 func (x *TreeLevel) Reset() {
 	*x = TreeLevel{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[4]
+		mi := &file_ark_v1_types_proto_msgTypes[5]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -359,7 +448,7 @@ func (x *TreeLevel) String() string {
 func (*TreeLevel) ProtoMessage() {}
 
 func (x *TreeLevel) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[4]
+	mi := &file_ark_v1_types_proto_msgTypes[5]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -372,7 +461,7 @@ func (x *TreeLevel) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TreeLevel.ProtoReflect.Descriptor instead.
 func (*TreeLevel) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{4}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{5}
 }
 
 func (x *TreeLevel) GetNodes() []*Node {
@@ -395,7 +484,7 @@ type Node struct {
 func (x *Node) Reset() {
 	*x = Node{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[5]
+		mi := &file_ark_v1_types_proto_msgTypes[6]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -408,7 +497,7 @@ func (x *Node) String() string {
 func (*Node) ProtoMessage() {}
 
 func (x *Node) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[5]
+	mi := &file_ark_v1_types_proto_msgTypes[6]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -421,7 +510,7 @@ func (x *Node) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Node.ProtoReflect.Descriptor instead.
 func (*Node) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{5}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *Node) GetTxid() string {
@@ -466,7 +555,7 @@ type Vtxo struct {
 func (x *Vtxo) Reset() {
 	*x = Vtxo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[6]
+		mi := &file_ark_v1_types_proto_msgTypes[7]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -479,7 +568,7 @@ func (x *Vtxo) String() string {
 func (*Vtxo) ProtoMessage() {}
 
 func (x *Vtxo) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[6]
+	mi := &file_ark_v1_types_proto_msgTypes[7]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -492,7 +581,7 @@ func (x *Vtxo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Vtxo.ProtoReflect.Descriptor instead.
 func (*Vtxo) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{6}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *Vtxo) GetOutpoint() *Outpoint {
@@ -587,7 +676,7 @@ type RoundTransaction struct {
 func (x *RoundTransaction) Reset() {
 	*x = RoundTransaction{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[7]
+		mi := &file_ark_v1_types_proto_msgTypes[8]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -600,7 +689,7 @@ func (x *RoundTransaction) String() string {
 func (*RoundTransaction) ProtoMessage() {}
 
 func (x *RoundTransaction) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[7]
+	mi := &file_ark_v1_types_proto_msgTypes[8]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -613,7 +702,7 @@ func (x *RoundTransaction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoundTransaction.ProtoReflect.Descriptor instead.
 func (*RoundTransaction) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{7}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *RoundTransaction) GetTxid() string {
@@ -665,7 +754,7 @@ type RedeemTransaction struct {
 func (x *RedeemTransaction) Reset() {
 	*x = RedeemTransaction{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[8]
+		mi := &file_ark_v1_types_proto_msgTypes[9]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -678,7 +767,7 @@ func (x *RedeemTransaction) String() string {
 func (*RedeemTransaction) ProtoMessage() {}
 
 func (x *RedeemTransaction) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[8]
+	mi := &file_ark_v1_types_proto_msgTypes[9]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -691,7 +780,7 @@ func (x *RedeemTransaction) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RedeemTransaction.ProtoReflect.Descriptor instead.
 func (*RedeemTransaction) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{8}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *RedeemTransaction) GetTxid() string {
@@ -733,7 +822,7 @@ type Tapscripts struct {
 func (x *Tapscripts) Reset() {
 	*x = Tapscripts{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[9]
+		mi := &file_ark_v1_types_proto_msgTypes[10]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -746,7 +835,7 @@ func (x *Tapscripts) String() string {
 func (*Tapscripts) ProtoMessage() {}
 
 func (x *Tapscripts) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[9]
+	mi := &file_ark_v1_types_proto_msgTypes[10]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -759,7 +848,7 @@ func (x *Tapscripts) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Tapscripts.ProtoReflect.Descriptor instead.
 func (*Tapscripts) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{9}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Tapscripts) GetScripts() []string {
@@ -781,7 +870,7 @@ type Bip322Signature struct {
 func (x *Bip322Signature) Reset() {
 	*x = Bip322Signature{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[10]
+		mi := &file_ark_v1_types_proto_msgTypes[11]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -794,7 +883,7 @@ func (x *Bip322Signature) String() string {
 func (*Bip322Signature) ProtoMessage() {}
 
 func (x *Bip322Signature) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[10]
+	mi := &file_ark_v1_types_proto_msgTypes[11]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -807,7 +896,7 @@ func (x *Bip322Signature) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Bip322Signature.ProtoReflect.Descriptor instead.
 func (*Bip322Signature) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{10}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *Bip322Signature) GetSignature() string {
@@ -838,7 +927,7 @@ type MarketHour struct {
 func (x *MarketHour) Reset() {
 	*x = MarketHour{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[11]
+		mi := &file_ark_v1_types_proto_msgTypes[12]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -851,7 +940,7 @@ func (x *MarketHour) String() string {
 func (*MarketHour) ProtoMessage() {}
 
 func (x *MarketHour) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[11]
+	mi := &file_ark_v1_types_proto_msgTypes[12]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -864,7 +953,7 @@ func (x *MarketHour) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MarketHour.ProtoReflect.Descriptor instead.
 func (*MarketHour) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{11}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{12}
 }
 
 func (x *MarketHour) GetNextStartTime() int64 {
@@ -909,7 +998,7 @@ type SweepableOutput struct {
 func (x *SweepableOutput) Reset() {
 	*x = SweepableOutput{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[12]
+		mi := &file_ark_v1_types_proto_msgTypes[13]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -922,7 +1011,7 @@ func (x *SweepableOutput) String() string {
 func (*SweepableOutput) ProtoMessage() {}
 
 func (x *SweepableOutput) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[12]
+	mi := &file_ark_v1_types_proto_msgTypes[13]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -935,7 +1024,7 @@ func (x *SweepableOutput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SweepableOutput.ProtoReflect.Descriptor instead.
 func (*SweepableOutput) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{12}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *SweepableOutput) GetTxid() string {
@@ -978,7 +1067,7 @@ type ScheduledSweep struct {
 func (x *ScheduledSweep) Reset() {
 	*x = ScheduledSweep{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[13]
+		mi := &file_ark_v1_types_proto_msgTypes[14]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -991,7 +1080,7 @@ func (x *ScheduledSweep) String() string {
 func (*ScheduledSweep) ProtoMessage() {}
 
 func (x *ScheduledSweep) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[13]
+	mi := &file_ark_v1_types_proto_msgTypes[14]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1004,7 +1093,7 @@ func (x *ScheduledSweep) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ScheduledSweep.ProtoReflect.Descriptor instead.
 func (*ScheduledSweep) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{13}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ScheduledSweep) GetRoundId() string {
@@ -1040,7 +1129,7 @@ type TxRequestInfo struct {
 func (x *TxRequestInfo) Reset() {
 	*x = TxRequestInfo{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[14]
+		mi := &file_ark_v1_types_proto_msgTypes[15]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1053,7 +1142,7 @@ func (x *TxRequestInfo) String() string {
 func (*TxRequestInfo) ProtoMessage() {}
 
 func (x *TxRequestInfo) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[14]
+	mi := &file_ark_v1_types_proto_msgTypes[15]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1066,7 +1155,7 @@ func (x *TxRequestInfo) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TxRequestInfo.ProtoReflect.Descriptor instead.
 func (*TxRequestInfo) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{14}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *TxRequestInfo) GetId() string {
@@ -1145,7 +1234,7 @@ type RequestInput struct {
 func (x *RequestInput) Reset() {
 	*x = RequestInput{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[15]
+		mi := &file_ark_v1_types_proto_msgTypes[16]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1158,7 +1247,7 @@ func (x *RequestInput) String() string {
 func (*RequestInput) ProtoMessage() {}
 
 func (x *RequestInput) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[15]
+	mi := &file_ark_v1_types_proto_msgTypes[16]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1171,7 +1260,7 @@ func (x *RequestInput) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RequestInput.ProtoReflect.Descriptor instead.
 func (*RequestInput) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{15}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *RequestInput) GetTxid() string {
@@ -1212,7 +1301,7 @@ type RoundFinalizationEvent struct {
 func (x *RoundFinalizationEvent) Reset() {
 	*x = RoundFinalizationEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[16]
+		mi := &file_ark_v1_types_proto_msgTypes[17]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1225,7 +1314,7 @@ func (x *RoundFinalizationEvent) String() string {
 func (*RoundFinalizationEvent) ProtoMessage() {}
 
 func (x *RoundFinalizationEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[16]
+	mi := &file_ark_v1_types_proto_msgTypes[17]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1238,7 +1327,7 @@ func (x *RoundFinalizationEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoundFinalizationEvent.ProtoReflect.Descriptor instead.
 func (*RoundFinalizationEvent) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{16}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *RoundFinalizationEvent) GetId() string {
@@ -1295,7 +1384,7 @@ type RoundFinalizedEvent struct {
 func (x *RoundFinalizedEvent) Reset() {
 	*x = RoundFinalizedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[17]
+		mi := &file_ark_v1_types_proto_msgTypes[18]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1308,7 +1397,7 @@ func (x *RoundFinalizedEvent) String() string {
 func (*RoundFinalizedEvent) ProtoMessage() {}
 
 func (x *RoundFinalizedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[17]
+	mi := &file_ark_v1_types_proto_msgTypes[18]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1321,7 +1410,7 @@ func (x *RoundFinalizedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoundFinalizedEvent.ProtoReflect.Descriptor instead.
 func (*RoundFinalizedEvent) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{17}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *RoundFinalizedEvent) GetId() string {
@@ -1350,7 +1439,7 @@ type RoundFailed struct {
 func (x *RoundFailed) Reset() {
 	*x = RoundFailed{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[18]
+		mi := &file_ark_v1_types_proto_msgTypes[19]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1363,7 +1452,7 @@ func (x *RoundFailed) String() string {
 func (*RoundFailed) ProtoMessage() {}
 
 func (x *RoundFailed) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[18]
+	mi := &file_ark_v1_types_proto_msgTypes[19]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1376,7 +1465,7 @@ func (x *RoundFailed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoundFailed.ProtoReflect.Descriptor instead.
 func (*RoundFailed) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{18}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *RoundFailed) GetId() string {
@@ -1407,7 +1496,7 @@ type RoundSigningEvent struct {
 func (x *RoundSigningEvent) Reset() {
 	*x = RoundSigningEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[19]
+		mi := &file_ark_v1_types_proto_msgTypes[20]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1420,7 +1509,7 @@ func (x *RoundSigningEvent) String() string {
 func (*RoundSigningEvent) ProtoMessage() {}
 
 func (x *RoundSigningEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[19]
+	mi := &file_ark_v1_types_proto_msgTypes[20]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1433,7 +1522,7 @@ func (x *RoundSigningEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoundSigningEvent.ProtoReflect.Descriptor instead.
 func (*RoundSigningEvent) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{19}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *RoundSigningEvent) GetId() string {
@@ -1476,7 +1565,7 @@ type RoundSigningNoncesGeneratedEvent struct {
 func (x *RoundSigningNoncesGeneratedEvent) Reset() {
 	*x = RoundSigningNoncesGeneratedEvent{}
 	if protoimpl.UnsafeEnabled {
-		mi := &file_ark_v1_types_proto_msgTypes[20]
+		mi := &file_ark_v1_types_proto_msgTypes[21]
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		ms.StoreMessageInfo(mi)
 	}
@@ -1489,7 +1578,7 @@ func (x *RoundSigningNoncesGeneratedEvent) String() string {
 func (*RoundSigningNoncesGeneratedEvent) ProtoMessage() {}
 
 func (x *RoundSigningNoncesGeneratedEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_ark_v1_types_proto_msgTypes[20]
+	mi := &file_ark_v1_types_proto_msgTypes[21]
 	if protoimpl.UnsafeEnabled && x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1502,7 +1591,7 @@ func (x *RoundSigningNoncesGeneratedEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RoundSigningNoncesGeneratedEvent.ProtoReflect.Descriptor instead.
 func (*RoundSigningNoncesGeneratedEvent) Descriptor() ([]byte, []int) {
-	return file_ark_v1_types_proto_rawDescGZIP(), []int{20}
+	return file_ark_v1_types_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *RoundSigningNoncesGeneratedEvent) GetId() string {
@@ -1543,7 +1632,17 @@ var file_ark_v1_types_proto_rawDesc = []byte{
 	0x08, 0x4f, 0x75, 0x74, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x12, 0x12, 0x0a, 0x04, 0x74, 0x78, 0x69,
 	0x64, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x04, 0x74, 0x78, 0x69, 0x64, 0x12, 0x12, 0x0a,
 	0x04, 0x76, 0x6f, 0x75, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0d, 0x52, 0x04, 0x76, 0x6f, 0x75,
-	0x74, 0x22, 0x3a, 0x0a, 0x06, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x61,
+	0x74, 0x22, 0x9d, 0x01, 0x0a, 0x05, 0x49, 0x6e, 0x70, 0x75, 0x74, 0x12, 0x2c, 0x0a, 0x08, 0x6f,
+	0x75, 0x74, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x18, 0x01, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x10, 0x2e,
+	0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x4f, 0x75, 0x74, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x52,
+	0x08, 0x6f, 0x75, 0x74, 0x70, 0x6f, 0x69, 0x6e, 0x74, 0x12, 0x20, 0x0a, 0x0a, 0x64, 0x65, 0x73,
+	0x63, 0x72, 0x69, 0x70, 0x74, 0x6f, 0x72, 0x18, 0x02, 0x20, 0x01, 0x28, 0x09, 0x48, 0x00, 0x52,
+	0x0a, 0x64, 0x65, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x6f, 0x72, 0x12, 0x34, 0x0a, 0x0a, 0x74,
+	0x61, 0x70, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74, 0x73, 0x18, 0x03, 0x20, 0x01, 0x28, 0x0b, 0x32,
+	0x12, 0x2e, 0x61, 0x72, 0x6b, 0x2e, 0x76, 0x31, 0x2e, 0x54, 0x61, 0x70, 0x73, 0x63, 0x72, 0x69,
+	0x70, 0x74, 0x73, 0x48, 0x00, 0x52, 0x0a, 0x74, 0x61, 0x70, 0x73, 0x63, 0x72, 0x69, 0x70, 0x74,
+	0x73, 0x42, 0x0e, 0x0a, 0x0c, 0x74, 0x61, 0x70, 0x72, 0x6f, 0x6f, 0x74, 0x5f, 0x74, 0x72, 0x65,
+	0x65, 0x22, 0x3a, 0x0a, 0x06, 0x4f, 0x75, 0x74, 0x70, 0x75, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x61,
 	0x64, 0x64, 0x72, 0x65, 0x73, 0x73, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x61, 0x64,
 	0x64, 0x72, 0x65, 0x73, 0x73, 0x12, 0x16, 0x0a, 0x06, 0x61, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x18,
 	0x02, 0x20, 0x01, 0x28, 0x04, 0x52, 0x06, 0x61, 0x6d, 0x6f, 0x75, 0x6e, 0x74, 0x22, 0x31, 0x0a,
@@ -1744,58 +1843,61 @@ func file_ark_v1_types_proto_rawDescGZIP() []byte {
 }
 
 var file_ark_v1_types_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_ark_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 22)
+var file_ark_v1_types_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
 var file_ark_v1_types_proto_goTypes = []interface{}{
 	(RoundStage)(0),                          // 0: ark.v1.RoundStage
 	(*Round)(nil),                            // 1: ark.v1.Round
 	(*Outpoint)(nil),                         // 2: ark.v1.Outpoint
-	(*Output)(nil),                           // 3: ark.v1.Output
-	(*Tree)(nil),                             // 4: ark.v1.Tree
-	(*TreeLevel)(nil),                        // 5: ark.v1.TreeLevel
-	(*Node)(nil),                             // 6: ark.v1.Node
-	(*Vtxo)(nil),                             // 7: ark.v1.Vtxo
-	(*RoundTransaction)(nil),                 // 8: ark.v1.RoundTransaction
-	(*RedeemTransaction)(nil),                // 9: ark.v1.RedeemTransaction
-	(*Tapscripts)(nil),                       // 10: ark.v1.Tapscripts
-	(*Bip322Signature)(nil),                  // 11: ark.v1.Bip322Signature
-	(*MarketHour)(nil),                       // 12: ark.v1.MarketHour
-	(*SweepableOutput)(nil),                  // 13: ark.v1.SweepableOutput
-	(*ScheduledSweep)(nil),                   // 14: ark.v1.ScheduledSweep
-	(*TxRequestInfo)(nil),                    // 15: ark.v1.TxRequestInfo
-	(*RequestInput)(nil),                     // 16: ark.v1.RequestInput
-	(*RoundFinalizationEvent)(nil),           // 17: ark.v1.RoundFinalizationEvent
-	(*RoundFinalizedEvent)(nil),              // 18: ark.v1.RoundFinalizedEvent
-	(*RoundFailed)(nil),                      // 19: ark.v1.RoundFailed
-	(*RoundSigningEvent)(nil),                // 20: ark.v1.RoundSigningEvent
-	(*RoundSigningNoncesGeneratedEvent)(nil), // 21: ark.v1.RoundSigningNoncesGeneratedEvent
-	nil,                                      // 22: ark.v1.RoundFinalizationEvent.ConnectorsIndexEntry
+	(*Input)(nil),                            // 3: ark.v1.Input
+	(*Output)(nil),                           // 4: ark.v1.Output
+	(*Tree)(nil),                             // 5: ark.v1.Tree
+	(*TreeLevel)(nil),                        // 6: ark.v1.TreeLevel
+	(*Node)(nil),                             // 7: ark.v1.Node
+	(*Vtxo)(nil),                             // 8: ark.v1.Vtxo
+	(*RoundTransaction)(nil),                 // 9: ark.v1.RoundTransaction
+	(*RedeemTransaction)(nil),                // 10: ark.v1.RedeemTransaction
+	(*Tapscripts)(nil),                       // 11: ark.v1.Tapscripts
+	(*Bip322Signature)(nil),                  // 12: ark.v1.Bip322Signature
+	(*MarketHour)(nil),                       // 13: ark.v1.MarketHour
+	(*SweepableOutput)(nil),                  // 14: ark.v1.SweepableOutput
+	(*ScheduledSweep)(nil),                   // 15: ark.v1.ScheduledSweep
+	(*TxRequestInfo)(nil),                    // 16: ark.v1.TxRequestInfo
+	(*RequestInput)(nil),                     // 17: ark.v1.RequestInput
+	(*RoundFinalizationEvent)(nil),           // 18: ark.v1.RoundFinalizationEvent
+	(*RoundFinalizedEvent)(nil),              // 19: ark.v1.RoundFinalizedEvent
+	(*RoundFailed)(nil),                      // 20: ark.v1.RoundFailed
+	(*RoundSigningEvent)(nil),                // 21: ark.v1.RoundSigningEvent
+	(*RoundSigningNoncesGeneratedEvent)(nil), // 22: ark.v1.RoundSigningNoncesGeneratedEvent
+	nil,                                      // 23: ark.v1.RoundFinalizationEvent.ConnectorsIndexEntry
 }
 var file_ark_v1_types_proto_depIdxs = []int32{
-	4,  // 0: ark.v1.Round.vtxo_tree:type_name -> ark.v1.Tree
-	4,  // 1: ark.v1.Round.connectors:type_name -> ark.v1.Tree
+	5,  // 0: ark.v1.Round.vtxo_tree:type_name -> ark.v1.Tree
+	5,  // 1: ark.v1.Round.connectors:type_name -> ark.v1.Tree
 	0,  // 2: ark.v1.Round.stage:type_name -> ark.v1.RoundStage
-	5,  // 3: ark.v1.Tree.levels:type_name -> ark.v1.TreeLevel
-	6,  // 4: ark.v1.TreeLevel.nodes:type_name -> ark.v1.Node
-	2,  // 5: ark.v1.Vtxo.outpoint:type_name -> ark.v1.Outpoint
-	7,  // 6: ark.v1.RoundTransaction.spent_vtxos:type_name -> ark.v1.Vtxo
-	7,  // 7: ark.v1.RoundTransaction.spendable_vtxos:type_name -> ark.v1.Vtxo
-	2,  // 8: ark.v1.RoundTransaction.claimed_boarding_utxos:type_name -> ark.v1.Outpoint
-	7,  // 9: ark.v1.RedeemTransaction.spent_vtxos:type_name -> ark.v1.Vtxo
-	7,  // 10: ark.v1.RedeemTransaction.spendable_vtxos:type_name -> ark.v1.Vtxo
-	13, // 11: ark.v1.ScheduledSweep.outputs:type_name -> ark.v1.SweepableOutput
-	3,  // 12: ark.v1.TxRequestInfo.receivers:type_name -> ark.v1.Output
-	16, // 13: ark.v1.TxRequestInfo.inputs:type_name -> ark.v1.RequestInput
-	16, // 14: ark.v1.TxRequestInfo.boarding_inputs:type_name -> ark.v1.RequestInput
-	4,  // 15: ark.v1.RoundFinalizationEvent.vtxo_tree:type_name -> ark.v1.Tree
-	4,  // 16: ark.v1.RoundFinalizationEvent.connectors:type_name -> ark.v1.Tree
-	22, // 17: ark.v1.RoundFinalizationEvent.connectors_index:type_name -> ark.v1.RoundFinalizationEvent.ConnectorsIndexEntry
-	4,  // 18: ark.v1.RoundSigningEvent.unsigned_vtxo_tree:type_name -> ark.v1.Tree
-	2,  // 19: ark.v1.RoundFinalizationEvent.ConnectorsIndexEntry.value:type_name -> ark.v1.Outpoint
-	20, // [20:20] is the sub-list for method output_type
-	20, // [20:20] is the sub-list for method input_type
-	20, // [20:20] is the sub-list for extension type_name
-	20, // [20:20] is the sub-list for extension extendee
-	0,  // [0:20] is the sub-list for field type_name
+	2,  // 3: ark.v1.Input.outpoint:type_name -> ark.v1.Outpoint
+	11, // 4: ark.v1.Input.tapscripts:type_name -> ark.v1.Tapscripts
+	6,  // 5: ark.v1.Tree.levels:type_name -> ark.v1.TreeLevel
+	7,  // 6: ark.v1.TreeLevel.nodes:type_name -> ark.v1.Node
+	2,  // 7: ark.v1.Vtxo.outpoint:type_name -> ark.v1.Outpoint
+	8,  // 8: ark.v1.RoundTransaction.spent_vtxos:type_name -> ark.v1.Vtxo
+	8,  // 9: ark.v1.RoundTransaction.spendable_vtxos:type_name -> ark.v1.Vtxo
+	2,  // 10: ark.v1.RoundTransaction.claimed_boarding_utxos:type_name -> ark.v1.Outpoint
+	8,  // 11: ark.v1.RedeemTransaction.spent_vtxos:type_name -> ark.v1.Vtxo
+	8,  // 12: ark.v1.RedeemTransaction.spendable_vtxos:type_name -> ark.v1.Vtxo
+	14, // 13: ark.v1.ScheduledSweep.outputs:type_name -> ark.v1.SweepableOutput
+	4,  // 14: ark.v1.TxRequestInfo.receivers:type_name -> ark.v1.Output
+	17, // 15: ark.v1.TxRequestInfo.inputs:type_name -> ark.v1.RequestInput
+	17, // 16: ark.v1.TxRequestInfo.boarding_inputs:type_name -> ark.v1.RequestInput
+	5,  // 17: ark.v1.RoundFinalizationEvent.vtxo_tree:type_name -> ark.v1.Tree
+	5,  // 18: ark.v1.RoundFinalizationEvent.connectors:type_name -> ark.v1.Tree
+	23, // 19: ark.v1.RoundFinalizationEvent.connectors_index:type_name -> ark.v1.RoundFinalizationEvent.ConnectorsIndexEntry
+	5,  // 20: ark.v1.RoundSigningEvent.unsigned_vtxo_tree:type_name -> ark.v1.Tree
+	2,  // 21: ark.v1.RoundFinalizationEvent.ConnectorsIndexEntry.value:type_name -> ark.v1.Outpoint
+	22, // [22:22] is the sub-list for method output_type
+	22, // [22:22] is the sub-list for method input_type
+	22, // [22:22] is the sub-list for extension type_name
+	22, // [22:22] is the sub-list for extension extendee
+	0,  // [0:22] is the sub-list for field type_name
 }
 
 func init() { file_ark_v1_types_proto_init() }
@@ -1829,7 +1931,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[2].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Output); i {
+			switch v := v.(*Input); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1841,7 +1943,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[3].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Tree); i {
+			switch v := v.(*Output); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1853,7 +1955,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[4].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*TreeLevel); i {
+			switch v := v.(*Tree); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1865,7 +1967,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[5].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Node); i {
+			switch v := v.(*TreeLevel); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1877,7 +1979,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[6].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Vtxo); i {
+			switch v := v.(*Node); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1889,7 +1991,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[7].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RoundTransaction); i {
+			switch v := v.(*Vtxo); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1901,7 +2003,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[8].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RedeemTransaction); i {
+			switch v := v.(*RoundTransaction); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1913,7 +2015,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[9].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Tapscripts); i {
+			switch v := v.(*RedeemTransaction); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1925,7 +2027,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[10].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*Bip322Signature); i {
+			switch v := v.(*Tapscripts); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1937,7 +2039,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[11].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*MarketHour); i {
+			switch v := v.(*Bip322Signature); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1949,7 +2051,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[12].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*SweepableOutput); i {
+			switch v := v.(*MarketHour); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1961,7 +2063,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[13].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*ScheduledSweep); i {
+			switch v := v.(*SweepableOutput); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1973,7 +2075,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[14].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*TxRequestInfo); i {
+			switch v := v.(*ScheduledSweep); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1985,7 +2087,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[15].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RequestInput); i {
+			switch v := v.(*TxRequestInfo); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -1997,7 +2099,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[16].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RoundFinalizationEvent); i {
+			switch v := v.(*RequestInput); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2009,7 +2111,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[17].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RoundFinalizedEvent); i {
+			switch v := v.(*RoundFinalizationEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2021,7 +2123,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[18].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RoundFailed); i {
+			switch v := v.(*RoundFinalizedEvent); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2033,7 +2135,7 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[19].Exporter = func(v interface{}, i int) interface{} {
-			switch v := v.(*RoundSigningEvent); i {
+			switch v := v.(*RoundFailed); i {
 			case 0:
 				return &v.state
 			case 1:
@@ -2045,6 +2147,18 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 		file_ark_v1_types_proto_msgTypes[20].Exporter = func(v interface{}, i int) interface{} {
+			switch v := v.(*RoundSigningEvent); i {
+			case 0:
+				return &v.state
+			case 1:
+				return &v.sizeCache
+			case 2:
+				return &v.unknownFields
+			default:
+				return nil
+			}
+		}
+		file_ark_v1_types_proto_msgTypes[21].Exporter = func(v interface{}, i int) interface{} {
 			switch v := v.(*RoundSigningNoncesGeneratedEvent); i {
 			case 0:
 				return &v.state
@@ -2057,13 +2171,17 @@ func file_ark_v1_types_proto_init() {
 			}
 		}
 	}
+	file_ark_v1_types_proto_msgTypes[2].OneofWrappers = []interface{}{
+		(*Input_Descriptor_)(nil),
+		(*Input_Tapscripts)(nil),
+	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_ark_v1_types_proto_rawDesc,
 			NumEnums:      1,
-			NumMessages:   22,
+			NumMessages:   23,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

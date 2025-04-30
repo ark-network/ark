@@ -189,6 +189,49 @@ func (h *handler) RegisterIntent(
 	}, nil
 }
 
+func (h *handler) RegisterInputsForNextRound(
+	ctx context.Context, req *arkv1.RegisterInputsForNextRoundRequest,
+) (*arkv1.RegisterInputsForNextRoundResponse, error) {
+	vtxosInputs := req.GetInputs()
+	notesInputs := req.GetNotes()
+
+	if len(vtxosInputs) <= 0 && len(notesInputs) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing inputs")
+	}
+
+	if len(vtxosInputs) > 0 && len(notesInputs) > 0 {
+		return nil, status.Error(codes.InvalidArgument, "cannot mix vtxos and notes")
+	}
+
+	requestID := ""
+
+	if len(vtxosInputs) > 0 {
+		inputs, err := parseInputs(vtxosInputs)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		requestID, err = h.svc.SpendVtxos(ctx, inputs)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(notesInputs) > 0 {
+		notes, err := parseNotes(notesInputs)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		requestID, err = h.svc.SpendNotes(ctx, notes)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &arkv1.RegisterInputsForNextRoundResponse{
+		RequestId: requestID,
+	}, nil
+}
+
 func (h *handler) RegisterOutputsForNextRound(
 	ctx context.Context, req *arkv1.RegisterOutputsForNextRoundRequest,
 ) (*arkv1.RegisterOutputsForNextRoundResponse, error) {

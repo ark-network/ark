@@ -21,6 +21,7 @@ type ArkServiceClient interface {
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
 	GetBoardingAddress(ctx context.Context, in *GetBoardingAddressRequest, opts ...grpc.CallOption) (*GetBoardingAddressResponse, error)
 	RegisterIntent(ctx context.Context, in *RegisterIntentRequest, opts ...grpc.CallOption) (*RegisterIntentResponse, error)
+	RegisterInputsForNextRound(ctx context.Context, in *RegisterInputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterInputsForNextRoundResponse, error)
 	RegisterOutputsForNextRound(ctx context.Context, in *RegisterOutputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterOutputsForNextRoundResponse, error)
 	SubmitTreeNonces(ctx context.Context, in *SubmitTreeNoncesRequest, opts ...grpc.CallOption) (*SubmitTreeNoncesResponse, error)
 	SubmitTreeSignatures(ctx context.Context, in *SubmitTreeSignaturesRequest, opts ...grpc.CallOption) (*SubmitTreeSignaturesResponse, error)
@@ -60,6 +61,15 @@ func (c *arkServiceClient) GetBoardingAddress(ctx context.Context, in *GetBoardi
 func (c *arkServiceClient) RegisterIntent(ctx context.Context, in *RegisterIntentRequest, opts ...grpc.CallOption) (*RegisterIntentResponse, error) {
 	out := new(RegisterIntentResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/RegisterIntent", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *arkServiceClient) RegisterInputsForNextRound(ctx context.Context, in *RegisterInputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterInputsForNextRoundResponse, error) {
+	out := new(RegisterInputsForNextRoundResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/RegisterInputsForNextRound", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -191,6 +201,7 @@ type ArkServiceServer interface {
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
 	GetBoardingAddress(context.Context, *GetBoardingAddressRequest) (*GetBoardingAddressResponse, error)
 	RegisterIntent(context.Context, *RegisterIntentRequest) (*RegisterIntentResponse, error)
+	RegisterInputsForNextRound(context.Context, *RegisterInputsForNextRoundRequest) (*RegisterInputsForNextRoundResponse, error)
 	RegisterOutputsForNextRound(context.Context, *RegisterOutputsForNextRoundRequest) (*RegisterOutputsForNextRoundResponse, error)
 	SubmitTreeNonces(context.Context, *SubmitTreeNoncesRequest) (*SubmitTreeNoncesResponse, error)
 	SubmitTreeSignatures(context.Context, *SubmitTreeSignaturesRequest) (*SubmitTreeSignaturesResponse, error)
@@ -213,6 +224,9 @@ func (UnimplementedArkServiceServer) GetBoardingAddress(context.Context, *GetBoa
 }
 func (UnimplementedArkServiceServer) RegisterIntent(context.Context, *RegisterIntentRequest) (*RegisterIntentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterIntent not implemented")
+}
+func (UnimplementedArkServiceServer) RegisterInputsForNextRound(context.Context, *RegisterInputsForNextRoundRequest) (*RegisterInputsForNextRoundResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RegisterInputsForNextRound not implemented")
 }
 func (UnimplementedArkServiceServer) RegisterOutputsForNextRound(context.Context, *RegisterOutputsForNextRoundRequest) (*RegisterOutputsForNextRoundResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterOutputsForNextRound not implemented")
@@ -300,6 +314,24 @@ func _ArkService_RegisterIntent_Handler(srv interface{}, ctx context.Context, de
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ArkServiceServer).RegisterIntent(ctx, req.(*RegisterIntentRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ArkService_RegisterInputsForNextRound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RegisterInputsForNextRoundRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).RegisterInputsForNextRound(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/RegisterInputsForNextRound",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).RegisterInputsForNextRound(ctx, req.(*RegisterInputsForNextRoundRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -472,6 +504,10 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RegisterIntent",
 			Handler:    _ArkService_RegisterIntent_Handler,
+		},
+		{
+			MethodName: "RegisterInputsForNextRound",
+			Handler:    _ArkService_RegisterInputsForNextRound_Handler,
 		},
 		{
 			MethodName: "RegisterOutputsForNextRound",

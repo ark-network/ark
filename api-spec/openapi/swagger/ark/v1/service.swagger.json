@@ -164,6 +164,38 @@
         ]
       }
     },
+    "/v1/round/registerInputs": {
+      "post": {
+        "operationId": "ArkService_RegisterInputsForNextRound",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1RegisterInputsForNextRoundResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1RegisterInputsForNextRoundRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/round/registerIntent": {
       "post": {
         "operationId": "ArkService_RegisterIntent",
@@ -518,6 +550,20 @@
         }
       }
     },
+    "v1Input": {
+      "type": "object",
+      "properties": {
+        "outpoint": {
+          "$ref": "#/definitions/v1Outpoint"
+        },
+        "descriptor": {
+          "type": "string"
+        },
+        "tapscripts": {
+          "$ref": "#/definitions/v1Tapscripts"
+        }
+      }
+    },
     "v1MarketHour": {
       "type": "object",
       "properties": {
@@ -617,6 +663,32 @@
           }
         },
         "hex": {
+          "type": "string"
+        }
+      }
+    },
+    "v1RegisterInputsForNextRoundRequest": {
+      "type": "object",
+      "properties": {
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1Input"
+          }
+        },
+        "notes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1RegisterInputsForNextRoundResponse": {
+      "type": "object",
+      "properties": {
+        "requestId": {
           "type": "string"
         }
       }
