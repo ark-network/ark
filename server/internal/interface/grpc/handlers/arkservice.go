@@ -79,15 +79,16 @@ func (h *handler) GetInfo(
 	)
 
 	return &arkv1.GetInfoResponse{
-		Pubkey:                  info.PubKey,
-		VtxoTreeExpiry:          info.VtxoTreeExpiry,
-		UnilateralExitDelay:     info.UnilateralExitDelay,
-		BoardingExitDelay:       info.BoardingExitDelay,
-		RoundInterval:           info.RoundInterval,
-		Network:                 info.Network,
-		Dust:                    int64(info.Dust),
-		ForfeitAddress:          info.ForfeitAddress,
-		VtxoDescriptorTemplates: []string{desc},
+		Pubkey:                     info.PubKey,
+		VtxoTreeExpiry:             info.VtxoTreeExpiry,
+		UnilateralExitDelay:        info.UnilateralExitDelay,
+		BoardingExitDelay:          info.BoardingExitDelay,
+		RoundInterval:              info.RoundInterval,
+		Network:                    info.Network,
+		Dust:                       int64(info.Dust),
+		ForfeitAddress:             info.ForfeitAddress,
+		BoardingDescriptorTemplate: desc,
+		VtxoDescriptorTemplates:    []string{desc},
 		MarketHour: &arkv1.MarketHour{
 			NextStartTime: info.NextMarketHour.StartTime.Unix(),
 			NextEndTime:   info.NextMarketHour.EndTime.Unix(),
