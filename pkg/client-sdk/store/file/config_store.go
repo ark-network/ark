@@ -69,6 +69,10 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 		MarketHourEndTime:          fmt.Sprintf("%d", data.MarketHourEndTime),
 		MarketHourPeriod:           fmt.Sprintf("%d", data.MarketHourPeriod),
 		MarketHourRoundInterval:    fmt.Sprintf("%d", data.MarketHourRoundInterval),
+		UtxoMinAmount:              fmt.Sprintf("%d", data.UtxoMinAmount),
+		UtxoMaxAmount:              fmt.Sprintf("%d", data.UtxoMaxAmount),
+		VtxoMinAmount:              fmt.Sprintf("%d", data.VtxoMinAmount),
+		VtxoMaxAmount:              fmt.Sprintf("%d", data.VtxoMaxAmount),
 	}
 
 	if err := s.write(sd); err != nil {

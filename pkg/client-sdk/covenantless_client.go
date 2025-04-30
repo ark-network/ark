@@ -194,7 +194,9 @@ func LoadCovenantlessClient(sdkStore types.Store) (ArkClient, error) {
 			return nil, err
 		}
 		go covenantlessClient.listenForArkTxs(txStreamCtx)
-		go covenantlessClient.listenForBoardingTxs(txStreamCtx)
+		if cfgData.UtxoMaxAmount != 0 {
+			go covenantlessClient.listenForBoardingTxs(txStreamCtx)
+		}
 	}
 
 	return &covenantlessClient, nil
@@ -248,7 +250,9 @@ func LoadCovenantlessClientWithWallet(
 			return nil, err
 		}
 		go covenantlessClient.listenForArkTxs(txStreamCtx)
-		go covenantlessClient.listenForBoardingTxs(txStreamCtx)
+		if cfgData.UtxoMaxAmount != 0 {
+			go covenantlessClient.listenForBoardingTxs(txStreamCtx)
+		}
 	}
 
 	return &covenantlessClient, nil
@@ -266,7 +270,9 @@ func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
 			return err
 		}
 		go a.listenForArkTxs(txStreamCtx)
-		go a.listenForBoardingTxs(txStreamCtx)
+		if a.Config.UtxoMaxAmount != 0 {
+			go a.listenForBoardingTxs(txStreamCtx)
+		}
 	}
 
 	return nil
@@ -284,7 +290,9 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 			return err
 		}
 		go a.listenForArkTxs(txStreamCtx)
-		go a.listenForBoardingTxs(txStreamCtx)
+		if a.Config.UtxoMaxAmount != 0 {
+			go a.listenForBoardingTxs(txStreamCtx)
+		}
 	}
 
 	return nil
@@ -293,9 +301,32 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 func (a *covenantlessArkClient) Balance(
 	ctx context.Context, computeVtxoExpiration bool,
 ) (*Balance, error) {
+	if a.wallet == nil {
+		return nil, fmt.Errorf("wallet not initialized")
+	}
+
 	offchainAddrs, boardingAddrs, redeemAddrs, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	if a.Config.UtxoMaxAmount == 0 {
+		balance, amountByExpiration, err := a.getOffchainBalance(
+			ctx, computeVtxoExpiration,
+		)
+		if err != nil {
+			return nil, err
+		}
+
+		nextExpiration, details := getOffchainBalanceDetails(amountByExpiration)
+
+		return &Balance{
+			OffchainBalance: OffchainBalance{
+				Total:          balance,
+				NextExpiration: getFancyTimeExpiration(nextExpiration),
+				Details:        details,
+			},
+		}, nil
 	}
 
 	const nbWorkers = 3
@@ -362,22 +393,8 @@ func (a *covenantlessArkClient) Balance(
 		if res.onchainSpendableBalance > 0 {
 			onchainBalance += res.onchainSpendableBalance
 		}
-		if res.offchainBalanceByExpiration != nil {
-			for timestamp, amount := range res.offchainBalanceByExpiration {
-				if nextExpiration == 0 || timestamp < nextExpiration {
-					nextExpiration = timestamp
-				}
+		nextExpiration, details = getOffchainBalanceDetails(res.offchainBalanceByExpiration)
 
-				fancyTime := time.Unix(timestamp, 0).Format(time.RFC3339)
-				details = append(
-					details,
-					VtxoDetails{
-						ExpiryTime: fancyTime,
-						Amount:     amount,
-					},
-				)
-			}
-		}
 		if res.onchainLockedBalance != nil {
 			for timestamp, amount := range res.onchainLockedBalance {
 				fancyTime := time.Unix(timestamp, 0).Format(time.RFC3339)
@@ -397,43 +414,17 @@ func (a *covenantlessArkClient) Balance(
 		}
 	}
 
-	fancyTimeExpiration := ""
-	if nextExpiration != 0 {
-		t := time.Unix(nextExpiration, 0)
-		if t.Before(time.Now().Add(48 * time.Hour)) {
-			// print the duration instead of the absolute time
-			until := time.Until(t)
-			seconds := math.Abs(until.Seconds())
-			minutes := math.Abs(until.Minutes())
-			hours := math.Abs(until.Hours())
-
-			if hours < 1 {
-				if minutes < 1 {
-					fancyTimeExpiration = fmt.Sprintf("%d seconds", int(seconds))
-				} else {
-					fancyTimeExpiration = fmt.Sprintf("%d minutes", int(minutes))
-				}
-			} else {
-				fancyTimeExpiration = fmt.Sprintf("%d hours", int(hours))
-			}
-		} else {
-			fancyTimeExpiration = t.Format(time.RFC3339)
-		}
-	}
-
-	response := &Balance{
+	return &Balance{
 		OnchainBalance: OnchainBalance{
 			SpendableAmount: onchainBalance,
 			LockedAmount:    lockedOnchainBalance,
 		},
 		OffchainBalance: OffchainBalance{
 			Total:          offchainBalance,
-			NextExpiration: fancyTimeExpiration,
+			NextExpiration: getFancyTimeExpiration(nextExpiration),
 			Details:        details,
 		},
-	}
-
-	return response, nil
+	}, nil
 }
 
 func (a *covenantlessArkClient) OnboardAgainAllExpiredBoardings(
@@ -441,6 +432,10 @@ func (a *covenantlessArkClient) OnboardAgainAllExpiredBoardings(
 ) (string, error) {
 	if err := a.safeCheck(); err != nil {
 		return "", err
+	}
+
+	if a.Config.UtxoMaxAmount == 0 {
+		return "", fmt.Errorf("operation not allowed by the server")
 	}
 
 	_, boardingAddr, err := a.wallet.NewAddress(ctx, false)
@@ -470,6 +465,10 @@ func (a *covenantlessArkClient) SendOffChain(
 	withExpiryCoinselect bool, receivers []Receiver,
 	withZeroFees bool,
 ) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
+
 	if len(receivers) <= 0 {
 		return "", fmt.Errorf("missing receivers")
 	}
@@ -593,6 +592,10 @@ func (a *covenantlessArkClient) SendOffChain(
 }
 
 func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string, opts ...Option) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
+
 	amount := uint64(0)
 
 	options := &SettleOptions{}
@@ -704,15 +707,19 @@ func (a *covenantlessArkClient) CollaborativeExit(
 	addr string, amount uint64, withExpiryCoinselect bool,
 	opts ...Option,
 ) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
+
+	if a.Config.UtxoMaxAmount == 0 {
+		return "", fmt.Errorf("operation not allowed by the server")
+	}
+
 	options := &SettleOptions{}
 	for _, opt := range opts {
 		if err := opt(options); err != nil {
 			return "", err
 		}
-	}
-
-	if a.wallet.IsLocked() {
-		return "", fmt.Errorf("wallet is locked")
 	}
 
 	netParams := utils.ToBitcoinNetwork(a.Network)
@@ -803,14 +810,18 @@ func (a *covenantlessArkClient) CollaborativeExit(
 }
 
 func (a *covenantlessArkClient) Settle(ctx context.Context, opts ...Option) (string, error) {
+	if err := a.safeCheck(); err != nil {
+		return "", err
+	}
+
 	return a.sendOffchain(ctx, false, nil, opts...)
 }
 
 func (a *covenantlessArkClient) GetTransactionHistory(
 	ctx context.Context,
 ) ([]types.Transaction, error) {
-	if a.Config == nil {
-		return nil, fmt.Errorf("client not initialized")
+	if err := a.safeCheck(); err != nil {
+		return nil, err
 	}
 
 	if a.Config.WithTransactionFeed {
@@ -1002,10 +1013,12 @@ func (a *covenantlessArkClient) refreshDb(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+
 	boardingTxs, roundsToIgnore, err := a.getBoardingTxs(ctx)
 	if err != nil {
 		return err
 	}
+
 	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos, roundsToIgnore)
 	if err != nil {
 		return err
@@ -3369,6 +3382,55 @@ func inputsToDerivationPath(inputs []client.Outpoint, notesInputs []string) stri
 	}
 
 	return path
+}
+
+func getOffchainBalanceDetails(amountByExpiration map[int64]uint64) (int64, []VtxoDetails) {
+	nextExpiration := int64(0)
+	details := make([]VtxoDetails, 0)
+	for timestamp, amount := range amountByExpiration {
+		if nextExpiration == 0 || timestamp < nextExpiration {
+			nextExpiration = timestamp
+		}
+
+		fancyTime := time.Unix(timestamp, 0).Format(time.RFC3339)
+		details = append(
+			details,
+			VtxoDetails{
+				ExpiryTime: fancyTime,
+				Amount:     amount,
+			},
+		)
+	}
+	return nextExpiration, details
+}
+
+func getFancyTimeExpiration(nextExpiration int64) string {
+	if nextExpiration == 0 {
+		return ""
+	}
+
+	fancyTimeExpiration := ""
+	t := time.Unix(nextExpiration, 0)
+	if t.Before(time.Now().Add(48 * time.Hour)) {
+		// print the duration instead of the absolute time
+		until := time.Until(t)
+		seconds := math.Abs(until.Seconds())
+		minutes := math.Abs(until.Minutes())
+		hours := math.Abs(until.Hours())
+
+		if hours < 1 {
+			if minutes < 1 {
+				fancyTimeExpiration = fmt.Sprintf("%d seconds", int(seconds))
+			} else {
+				fancyTimeExpiration = fmt.Sprintf("%d minutes", int(minutes))
+			}
+		} else {
+			fancyTimeExpiration = fmt.Sprintf("%d hours", int(hours))
+		}
+	} else {
+		fancyTimeExpiration = t.Format(time.RFC3339)
+	}
+	return fancyTimeExpiration
 }
 
 func toTypesVtxo(src client.Vtxo) types.Vtxo {
