@@ -20,6 +20,12 @@ service ArkService {
 
   /* In-Round Transaction APIs */
 
+  rpc RegisterIntent(RegisterIntentRequest) returns (RegisterIntentResponse) {
+    option (google.api.http) = {
+      post: "/v1/round/registerIntent"
+      body: "*"
+    };
+  };
   rpc RegisterInputsForNextRound(RegisterInputsForNextRoundRequest) returns (RegisterInputsForNextRoundResponse) {
     option (google.api.http) = {
       post: "/v1/round/registerInputs"
@@ -70,23 +76,9 @@ service ArkService {
     };
   }
 
-  /* Nostr APIs */
-
   rpc GetTransactionsStream(GetTransactionsStreamRequest) returns (stream GetTransactionsStreamResponse) {
     option (google.api.http) = {
       get: "/v1/transactions"
-    };
-  }
-  rpc SetNostrRecipient(SetNostrRecipientRequest) returns (SetNostrRecipientResponse) {
-    option (google.api.http) = {
-      post: "/v1/vtxo/nostr"
-      body: "*"
-    };
-  }
-  rpc DeleteNostrRecipient(DeleteNostrRecipientRequest) returns (DeleteNostrRecipientResponse) {
-    option (google.api.http) = {
-      post: "/v1/vtxo/nostr/delete"
-      body: "*"
     };
   }
 }
@@ -123,6 +115,15 @@ message GetBoardingAddressResponse {
 }
 
 /* In-Round Transaction API messages */
+
+message RegisterIntentRequest {
+  // BIP322 signature embeds the outpoints and the proof of funds
+  Bip322Signature bip322_signature = 1;
+  repeated string notes = 2;
+}
+message RegisterIntentResponse {
+  string request_id = 1;
+}
 
 message RegisterInputsForNextRoundRequest {
   repeated Input inputs = 1;
@@ -201,14 +202,3 @@ message GetTransactionsStreamResponse {
     RedeemTransaction redeem = 2;
   }
 }
-
-message SetNostrRecipientRequest {
-  string nostr_recipient = 1;
-  repeated SignedVtxoOutpoint vtxos = 2;
-}
-message SetNostrRecipientResponse {}
-
-message DeleteNostrRecipientRequest {
-  repeated SignedVtxoOutpoint vtxos = 1;
-}
-message DeleteNostrRecipientResponse {}

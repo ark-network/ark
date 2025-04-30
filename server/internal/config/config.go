@@ -19,7 +19,6 @@ import (
 	fileunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/file"
 	btcwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/btc-embedded"
 	liquidwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/liquid-standalone"
-	"github.com/nbd-wtf/go-nostr"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -80,7 +79,6 @@ type Config struct {
 	VtxoTreeExpiry      common.RelativeLocktime
 	UnilateralExitDelay common.RelativeLocktime
 	BoardingExitDelay   common.RelativeLocktime
-	NostrDefaultRelays  []string
 	NoteUriPrefix       string
 
 	MarketHourStartTime     time.Time
@@ -136,7 +134,6 @@ var (
 	BoardingExitDelay   = "BOARDING_EXIT_DELAY"
 	EsploraURL          = "ESPLORA_URL"
 	NeutrinoPeer        = "NEUTRINO_PEER"
-	NostrDefaultRelays  = "NOSTR_DEFAULT_RELAYS"
 	// #nosec G101
 	BitcoindRpcUser = "BITCOIND_RPC_USER"
 	// #nosec G101
@@ -179,7 +176,6 @@ var (
 	defaultBoardingExitDelay   = 7776000 // 3 months
 	defaultNoMacaroons         = false
 	defaultNoTLS               = true
-	defaultNostrDefaultRelays  = []string{"wss://relay.primal.net", "wss://relay.damus.io"}
 	defaultMarketHourStartTime = time.Now()
 	defaultMarketHourEndTime   = defaultMarketHourStartTime.Add(time.Hour)
 	defaultMarketHourPeriod    = 24 * time.Hour
@@ -212,7 +208,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(EsploraURL, defaultEsploraURL)
 	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
 	viper.SetDefault(BoardingExitDelay, defaultBoardingExitDelay)
-	viper.SetDefault(NostrDefaultRelays, defaultNostrDefaultRelays)
 	viper.SetDefault(MarketHourStartTime, defaultMarketHourStartTime)
 	viper.SetDefault(MarketHourEndTime, defaultMarketHourEndTime)
 	viper.SetDefault(MarketHourPeriod, defaultMarketHourPeriod)
@@ -265,7 +260,6 @@ func LoadConfig() (*Config, error) {
 		UnlockerType:              viper.GetString(UnlockerType),
 		UnlockerFilePath:          viper.GetString(UnlockerFilePath),
 		UnlockerPassword:          viper.GetString(UnlockerPassword),
-		NostrDefaultRelays:        viper.GetStringSlice(NostrDefaultRelays),
 		NoteUriPrefix:             viper.GetString(NoteUriPrefix),
 		MarketHourStartTime:       viper.GetTime(MarketHourStartTime),
 		MarketHourEndTime:         viper.GetTime(MarketHourEndTime),
@@ -393,16 +387,6 @@ func (c *Config) Validate() error {
 			"boarding exit delay must be a multiple of %d, rounded to %d",
 			minAllowedSequence, c.BoardingExitDelay,
 		)
-	}
-
-	if len(c.NostrDefaultRelays) == 0 {
-		return fmt.Errorf("missing nostr default relays")
-	}
-
-	for _, relay := range c.NostrDefaultRelays {
-		if !nostr.IsValidRelayURL(relay) {
-			return fmt.Errorf("invalid nostr relay url: %s", relay)
-		}
 	}
 
 	if err := c.repoManager(); err != nil {
@@ -586,7 +570,7 @@ func (c *Config) schedulerService() error {
 func (c *Config) appService() error {
 	if common.IsLiquid(c.Network) {
 		svc, err := application.NewCovenantService(
-			c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
+			c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay,
 			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 			c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 			c.RoundMaxParticipantsCount, c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount,
@@ -600,7 +584,7 @@ func (c *Config) appService() error {
 	}
 
 	svc, err := application.NewCovenantlessService(
-		c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
+		c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 		c.AllowZeroFees, c.RoundMaxParticipantsCount, c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount,

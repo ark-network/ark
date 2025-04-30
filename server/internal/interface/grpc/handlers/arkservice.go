@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common/bip322"
 	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/tree"
@@ -132,6 +133,59 @@ func (h *handler) GetBoardingAddress(
 				Scripts: tapscripts,
 			},
 		},
+	}, nil
+}
+
+func (h *handler) RegisterIntent(
+	ctx context.Context, req *arkv1.RegisterIntentRequest,
+) (*arkv1.RegisterIntentResponse, error) {
+	notesInputs := req.GetNotes()
+	bip322Signature := req.GetBip322Signature()
+
+	if len(notesInputs) <= 0 && bip322Signature == nil {
+		return nil, status.Error(codes.InvalidArgument, "missing inputs")
+	}
+
+	if bip322Signature != nil && len(notesInputs) > 0 {
+		return nil, status.Error(codes.InvalidArgument, "cannot mix vtxos and notes")
+	}
+
+	requestID := ""
+
+	if bip322Signature != nil {
+		signature, err := bip322.DecodeSignature(bip322Signature.Signature)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 signature")
+		}
+
+		if len(bip322Signature.Message) <= 0 {
+			return nil, status.Error(codes.InvalidArgument, "missing message")
+		}
+
+		var message tree.IntentMessage
+		if err := message.Decode(bip322Signature.Message); err != nil {
+			return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 message")
+		}
+
+		requestID, err = h.svc.RegisterIntent(ctx, *signature, message)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if len(notesInputs) > 0 {
+		notes, err := parseNotes(notesInputs)
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		requestID, err = h.svc.SpendNotes(ctx, notes)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return &arkv1.RegisterIntentResponse{
+		RequestId: requestID,
 	}, nil
 }
 
@@ -479,42 +533,6 @@ func (h *handler) GetTransactionsStream(
 			}
 		}
 	}
-}
-
-func (h *handler) DeleteNostrRecipient(
-	ctx context.Context, req *arkv1.DeleteNostrRecipientRequest,
-) (*arkv1.DeleteNostrRecipientResponse, error) {
-	signedVtxoOutpoints, err := parseSignedVtxoOutpoints(req.GetVtxos())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	if err := h.svc.DeleteNostrRecipient(ctx, signedVtxoOutpoints); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.DeleteNostrRecipientResponse{}, nil
-}
-
-func (h *handler) SetNostrRecipient(
-	ctx context.Context,
-	req *arkv1.SetNostrRecipientRequest,
-) (*arkv1.SetNostrRecipientResponse, error) {
-	signedVtxoOutpoints, err := parseSignedVtxoOutpoints(req.GetVtxos())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	nostrRecipient := req.GetNostrRecipient()
-	if len(nostrRecipient) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "missing nostr recipient")
-	}
-
-	if err := h.svc.SetNostrRecipient(ctx, nostrRecipient, signedVtxoOutpoints); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.SetNostrRecipientResponse{}, nil
 }
 
 func (h *handler) SubscribeForAddress(
