@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	composePath   = "../../../../docker-compose.regtest.yml"
+	composePath   = "../../../docker-compose.regtest.yml"
 	redeemAddress = "bcrt1q2wrgf2hrkfegt0t97cnv4g5yvfjua9k6vua54d"
 )
 
