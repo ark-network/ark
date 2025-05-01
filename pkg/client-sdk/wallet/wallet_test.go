@@ -25,7 +25,7 @@ func TestWallet(t *testing.T) {
 		ServerPubKey:               key.PubKey(),
 		WalletType:                 wallet.SingleKeyWallet,
 		ClientType:                 client.GrpcClient,
-		Network:                    common.LiquidRegTest,
+		Network:                    common.BitcoinRegTest,
 		VtxoTreeExpiry:             common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
 		RoundInterval:              10,
 		UnilateralExitDelay:        common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 512},
@@ -40,14 +40,9 @@ func TestWallet(t *testing.T) {
 		args  []interface{}
 	}{
 		{
-			name:  "liquid" + wallet.SingleKeyWallet,
-			chain: "liquid",
-			args:  []interface{}{common.LiquidRegTest},
-		},
-		{
 			name:  "bitcoin" + wallet.SingleKeyWallet,
 			chain: "bitcoin",
-			args:  []interface{}{common.LiquidRegTest},
+			args:  []interface{}{common.BitcoinRegTest},
 		},
 	}
 
@@ -67,12 +62,7 @@ func TestWallet(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, walletStore)
 
-			var walletSvc wallet.WalletService
-			if tt.chain == "liquid" {
-				walletSvc, err = singlekeywallet.NewLiquidWallet(store, walletStore)
-			} else {
-				walletSvc, err = singlekeywallet.NewBitcoinWallet(store, walletStore)
-			}
+			walletSvc, err := singlekeywallet.NewBitcoinWallet(store, walletStore)
 			require.NoError(t, err)
 			require.NotNil(t, walletSvc)
 

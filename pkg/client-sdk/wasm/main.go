@@ -14,7 +14,7 @@ func main() {
 	ctx := context.Background()
 	storeSvc := browser.NewLocalStorageStore()
 
-	if err := browser.NewCovenantlessClient(ctx, storeSvc, Version); err != nil {
+	if err := browser.NewArkClient(ctx, storeSvc, Version); err != nil {
 		browser.ConsoleError(err)
 		return
 	}

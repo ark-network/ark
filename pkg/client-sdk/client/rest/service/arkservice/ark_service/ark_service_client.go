@@ -64,6 +64,8 @@ type ClientService interface {
 
 	ArkServicePing(params *ArkServicePingParams, opts ...ClientOption) (*ArkServicePingOK, error)
 
+	ArkServiceRegisterInputsForNextRound(params *ArkServiceRegisterInputsForNextRoundParams, opts ...ClientOption) (*ArkServiceRegisterInputsForNextRoundOK, error)
+
 	ArkServiceRegisterIntent(params *ArkServiceRegisterIntentParams, opts ...ClientOption) (*ArkServiceRegisterIntentOK, error)
 
 	ArkServiceRegisterOutputsForNextRound(params *ArkServiceRegisterOutputsForNextRoundParams, opts ...ClientOption) (*ArkServiceRegisterOutputsForNextRoundOK, error)
@@ -261,6 +263,43 @@ func (a *Client) ArkServicePing(params *ArkServicePingParams, opts ...ClientOpti
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServicePingDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceRegisterInputsForNextRound ark service register inputs for next round API
+*/
+func (a *Client) ArkServiceRegisterInputsForNextRound(params *ArkServiceRegisterInputsForNextRoundParams, opts ...ClientOption) (*ArkServiceRegisterInputsForNextRoundOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceRegisterInputsForNextRoundParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_RegisterInputsForNextRound",
+		Method:             "POST",
+		PathPattern:        "/v1/round/registerInputs",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceRegisterInputsForNextRoundReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceRegisterInputsForNextRoundOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceRegisterInputsForNextRoundDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

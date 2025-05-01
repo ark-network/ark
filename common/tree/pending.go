@@ -1,10 +1,9 @@
-package bitcointree
+package tree
 
 import (
 	"fmt"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
@@ -62,7 +61,7 @@ func BuildRedeemTx(
 			LeafVersion:  txscript.BaseLeafVersion,
 		}
 
-		closure, err := tree.DecodeClosure(vtxo.Tapscript.RevealedScript)
+		closure, err := DecodeClosure(vtxo.Tapscript.RevealedScript)
 		if err != nil {
 			return "", err
 		}
@@ -70,7 +69,7 @@ func BuildRedeemTx(
 		// check if the closure is a CLTV multisig closure,
 		// if so, update the tx locktime
 		var locktime *common.AbsoluteLocktime
-		if cltv, ok := closure.(*tree.CLTVMultisigClosure); ok {
+		if cltv, ok := closure.(*CLTVMultisigClosure); ok {
 			locktime = &cltv.Locktime
 			if locktime.IsSeconds() {
 				if txLocktime != 0 && !txLocktime.IsSeconds() {

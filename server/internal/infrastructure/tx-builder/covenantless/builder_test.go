@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -93,7 +92,7 @@ func TestBuildRoundTx(t *testing.T) {
 				require.Equal(t, f.ExpectedNumOfNodes, vtxoTree.NumberOfNodes())
 				require.Len(t, vtxoTree.Leaves(), f.ExpectedNumOfLeaves)
 
-				err = bitcointree.ValidateVtxoTree(
+				err = tree.ValidateVtxoTree(
 					vtxoTree, roundTx, pubkey, vtxoTreeExpiry,
 				)
 				require.NoError(t, err)

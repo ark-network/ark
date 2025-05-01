@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -32,9 +31,11 @@ type RoundEvent interface {
 
 type TransportClient interface {
 	GetInfo(ctx context.Context) (*Info, error)
+	RegisterInputsForNextRound(
+		ctx context.Context, inputs []Input,
+	) (string, error)
 	RegisterIntent(
-		ctx context.Context,
-		signature, message string,
+		ctx context.Context, signature, message string,
 	) (string, error)
 	RegisterNotesForNextRound(
 		ctx context.Context, notes []string,
@@ -43,10 +44,10 @@ type TransportClient interface {
 		ctx context.Context, requestID string, outputs []Output, musig2 *tree.Musig2,
 	) error
 	SubmitTreeNonces(
-		ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
+		ctx context.Context, roundID, cosignerPubkey string, nonces tree.TreeNonces,
 	) error
 	SubmitTreeSignatures(
-		ctx context.Context, roundID, cosignerPubkey string, signatures bitcointree.TreePartialSigs,
+		ctx context.Context, roundID, cosignerPubkey string, signatures tree.TreePartialSigs,
 	) error
 	SubmitSignedForfeitTxs(
 		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
@@ -103,6 +104,11 @@ func (o Outpoint) String() string {
 
 func (o Outpoint) Equals(other Outpoint) bool {
 	return o.Txid == other.Txid && o.VOut == other.VOut
+}
+
+type Input struct {
+	Outpoint
+	Tapscripts []string
 }
 
 type Vtxo struct {
@@ -260,7 +266,7 @@ func (e RoundSigningStartedEvent) isRoundEvent() {}
 
 type RoundSigningNoncesGeneratedEvent struct {
 	ID     string
-	Nonces bitcointree.TreeNonces
+	Nonces tree.TreeNonces
 }
 
 func (e RoundSigningNoncesGeneratedEvent) isRoundEvent() {}

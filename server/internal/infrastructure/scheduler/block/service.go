@@ -130,6 +130,7 @@ func (s *service) fetchTipHeight() (int64, error) {
 		return 0, err
 	}
 
+	// nolint:all
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {

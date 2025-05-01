@@ -7,7 +7,6 @@ import (
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -84,7 +83,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 	}
 
 	if ee := e.GetRoundSigningNoncesGenerated(); ee != nil {
-		nonces, err := bitcointree.DecodeNonces(hex.NewDecoder(strings.NewReader(ee.GetTreeNonces())))
+		nonces, err := tree.DecodeNonces(hex.NewDecoder(strings.NewReader(ee.GetTreeNonces())))
 		if err != nil {
 			return nil, err
 		}
@@ -126,6 +125,30 @@ func (v vtxos) toVtxos() []client.Vtxo {
 	list := make([]client.Vtxo, 0, len(v))
 	for _, vv := range v {
 		list = append(list, vtxo{vv}.toVtxo())
+	}
+	return list
+}
+
+func toProtoInput(i client.Input) *arkv1.Input {
+	return &arkv1.Input{
+		Outpoint: &arkv1.Outpoint{
+			Txid: i.Txid,
+			Vout: i.VOut,
+		},
+		TaprootTree: &arkv1.Input_Tapscripts{
+			Tapscripts: &arkv1.Tapscripts{
+				Scripts: i.Tapscripts,
+			},
+		},
+	}
+}
+
+type ins []client.Input
+
+func (i ins) toProto() []*arkv1.Input {
+	list := make([]*arkv1.Input, 0, len(i))
+	for _, ii := range i {
+		list = append(list, toProtoInput(ii))
 	}
 	return list
 }

@@ -1,5 +1,5 @@
 # Ark Server
-This is a Go implementation of the Ark server. An Ark server it's an always-on server that provides bitcoin liquidity in the Ark layer-two protocol. It supports Bitcoin and Liquid (with more experimantal features using covenants).
+This is a Go implementation of the Ark server. An Ark server it's an always-on server that provides bitcoin liquidity in the Ark layer-two protocol.
 
 **ALPHA STAGE SOFTWARE: USE AT YOUR OWN RISK!**
 

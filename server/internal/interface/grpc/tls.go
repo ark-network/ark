@@ -147,6 +147,7 @@ func generateOperatorTLSKeyCert(
 		return err
 	}
 	if err := os.WriteFile(keyPath, keyBuf.Bytes(), 0600); err != nil {
+		// nolint:all
 		os.Remove(certPath)
 		return err
 	}

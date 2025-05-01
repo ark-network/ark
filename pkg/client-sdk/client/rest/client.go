@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice"
@@ -155,6 +154,34 @@ func (a *restClient) GetBoardingAddress(
 	return resp.Payload.Address, nil
 }
 
+func (a *restClient) RegisterInputsForNextRound(
+	ctx context.Context, inputs []client.Input,
+) (string, error) {
+	ins := make([]*models.V1Input, 0, len(inputs))
+	for _, i := range inputs {
+		ins = append(ins, &models.V1Input{
+			Outpoint: &models.V1Outpoint{
+				Txid: i.Txid,
+				Vout: int64(i.VOut),
+			},
+			Tapscripts: &models.V1Tapscripts{
+				Scripts: i.Tapscripts,
+			},
+		})
+	}
+	body := &models.V1RegisterInputsForNextRoundRequest{
+		Inputs: ins,
+	}
+	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
+		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Payload.RequestID, nil
+}
+
 func (a *restClient) RegisterIntent(
 	ctx context.Context,
 	signature, message string,
@@ -218,7 +245,7 @@ func (a *restClient) RegisterOutputsForNextRound(
 
 func (a *restClient) SubmitTreeNonces(
 	ctx context.Context, roundID, cosignerPubkey string,
-	nonces bitcointree.TreeNonces,
+	nonces tree.TreeNonces,
 ) error {
 	var nonceBuffer bytes.Buffer
 
@@ -245,7 +272,7 @@ func (a *restClient) SubmitTreeNonces(
 
 func (a *restClient) SubmitTreeSignatures(
 	ctx context.Context, roundID, cosignerPubkey string,
-	signatures bitcointree.TreePartialSigs,
+	signatures tree.TreePartialSigs,
 ) error {
 	var sigsBuffer bytes.Buffer
 
@@ -376,7 +403,7 @@ func (c *restClient) GetEventStream(
 				case resp.Result.RoundSigningNoncesGenerated != nil:
 					e := resp.Result.RoundSigningNoncesGenerated
 					reader := hex.NewDecoder(strings.NewReader(e.TreeNonces))
-					nonces, err := bitcointree.DecodeNonces(reader)
+					nonces, err := tree.DecodeNonces(reader)
 					if err != nil {
 						_err = err
 						break

@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	composePath = "../../../../docker-compose.clark.regtest.yml"
+	composePath = "../../../../docker-compose.regtest.yml"
 )
 
 func TestMain(m *testing.M) {
@@ -561,7 +561,7 @@ func setupAspWallet() error {
 }
 
 func runClarkCommand(arg ...string) (string, error) {
-	args := append([]string{"exec", "-t", "clarkd", "ark"}, arg...)
+	args := append([]string{"exec", "-t", "arkd", "ark"}, arg...)
 	return utils.RunCommand("docker", args...)
 }
 

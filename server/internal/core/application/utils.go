@@ -92,8 +92,8 @@ func (m *txRequestsQueue) push(
 	for _, input := range request.Inputs {
 		for _, pay := range m.requests {
 			for _, pInput := range pay.Inputs {
-				if input.VtxoKey.Txid == pInput.VtxoKey.Txid && input.VtxoKey.VOut == pInput.VtxoKey.VOut {
-					return fmt.Errorf("duplicated input, %s:%d already used by tx request %s", input.VtxoKey.Txid, input.VtxoKey.VOut, pay.Id)
+				if input.Txid == pInput.Txid && input.VOut == pInput.VOut {
+					return fmt.Errorf("duplicated input, %s:%d already used by tx request %s", input.Txid, input.VOut, pay.Id)
 				}
 			}
 		}

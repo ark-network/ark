@@ -1,4 +1,4 @@
-package bitcointree
+package tree
 
 import (
 	"bytes"

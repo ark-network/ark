@@ -13,7 +13,6 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bip322"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -80,7 +79,7 @@ type covenantlessService struct {
 	vtxoMinAmount             int64
 }
 
-func NewCovenantlessService(
+func NewService(
 	network common.Network,
 	roundInterval int64,
 	vtxoTreeExpiry, unilateralExitDelay, boardingExitDelay common.RelativeLocktime,
@@ -279,7 +278,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 			return "", "", fmt.Errorf("missing tapscript leaf")
 		}
 
-		tapscripts, err := bitcointree.GetTaprootTree(input)
+		tapscripts, err := tree.GetTaprootTree(input)
 		if err != nil {
 			return "", "", fmt.Errorf("missing tapscripts: %s", err)
 		}
@@ -320,7 +319,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 			return "", "", fmt.Errorf("vtxo already swept")
 		}
 
-		vtxoScript, err := bitcointree.ParseVtxoScript(tapscripts)
+		vtxoScript, err := tree.ParseVtxoScript(tapscripts)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to parse vtxo script: %s", err)
 		}
@@ -453,19 +452,11 @@ func (s *covenantlessService) SubmitRedeemTx(
 		})
 	}
 
-	dust, err := s.wallet.GetDustAmount(ctx)
-	if err != nil {
-		return "", "", fmt.Errorf("failed to get dust threshold: %s", err)
-	}
-
 	outputs := ptx.UnsignedTx.TxOut
 
 	sumOfOutputs := int64(0)
 	for _, out := range outputs {
 		sumOfOutputs += out.Value
-		if out.Value < int64(dust) {
-			return "", "", fmt.Errorf("output value is less than dust threshold")
-		}
 
 		if s.vtxoMaxAmount >= 0 {
 			if out.Value > s.vtxoMaxAmount {
@@ -498,7 +489,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 	}
 
 	// recompute redeem tx
-	rebuiltRedeemTx, err := bitcointree.BuildRedeemTx(ins, outputs)
+	rebuiltRedeemTx, err := tree.BuildRedeemTx(ins, outputs)
 	if err != nil {
 		return "", "", fmt.Errorf("failed to rebuild redeem tx: %s", err)
 	}
@@ -593,7 +584,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 func (s *covenantlessService) GetBoardingAddress(
 	ctx context.Context, userPubkey *secp256k1.PublicKey,
 ) (address string, scripts []string, err error) {
-	vtxoScript := bitcointree.NewDefaultVtxoScript(s.pubkey, userPubkey, s.boardingExitDelay)
+	vtxoScript := tree.NewDefaultVtxoScript(s.pubkey, userPubkey, s.boardingExitDelay)
 
 	tapKey, _, err := vtxoScript.TapTree()
 	if err != nil {
@@ -697,7 +688,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			return "", fmt.Errorf("failed to decode taptree: %s", err)
 		}
 
-		tapscripts, err := bitcointree.DecodeTapTree(tapTreeBytes)
+		tapscripts, err := tree.DecodeTapTree(tapTreeBytes)
 		if err != nil {
 			return "", fmt.Errorf("failed to decode taptree: %s", err)
 		}
@@ -735,7 +726,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 					return "", fmt.Errorf("tx %s not confirmed", vtxoKey.Txid)
 				}
 
-				vtxoScript, err := bitcointree.ParseVtxoScript(tapscripts)
+				vtxoScript, err := tree.ParseVtxoScript(tapscripts)
 				if err != nil {
 					return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
 				}
@@ -823,7 +814,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			continue
 		}
 
-		vtxoScript, err := bitcointree.ParseVtxoScript(tapscripts)
+		vtxoScript, err := tree.ParseVtxoScript(tapscripts)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
 		}
@@ -868,7 +859,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 	}
 
 	if bip322signature.ContainsOutputs() {
-		dustAmount, err := s.wallet.GetDustAmount(ctx)
 		if err != nil {
 			return "", fmt.Errorf("unable to verify outputs amount, failed to get dust: %s", err)
 		}
@@ -878,21 +868,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 
 		for outputIndex, output := range bip322signature.TxOut {
 			amount := uint64(output.Value)
-			if amount <= dustAmount {
-				return "", fmt.Errorf("receiver amount must be greater than dust amount %d", dustAmount)
-			}
-
-			if s.vtxoMaxAmount >= 0 {
-				if amount > uint64(s.vtxoMaxAmount) {
-					return "", fmt.Errorf("receiver amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
-				}
-			}
-			if s.vtxoMinAmount >= 0 {
-				if amount < uint64(s.vtxoMinAmount) {
-					return "", fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
-				}
-			}
-
 			rcv := domain.Receiver{
 				Amount: amount,
 			}
@@ -906,6 +881,17 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			}
 
 			if isOnchain {
+				if s.utxoMaxAmount >= 0 {
+					if amount > uint64(s.utxoMaxAmount) {
+						return "", fmt.Errorf("receiver amount is higher than max utxo amount:%d", s.vtxoMaxAmount)
+					}
+				}
+				if s.utxoMinAmount >= 0 {
+					if amount < uint64(s.utxoMinAmount) {
+						return "", fmt.Errorf("receiver amount is lower than min utxo amount:%d", s.vtxoMinAmount)
+					}
+				}
+
 				_, addrs, _, err := txscript.ExtractPkScriptAddrs(output.PkScript, s.chainParams())
 				if err != nil {
 					return "", fmt.Errorf("failed to extract pkscript addrs: %s", err)
@@ -917,6 +903,17 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 
 				rcv.OnchainAddress = addrs[0].EncodeAddress()
 			} else {
+				if s.vtxoMaxAmount >= 0 {
+					if amount > uint64(s.vtxoMaxAmount) {
+						return "", fmt.Errorf("receiver amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
+					}
+				}
+				if s.vtxoMinAmount >= 0 {
+					if amount < uint64(s.vtxoMinAmount) {
+						return "", fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
+					}
+				}
+
 				hasOffChainReceiver = true
 				rcv.PubKey = hex.EncodeToString(output.PkScript[2:])
 			}
@@ -963,7 +960,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 
 	for _, input := range inputs {
 		if s.redeemTxInputs.includes(input.VtxoKey) {
-			return "", fmt.Errorf("vtxo %s is currently being spent", input.VtxoKey.String())
+			return "", fmt.Errorf("vtxo %s is currently being spent", input.String())
 		}
 
 		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{input.VtxoKey})
@@ -990,7 +987,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 					return "", fmt.Errorf("tx %s not confirmed", input.Txid)
 				}
 
-				vtxoScript, err := bitcointree.ParseVtxoScript(input.Tapscripts)
+				vtxoScript, err := tree.ParseVtxoScript(input.Tapscripts)
 				if err != nil {
 					return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
 				}
@@ -1051,7 +1048,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 			return "", fmt.Errorf("input %s:%d already swept", vtxo.Txid, vtxo.VOut)
 		}
 
-		vtxoScript, err := bitcointree.ParseVtxoScript(input.Tapscripts)
+		vtxoScript, err := tree.ParseVtxoScript(input.Tapscripts)
 		if err != nil {
 			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
 		}
@@ -1094,13 +1091,13 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 }
 
 func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input) (*ports.BoardingInput, error) {
-	if len(tx.TxOut) <= int(input.VtxoKey.VOut) {
+	if len(tx.TxOut) <= int(input.VOut) {
 		return nil, fmt.Errorf("output not found")
 	}
 
-	output := tx.TxOut[input.VtxoKey.VOut]
+	output := tx.TxOut[input.VOut]
 
-	boardingScript, err := bitcointree.ParseVtxoScript(input.Tapscripts)
+	boardingScript, err := tree.ParseVtxoScript(input.Tapscripts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse boarding descriptor: %s", err)
 	}
@@ -1136,18 +1133,9 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 		return fmt.Errorf("invalid credentials")
 	}
 
-	dustAmount, err := s.wallet.GetDustAmount(ctx)
-	if err != nil {
-		return fmt.Errorf("unable to verify receiver amount, failed to get dust: %s", err)
-	}
-
 	hasOffChainReceiver := false
 
 	for _, rcv := range receivers {
-		if rcv.Amount <= dustAmount {
-			return fmt.Errorf("receiver amount must be greater than dust amount %d", dustAmount)
-		}
-
 		if s.vtxoMaxAmount >= 0 {
 			if rcv.Amount > uint64(s.vtxoMaxAmount) {
 				return fmt.Errorf("receiver amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
@@ -1503,7 +1491,7 @@ func (s *covenantlessService) RegisterCosignerNonces(
 		return fmt.Errorf(`cosigner %s not found for round "%s"`, userPubkey, roundID)
 	}
 
-	nonces, err := bitcointree.DecodeNonces(hex.NewDecoder(strings.NewReader(encodedNonces)))
+	nonces, err := tree.DecodeNonces(hex.NewDecoder(strings.NewReader(encodedNonces)))
 	if err != nil {
 		return fmt.Errorf("failed to decode nonces: %s", err)
 	}
@@ -1541,7 +1529,7 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 		return fmt.Errorf(`cosigner %s not found for round "%s"`, userPubkey, roundID)
 	}
 
-	signatures, err := bitcointree.DecodeSignatures(hex.NewDecoder(strings.NewReader(encodedSignatures)))
+	signatures, err := tree.DecodeSignatures(hex.NewDecoder(strings.NewReader(encodedSignatures)))
 	if err != nil {
 		return fmt.Errorf("failed to decode signatures: %s", err)
 	}
@@ -1746,14 +1734,14 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		sweepTapTree := txscript.AssembleTaprootScriptTree(sweepLeaf)
 		root := sweepTapTree.RootNode.TapHash()
 
-		coordinator, err := bitcointree.NewTreeCoordinatorSession(sharedOutputAmount, vtxoTree, root.CloneBytes())
+		coordinator, err := tree.NewTreeCoordinatorSession(sharedOutputAmount, vtxoTree, root.CloneBytes())
 		if err != nil {
 			round.Fail(fmt.Errorf("failed to create tree coordinator: %s", err))
 			log.WithError(err).Warn("failed to create tree coordinator")
 			return
 		}
 
-		serverSignerSession := bitcointree.NewTreeSignerSession(s.serverSigningKey)
+		serverSignerSession := tree.NewTreeSignerSession(s.serverSigningKey)
 		if err := serverSignerSession.Init(root.CloneBytes(), sharedOutputAmount, vtxoTree); err != nil {
 			round.Fail(fmt.Errorf("failed to create tree signer session: %s", err))
 			log.WithError(err).Warn("failed to create tree signer session")
@@ -1885,7 +1873,7 @@ func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree
 	s.eventsCh <- ev
 }
 
-func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combinedNonces bitcointree.TreeNonces) {
+func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combinedNonces tree.TreeNonces) {
 	ev := RoundSigningNoncesGenerated{
 		Id:     s.currentRound.Id,
 		Nonces: combinedNonces,
@@ -2572,19 +2560,19 @@ type musigSigningSession struct {
 	lock        sync.Mutex
 	nbCosigners int
 	cosigners   map[string]struct{}
-	nonces      map[*secp256k1.PublicKey]bitcointree.TreeNonces
+	nonces      map[*secp256k1.PublicKey]tree.TreeNonces
 	nonceDoneC  chan struct{}
 
-	signatures map[*secp256k1.PublicKey]bitcointree.TreePartialSigs
+	signatures map[*secp256k1.PublicKey]tree.TreePartialSigs
 	sigDoneC   chan struct{}
 }
 
 func newMusigSigningSession(cosigners map[string]struct{}) *musigSigningSession {
 	return &musigSigningSession{
-		nonces:     make(map[*secp256k1.PublicKey]bitcointree.TreeNonces),
+		nonces:     make(map[*secp256k1.PublicKey]tree.TreeNonces),
 		nonceDoneC: make(chan struct{}),
 
-		signatures:  make(map[*secp256k1.PublicKey]bitcointree.TreePartialSigs),
+		signatures:  make(map[*secp256k1.PublicKey]tree.TreePartialSigs),
 		sigDoneC:    make(chan struct{}),
 		lock:        sync.Mutex{},
 		cosigners:   cosigners,

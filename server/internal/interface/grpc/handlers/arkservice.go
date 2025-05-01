@@ -9,7 +9,6 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/bip322"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
@@ -71,7 +70,7 @@ func (h *handler) GetInfo(
 
 	desc := fmt.Sprintf(
 		descriptor.DefaultVtxoDescriptorTemplate,
-		hex.EncodeToString(bitcointree.UnspendableKey().SerializeCompressed()),
+		hex.EncodeToString(tree.UnspendableKey().SerializeCompressed()),
 		"USER",
 		info.PubKey,
 		info.UnilateralExitDelay,

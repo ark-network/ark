@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -98,7 +97,7 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, 
 				keys[hex.EncodeToString(schnorr.SerializePubKey(key))] = false
 			}
 		case *tree.ConditionMultisigClosure:
-			witness, err := bitcointree.GetConditionWitness(input)
+			witness, err := tree.GetConditionWitness(input)
 			if err != nil {
 				return false, txid, err
 			}
@@ -131,7 +130,7 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, 
 
 		rootHash := controlBlock.RootHash(tapLeaf.Script)
 		tapKeyFromControlBlock := txscript.ComputeTaprootOutputKey(
-			bitcointree.UnspendableKey(), rootHash[:],
+			tree.UnspendableKey(), rootHash[:],
 		)
 		pkscript, err := common.P2TRScript(tapKeyFromControlBlock)
 		if err != nil {
@@ -194,7 +193,7 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 				return "", err
 			}
 
-			conditionWitness, err := bitcointree.GetConditionWitness(in)
+			conditionWitness, err := tree.GetConditionWitness(in)
 			if err != nil {
 				return "", err
 			}
@@ -400,7 +399,7 @@ func (b *txBuilder) VerifyForfeitTxs(
 		}
 
 		vtxoTapscript := tx.Inputs[1].TaprootLeafScript[0]
-		conditionWitness, err := bitcointree.GetConditionWitness(tx.Inputs[1])
+		conditionWitness, err := tree.GetConditionWitness(tx.Inputs[1])
 		if err != nil {
 			return nil, err
 		}
@@ -479,7 +478,7 @@ func (b *txBuilder) VerifyForfeitTxs(
 			return nil, err
 		}
 
-		rebuilt, err := bitcointree.BuildForfeitTx(
+		rebuilt, err := tree.BuildForfeitTx(
 			&wire.OutPoint{
 				Hash:  connectorInput.PreviousOutPoint.Hash,
 				Index: connectorInput.PreviousOutPoint.Index,
@@ -543,7 +542,7 @@ func (b *txBuilder) BuildRoundTx(
 	sweepTapscriptRoot := txscript.NewBaseTapLeaf(sweepScript).TapHash()
 
 	if !isOnchainOnly(requests) {
-		sharedOutputScript, sharedOutputAmount, err = bitcointree.CraftSharedOutput(
+		sharedOutputScript, sharedOutputAmount, err = tree.CraftSharedOutput(
 			receivers, feeAmount, sweepTapscriptRoot[:],
 		)
 		if err != nil {
@@ -609,7 +608,7 @@ func (b *txBuilder) BuildRoundTx(
 			})
 		}
 
-		connectorsTreePkScript, connectorsTreeAmount, err = bitcointree.CraftConnectorsOutput(
+		connectorsTreePkScript, connectorsTreeAmount, err = tree.CraftConnectorsOutput(
 			connectorsTreeLeaves,
 			minRelayFeeConnectorTx,
 		)
@@ -641,7 +640,7 @@ func (b *txBuilder) BuildRoundTx(
 			Index: 0,
 		}
 
-		vtxoTree, err = bitcointree.BuildVtxoTree(
+		vtxoTree, err = tree.BuildVtxoTree(
 			initialOutpoint, receivers, feeAmount, sweepTapscriptRoot[:], b.vtxoTreeExpiry,
 		)
 		if err != nil {
@@ -663,7 +662,7 @@ func (b *txBuilder) BuildRoundTx(
 		Index: 1,
 	}
 
-	connectors, err := bitcointree.BuildConnectorsTree(
+	connectors, err := tree.BuildConnectorsTree(
 		rootConnectorsOutpoint,
 		connectorsTreeLeaves,
 		minRelayFeeConnectorTx,
@@ -882,11 +881,11 @@ func (b *txBuilder) createRoundTx(
 
 		ins = append(ins, &wire.OutPoint{
 			Hash:  *txHash,
-			Index: boardingInput.VtxoKey.VOut,
+			Index: boardingInput.VOut,
 		})
 		nSequences = append(nSequences, wire.MaxTxInSequenceNum)
 
-		boardingVtxoScript, err := bitcointree.ParseVtxoScript(boardingInput.Tapscripts)
+		boardingVtxoScript, err := tree.ParseVtxoScript(boardingInput.Tapscripts)
 		if err != nil {
 			return nil, err
 		}
@@ -1251,7 +1250,7 @@ func (b *txBuilder) extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.Taproot
 		return nil, nil, nil, err
 	}
 
-	cosignerPubKeys, err := bitcointree.GetCosignerKeys(input)
+	cosignerPubKeys, err := tree.GetCosignerKeys(input)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -1260,7 +1259,7 @@ func (b *txBuilder) extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.Taproot
 		return nil, nil, nil, fmt.Errorf("no cosigner pubkeys found")
 	}
 
-	vtxoTreeExpiry, err = bitcointree.GetVtxoTreeExpiry(input)
+	vtxoTreeExpiry, err = tree.GetVtxoTreeExpiry(input)
 	if err != nil {
 		return nil, nil, nil, err
 	}
@@ -1280,7 +1279,7 @@ func (b *txBuilder) extractSweepLeaf(input psbt.PInput) (sweepLeaf *psbt.Taproot
 	sweepTapTree := txscript.AssembleTaprootScriptTree(txscript.NewBaseTapLeaf(sweepScript))
 	sweepRoot := sweepTapTree.RootNode.TapHash()
 
-	aggregatedKey, err := bitcointree.AggregateKeys(cosignerPubKeys, sweepRoot[:])
+	aggregatedKey, err := tree.AggregateKeys(cosignerPubKeys, sweepRoot[:])
 	if err != nil {
 		return nil, nil, nil, err
 	}
