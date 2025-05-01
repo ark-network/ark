@@ -2467,7 +2467,7 @@ func (a *covenantlessArkClient) getRedeemBranches(
 			vtxoTrees[vtxo.RoundTxid] = round.Tree
 		}
 
-		redeemBranch, err := redemption.NewCovenantlessRedeemBranch(
+		redeemBranch, err := redemption.NewRedeemBranch(
 			a.explorer, vtxoTrees[vtxo.RoundTxid], vtxo,
 		)
 		if err != nil {

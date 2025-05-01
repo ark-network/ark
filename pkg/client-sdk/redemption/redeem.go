@@ -20,7 +20,7 @@ type CovenantlessRedeemBranch struct {
 	explorer       explorer.Explorer
 }
 
-func NewCovenantlessRedeemBranch(
+func NewRedeemBranch(
 	explorer explorer.Explorer,
 	vtxoTree tree.TxTree, vtxo client.Vtxo,
 ) (*CovenantlessRedeemBranch, error) {

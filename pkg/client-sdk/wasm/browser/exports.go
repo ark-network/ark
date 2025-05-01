@@ -56,7 +56,7 @@ func init() {
 	js.Global().Set("getVersion", GetVersionWrapper())
 }
 
-func NewCovenantlessClient(
+func NewArkClient(
 	ctx context.Context, storeSvc types.Store, v string,
 ) error {
 	var err error
@@ -67,7 +67,7 @@ func NewCovenantlessClient(
 	}
 
 	if data == nil {
-		arkSdkClient, err = arksdk.NewCovenantlessClient(storeSvc)
+		arkSdkClient, err = arksdk.NewArkClient(storeSvc)
 	} else {
 		var walletSvc wallet.WalletService
 		switch data.WalletType {
@@ -80,7 +80,7 @@ func NewCovenantlessClient(
 		default:
 			return fmt.Errorf("unknown wallet type")
 		}
-		arkSdkClient, err = arksdk.LoadCovenantlessClientWithWallet(storeSvc, walletSvc)
+		arkSdkClient, err = arksdk.LoadArkClientWithWallet(storeSvc, walletSvc)
 	}
 	if err != nil {
 		js.Global().Get("console").Call("error", err.Error())

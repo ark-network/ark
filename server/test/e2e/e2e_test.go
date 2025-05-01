@@ -366,7 +366,7 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 
 	expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
 
-	branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, vtxo)
+	branch, err := redemption.NewRedeemBranch(expl, round.Tree, vtxo)
 	require.NoError(t, err)
 
 	txs, err := branch.RedeemPath()
@@ -461,7 +461,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 
 		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
 
-		branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, vtxo)
+		branch, err := redemption.NewRedeemBranch(expl, round.Tree, vtxo)
 		require.NoError(t, err)
 
 		txs, err := branch.RedeemPath()
@@ -708,7 +708,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 
 		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
 
-		branch, err := redemption.NewCovenantlessRedeemBranch(expl, round.Tree, initialTreeVtxo)
+		branch, err := redemption.NewRedeemBranch(expl, round.Tree, initialTreeVtxo)
 		require.NoError(t, err)
 
 		txs, err := branch.RedeemPath()

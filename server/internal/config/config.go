@@ -542,7 +542,7 @@ func (c *Config) schedulerService() error {
 }
 
 func (c *Config) appService() error {
-	svc, err := application.NewCovenantlessService(
+	svc, err := application.NewService(
 		c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,

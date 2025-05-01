@@ -79,7 +79,7 @@ type covenantlessService struct {
 	vtxoMinAmount             int64
 }
 
-func NewCovenantlessService(
+func NewService(
 	network common.Network,
 	roundInterval int64,
 	vtxoTreeExpiry, unilateralExitDelay, boardingExitDelay common.RelativeLocktime,
