@@ -1534,7 +1534,7 @@ func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.TransportClient) {
 	})
 	require.NoError(t, err)
 
-	client, err := arksdk.NewCovenantlessClient(appDataStore)
+	client, err := arksdk.NewArkClient(appDataStore)
 	require.NoError(t, err)
 
 	err = client.Init(context.Background(), arksdk.InitArgs{

@@ -180,7 +180,7 @@ func setupArkClient(wallet string) (arksdk.ArkClient, error) {
 		return nil, fmt.Errorf("failed to setup app data store: %s", err)
 	}
 
-	client, err := arksdk.NewCovenantlessClient(appDataStore)
+	client, err := arksdk.NewArkClient(appDataStore)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup ark client: %s", err)
 	}

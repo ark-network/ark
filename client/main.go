@@ -482,7 +482,7 @@ func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 	}
 
 	return loadOrCreateClient(
-		arksdk.LoadCovenantlessClient, arksdk.NewCovenantlessClient, sdkRepository,
+		arksdk.LoadArkClient, arksdk.NewArkClient, sdkRepository,
 	)
 }
 
