@@ -38,7 +38,7 @@ import (
 )
 
 const (
-	composePath   = "../../../../docker-compose.clark.regtest.yml"
+	composePath   = "../../../../docker-compose.regtest.yml"
 	redeemAddress = "bcrt1q2wrgf2hrkfegt0t97cnv4g5yvfjua9k6vua54d"
 )
 
@@ -1416,7 +1416,7 @@ func TestSweep(t *testing.T) {
 
 func runClarkCommand(arg ...string) (string, error) {
 	args := append([]string{"ark"}, arg...)
-	return utils.RunDockerExec("clarkd", args...)
+	return utils.RunDockerExec("arkd", args...)
 }
 
 func setupServerWallet() error {

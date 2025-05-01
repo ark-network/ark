@@ -1,6 +1,6 @@
 services:
-  clarkd:
-    container_name: clarkd 
+  arkd:
+    container_name: arkd 
     build: 
       context: .
       dockerfile: Dockerfile
