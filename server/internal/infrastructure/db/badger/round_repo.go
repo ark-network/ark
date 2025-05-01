@@ -152,6 +152,7 @@ func (r *roundRepository) GetVtxoTreeWithTxid(
 }
 
 func (r *roundRepository) Close() {
+	// nolint:all
 	r.store.Close()
 }
 

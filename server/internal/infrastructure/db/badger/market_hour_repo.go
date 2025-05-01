@@ -77,5 +77,6 @@ func (r *marketHourRepository) Upsert(ctx context.Context, marketHour domain.Mar
 }
 
 func (r *marketHourRepository) Close() {
+	// nolint:all
 	r.store.Close()
 }

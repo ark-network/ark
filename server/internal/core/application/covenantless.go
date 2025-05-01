@@ -960,7 +960,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 
 	for _, input := range inputs {
 		if s.redeemTxInputs.includes(input.VtxoKey) {
-			return "", fmt.Errorf("vtxo %s is currently being spent", input.VtxoKey.String())
+			return "", fmt.Errorf("vtxo %s is currently being spent", input.String())
 		}
 
 		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{input.VtxoKey})
@@ -1091,11 +1091,11 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 }
 
 func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input) (*ports.BoardingInput, error) {
-	if len(tx.TxOut) <= int(input.VtxoKey.VOut) {
+	if len(tx.TxOut) <= int(input.VOut) {
 		return nil, fmt.Errorf("output not found")
 	}
 
-	output := tx.TxOut[input.VtxoKey.VOut]
+	output := tx.TxOut[input.VOut]
 
 	boardingScript, err := tree.ParseVtxoScript(input.Tapscripts)
 	if err != nil {

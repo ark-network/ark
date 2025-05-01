@@ -881,7 +881,7 @@ func (b *txBuilder) createRoundTx(
 
 		ins = append(ins, &wire.OutPoint{
 			Hash:  *txHash,
-			Index: boardingInput.VtxoKey.VOut,
+			Index: boardingInput.VOut,
 		})
 		nSequences = append(nSequences, wire.MaxTxInSequenceNum)
 

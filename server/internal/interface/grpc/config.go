@@ -24,6 +24,7 @@ func (c Config) Validate() error {
 	if err != nil {
 		return fmt.Errorf("invalid port: %s", err)
 	}
+	// nolint:all
 	defer lis.Close()
 
 	if !c.NoTLS {

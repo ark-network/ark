@@ -37,6 +37,7 @@ func (f *esploraClient) broadcast(txhex string) error {
 		return err
 	}
 
+	// nolint:all
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -65,6 +66,7 @@ func (f *esploraClient) getTx(txid string) (*wire.MsgTx, error) {
 	if err != nil {
 		return nil, err
 	}
+	// nolint:all
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -91,6 +93,7 @@ func (f *esploraClient) getTxStatus(txid string) (isConfirmed bool, blocknumber,
 		return false, 0, 0, err
 	}
 
+	// nolint:all
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
@@ -118,6 +121,7 @@ func (f *esploraClient) GetFeeMap() (map[uint32]uint32, error) {
 	if err != nil {
 		return nil, err
 	}
+	// nolint:all
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {

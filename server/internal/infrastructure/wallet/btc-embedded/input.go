@@ -33,17 +33,17 @@ type coinTxInput struct {
 }
 
 func (c coinTxInput) GetIndex() uint32 {
-	return c.OutPoint.Index
+	return c.Index
 }
 
 func (c coinTxInput) GetScript() string {
-	return hex.EncodeToString(c.TxOut.PkScript)
+	return hex.EncodeToString(c.PkScript)
 }
 
 func (c coinTxInput) GetTxid() string {
-	return c.OutPoint.Hash.String()
+	return c.Hash.String()
 }
 
 func (c coinTxInput) GetValue() uint64 {
-	return uint64(c.TxOut.Value)
+	return uint64(c.Value)
 }

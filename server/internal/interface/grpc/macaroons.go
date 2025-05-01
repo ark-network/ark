@@ -57,6 +57,7 @@ func genMacaroons(
 			perms = 0600
 		}
 		if err := os.WriteFile(macFile, mktMacBytes, perms); err != nil {
+			// nolint:all
 			os.Remove(macFile)
 			return false, err
 		}
