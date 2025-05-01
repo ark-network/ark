@@ -44,7 +44,7 @@ func main() {
 		&balanceCommand,
 		&redeemCommand,
 		&notesCommand,
-		&registerNostrCommand,
+		&recoverCommand,
 	)
 	app.Flags = []cli.Flag{
 		datadirFlag,
@@ -140,11 +140,6 @@ var (
 		Aliases: []string{"n"},
 		Usage:   "notes to redeem",
 	}
-	nostrProfileFlag = &cli.StringFlag{
-		Name:    "profile",
-		Aliases: []string{"p"},
-		Usage:   "nostr profile to register",
-	}
 	restFlag = &cli.BoolFlag{
 		Name:        "rest",
 		Usage:       "use REST client instead of gRPC",
@@ -230,12 +225,13 @@ var (
 			return redeemNotes(ctx)
 		},
 	}
-	registerNostrCommand = cli.Command{
-		Name:  "register-nostr",
-		Usage: "Register Nostr profile",
-		Flags: []cli.Flag{nostrProfileFlag, passwordFlag},
+
+	recoverCommand = cli.Command{
+		Name:  "recover",
+		Usage: "Recover unspent and swept vtxos",
+		Flags: []cli.Flag{passwordFlag},
 		Action: func(ctx *cli.Context) error {
-			return registerNostrProfile(ctx)
+			return recoverVtxos(ctx)
 		},
 	}
 )
@@ -270,18 +266,19 @@ func config(ctx *cli.Context) error {
 	}
 
 	cfg := map[string]interface{}{
-		"server_url":            cfgData.ServerUrl,
-		"server_pubkey":         hex.EncodeToString(cfgData.ServerPubKey.SerializeCompressed()),
-		"wallet_type":           cfgData.WalletType,
-		"client_tyep":           cfgData.ClientType,
-		"network":               cfgData.Network.Name,
-		"vtxo_tree_expiry":      cfgData.VtxoTreeExpiry,
-		"unilateral_exit_delay": cfgData.UnilateralExitDelay,
-		"dust":                  cfgData.Dust,
-		"boarding_exit_delay":   cfgData.BoardingExitDelay,
-		"explorer_url":          cfgData.ExplorerURL,
-		"forfeit_address":       cfgData.ForfeitAddress,
-		"with_transaction_feed": cfgData.WithTransactionFeed,
+		"server_url":                   cfgData.ServerUrl,
+		"server_pubkey":                hex.EncodeToString(cfgData.ServerPubKey.SerializeCompressed()),
+		"wallet_type":                  cfgData.WalletType,
+		"client_type":                  cfgData.ClientType,
+		"network":                      cfgData.Network.Name,
+		"vtxo_tree_expiry":             cfgData.VtxoTreeExpiry,
+		"unilateral_exit_delay":        cfgData.UnilateralExitDelay,
+		"dust":                         cfgData.Dust,
+		"boarding_exit_delay":          cfgData.BoardingExitDelay,
+		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
+		"explorer_url":                 cfgData.ExplorerURL,
+		"forfeit_address":              cfgData.ForfeitAddress,
+		"with_transaction_feed":        cfgData.WithTransactionFeed,
 	}
 
 	return printJSON(cfg)
@@ -426,9 +423,7 @@ func redeem(ctx *cli.Context) error {
 	})
 }
 
-func registerNostrProfile(ctx *cli.Context) error {
-	profile := ctx.String(nostrProfileFlag.Name)
-
+func recoverVtxos(ctx *cli.Context) error {
 	password, err := readPassword(ctx)
 	if err != nil {
 		return err
@@ -437,7 +432,13 @@ func registerNostrProfile(ctx *cli.Context) error {
 		return err
 	}
 
-	return arkSdkClient.SetNostrNotificationRecipient(ctx.Context, profile)
+	txid, err := arkSdkClient.Settle(ctx.Context, arksdk.WithRecoverableVtxos)
+	if err != nil {
+		return err
+	}
+	return printJSON(map[string]interface{}{
+		"txid": txid,
+	})
 }
 
 func redeemNotes(ctx *cli.Context) error {

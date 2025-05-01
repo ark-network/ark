@@ -66,19 +66,24 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		return nil, err
 	}
 	return &client.Info{
-		PubKey:                  resp.GetPubkey(),
-		VtxoTreeExpiry:          resp.GetVtxoTreeExpiry(),
-		UnilateralExitDelay:     resp.GetUnilateralExitDelay(),
-		RoundInterval:           resp.GetRoundInterval(),
-		Network:                 resp.GetNetwork(),
-		Dust:                    uint64(resp.GetDust()),
-		BoardingExitDelay:       resp.GetBoardingExitDelay(),
-		ForfeitAddress:          resp.GetForfeitAddress(),
-		Version:                 resp.GetVersion(),
-		MarketHourStartTime:     resp.GetMarketHour().GetNextStartTime(),
-		MarketHourEndTime:       resp.GetMarketHour().GetNextEndTime(),
-		MarketHourPeriod:        resp.GetMarketHour().GetPeriod(),
-		MarketHourRoundInterval: resp.GetMarketHour().GetRoundInterval(),
+		PubKey:                     resp.GetPubkey(),
+		VtxoTreeExpiry:             resp.GetVtxoTreeExpiry(),
+		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
+		RoundInterval:              resp.GetRoundInterval(),
+		Network:                    resp.GetNetwork(),
+		Dust:                       uint64(resp.GetDust()),
+		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
+		BoardingExitDelay:          resp.GetBoardingExitDelay(),
+		ForfeitAddress:             resp.GetForfeitAddress(),
+		Version:                    resp.GetVersion(),
+		MarketHourStartTime:        resp.GetMarketHour().GetNextStartTime(),
+		MarketHourEndTime:          resp.GetMarketHour().GetNextEndTime(),
+		MarketHourPeriod:           resp.GetMarketHour().GetPeriod(),
+		MarketHourRoundInterval:    resp.GetMarketHour().GetRoundInterval(),
+		UtxoMinAmount:              resp.GetUtxoMinAmount(),
+		UtxoMaxAmount:              resp.GetUtxoMaxAmount(),
+		VtxoMinAmount:              resp.GetVtxoMinAmount(),
+		VtxoMaxAmount:              resp.GetVtxoMaxAmount(),
 	}, nil
 }
 
@@ -109,13 +114,31 @@ func (a *grpcClient) RegisterInputsForNextRound(
 	return resp.GetRequestId(), nil
 }
 
+func (a *grpcClient) RegisterIntent(
+	ctx context.Context,
+	signature, message string,
+) (string, error) {
+	req := &arkv1.RegisterIntentRequest{
+		Bip322Signature: &arkv1.Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
+	}
+
+	resp, err := a.svc.RegisterIntent(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	return resp.GetRequestId(), nil
+}
+
 func (a *grpcClient) RegisterNotesForNextRound(
 	ctx context.Context, notes []string,
 ) (string, error) {
-	req := &arkv1.RegisterInputsForNextRoundRequest{
+	req := &arkv1.RegisterIntentRequest{
 		Notes: notes,
 	}
-	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
+	resp, err := a.svc.RegisterIntent(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -411,27 +434,6 @@ func (c *grpcClient) GetTransactionsStream(
 	return eventsCh, closeFn, nil
 }
 
-func (a *grpcClient) SetNostrRecipient(
-	ctx context.Context, nostrRecipient string, vtxos []client.SignedVtxoOutpoint,
-) error {
-	req := &arkv1.SetNostrRecipientRequest{
-		NostrRecipient: nostrRecipient,
-		Vtxos:          signedVtxosToProto(vtxos),
-	}
-	_, err := a.svc.SetNostrRecipient(ctx, req)
-	return err
-}
-
-func (a *grpcClient) DeleteNostrRecipient(
-	ctx context.Context, vtxos []client.SignedVtxoOutpoint,
-) error {
-	req := &arkv1.DeleteNostrRecipientRequest{
-		Vtxos: signedVtxosToProto(vtxos),
-	}
-	_, err := a.svc.DeleteNostrRecipient(ctx, req)
-	return err
-}
-
 func (c *grpcClient) SubscribeForAddress(
 	ctx context.Context, addr string,
 ) (<-chan client.AddressEvent, func(), error) {
@@ -479,24 +481,6 @@ func (c *grpcClient) SubscribeForAddress(
 	}
 
 	return eventsCh, closeFn, nil
-}
-
-func signedVtxosToProto(vtxos []client.SignedVtxoOutpoint) []*arkv1.SignedVtxoOutpoint {
-	protoVtxos := make([]*arkv1.SignedVtxoOutpoint, len(vtxos))
-	for i, v := range vtxos {
-		protoVtxos[i] = &arkv1.SignedVtxoOutpoint{
-			Outpoint: &arkv1.Outpoint{
-				Txid: v.Outpoint.Txid,
-				Vout: uint32(v.Outpoint.VOut),
-			},
-			Proof: &arkv1.OwnershipProof{
-				ControlBlock: v.Proof.ControlBlock,
-				Script:       v.Proof.Script,
-				Signature:    v.Proof.Signature,
-			},
-		}
-	}
-	return protoVtxos
 }
 
 func outpointsFromProto(protoOutpoints []*arkv1.Outpoint) []client.Outpoint {

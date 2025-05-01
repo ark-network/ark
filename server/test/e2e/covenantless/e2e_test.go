@@ -34,8 +34,6 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/nbd-wtf/go-nostr"
-	"github.com/nbd-wtf/go-nostr/nip04"
 	"github.com/stretchr/testify/require"
 )
 
@@ -557,7 +555,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 				&tree.CLTVMultisigClosure{
 					Locktime: cltvLocktime,
 					MultisigClosure: tree.MultisigClosure{
-						PubKeys: []*secp256k1.PublicKey{bobPubKey},
+						PubKeys: []*secp256k1.PublicKey{bobPubKey, aliceAddr.Server},
 					},
 				},
 			},
@@ -775,6 +773,82 @@ func TestChainOutOfRoundTransactions(t *testing.T) {
 	require.NotZero(t, balance.Offchain.Total)
 }
 
+// TestCollisionBetweenInRoundAndRedeemVtxo tests for a potential collision between VTXOs that could occur
+// due to a race condition between simultaneous Settle and SubmitRedeemTx calls. The race condition doesn't
+// consistently reproduce, making the test unreliable in automated test suites. Therefore, the test is skipped
+// by default and left here as documentation for future debugging and reference.
+func TestCollisionBetweenInRoundAndRedeemVtxo(t *testing.T) {
+	t.Skip()
+
+	ctx := context.Background()
+	alice, grpcAlice := setupArkSDK(t)
+	defer grpcAlice.Close()
+
+	bob, grpcBob := setupArkSDK(t)
+	defer grpcBob.Close()
+
+	_, aliceBoardingAddress, err := alice.Receive(ctx)
+	require.NoError(t, err)
+
+	bobAddr, _, err := bob.Receive(ctx)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", aliceBoardingAddress, "0.00005000")
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "rpc", "generatetoaddress", "1", "bcrt1qe8eelqalnch946nzhefd5ajhgl2afjw5aegc59")
+	require.NoError(t, err)
+	time.Sleep(5 * time.Second)
+
+	_, err = alice.Settle(ctx)
+	require.NoError(t, err)
+
+	time.Sleep(1 * time.Second)
+
+	//test collision when first Settle is called
+	type resp struct {
+		txid string
+		err  error
+	}
+
+	ch := make(chan resp, 2)
+	wg := &sync.WaitGroup{}
+	wg.Add(2)
+
+	go func() {
+		defer wg.Done()
+		txid, err := alice.Settle(ctx)
+		ch <- resp{txid, err}
+	}()
+	// SDK Settle call is bit slower than Redeem so we introduce small delay so we make sure Settle is called before Redeem
+	// this timeout can vary depending on the environment
+	time.Sleep(50 * time.Millisecond)
+	go func() {
+		defer wg.Done()
+		txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddr, 1000)}, false)
+		ch <- resp{txid, err}
+	}()
+
+	go func() {
+		wg.Wait()
+		close(ch)
+	}()
+
+	finalResp := resp{}
+	for resp := range ch {
+		if resp.err != nil {
+			finalResp.err = resp.err
+		} else {
+			finalResp.txid = resp.txid
+		}
+	}
+
+	t.Log(finalResp.err)
+	require.NotEmpty(t, finalResp.txid)
+	require.Error(t, finalResp.err)
+
+}
+
 func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 	ctx := context.Background()
 	alice, grpcAlice := setupArkSDK(t)
@@ -968,7 +1042,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 			&tree.CLTVMultisigClosure{
 				Locktime: common.AbsoluteLocktime(currentHeight + cltvBlocks),
 				MultisigClosure: tree.MultisigClosure{
-					PubKeys: []*secp256k1.PublicKey{bobPubKey},
+					PubKeys: []*secp256k1.PublicKey{bobPubKey, aliceAddr.Server},
 				},
 			},
 		},
@@ -1171,7 +1245,7 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 			&tree.ConditionMultisigClosure{
 				Condition: conditionScript,
 				MultisigClosure: tree.MultisigClosure{
-					PubKeys: []*secp256k1.PublicKey{bobPubKey},
+					PubKeys: []*secp256k1.PublicKey{bobPubKey, aliceAddr.Server},
 				},
 			},
 		},
@@ -1317,36 +1391,10 @@ func TestSweep(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	secretKey, pubkey, npub, err := utils.GetNostrKeys()
-	require.NoError(t, err)
-
-	_, err = runClarkCommand("register-nostr", "--profile", npub, "--password", utils.Password)
-	require.NoError(t, err)
-
-	time.Sleep(3 * time.Second)
-
-	// connect to relay
-	relay, err := nostr.RelayConnect(context.Background(), "ws://localhost:10547")
-	require.NoError(t, err)
-	defer relay.Close()
-
-	sub, err := relay.Subscribe(context.Background(), nostr.Filters{
-		{
-			Kinds: []int{nostr.KindEncryptedDirectMessage},
-		},
-		{
-			Tags: nostr.TagMap{
-				"p": []string{pubkey},
-			},
-		},
-	})
-	require.NoError(t, err)
-	defer sub.Close()
-
 	_, err = utils.RunCommand("nigiri", "rpc", "generatetoaddress", "100", "bcrt1qe8eelqalnch946nzhefd5ajhgl2afjw5aegc59")
 	require.NoError(t, err)
 
-	time.Sleep(40 * time.Second)
+	time.Sleep(20 * time.Second)
 
 	var balance utils.ArkBalance
 	balanceStr, err := runClarkCommand("balance")
@@ -1354,25 +1402,16 @@ func TestSweep(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.Zero(t, balance.Offchain.Total) // all funds should be swept
 
-	var note string
-
-	for event := range sub.Events {
-		sharedSecret, err := nip04.ComputeSharedSecret(event.PubKey, secretKey)
-		require.NoError(t, err)
-
-		// Decrypt the NIP04 message
-		decrypted, err := nip04.Decrypt(event.Content, sharedSecret)
-		require.NoError(t, err)
-
-		note = decrypted
-		break // Exit after processing the first message
-	}
-
-	require.NotEmpty(t, note)
-
 	// redeem the note
-	_, err = runClarkCommand("redeem-notes", "--notes", note, "--password", utils.Password)
+	_, err = runClarkCommand("recover", "--password", utils.Password)
 	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
+	balanceStr, err = runClarkCommand("balance")
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
+	require.NotZero(t, balance.Offchain.Total) // funds should be recovered
 }
 
 func runClarkCommand(arg ...string) (string, error) {

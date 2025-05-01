@@ -7,9 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/nbd-wtf/go-nostr"
-	"github.com/nbd-wtf/go-nostr/nip19"
 )
 
 const (
@@ -118,23 +115,4 @@ func RunCommand(name string, arg ...string) (string, error) {
 func newCommand(name string, arg ...string) *exec.Cmd {
 	cmd := exec.Command(name, arg...)
 	return cmd
-}
-
-// nostr
-// use nak utils https://github.com/fiatjaf/nak
-
-func GetNostrKeys() (secretKey, pubkey string, npub string, err error) {
-	secretKey = NostrTestingSecretKey
-
-	pubkey, err = nostr.GetPublicKey(secretKey)
-	if err != nil {
-		return
-	}
-
-	npub, err = nip19.EncodePublicKey(pubkey)
-	if err != nil {
-		return
-	}
-
-	return
 }

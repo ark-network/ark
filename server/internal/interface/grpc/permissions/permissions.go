@@ -110,6 +110,10 @@ func Whitelist() map[string][]bakery.Op {
 			Entity: EntityWallet,
 			Action: "read",
 		}},
+		fmt.Sprintf("/%s/RegisterIntent", arkv1.ArkService_ServiceDesc.ServiceName): {{
+			Entity: EntityArk,
+			Action: "write",
+		}},
 		fmt.Sprintf("/%s/RegisterInputsForNextRound", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
@@ -154,13 +158,9 @@ func Whitelist() map[string][]bakery.Op {
 			Entity: EntityArk,
 			Action: "write",
 		}},
-		fmt.Sprintf("/%s/SetNostrRecipient", arkv1.ArkService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/GetTransactionsStream", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
-			Action: "write",
-		}},
-		fmt.Sprintf("/%s/DeleteNostrRecipient", arkv1.ArkService_ServiceDesc.ServiceName): {{
-			Entity: EntityArk,
-			Action: "write",
+			Action: "read",
 		}},
 		fmt.Sprintf("/%s/GetRound", arkv1.ExplorerService_ServiceDesc.ServiceName): {{
 			Entity: EntityExplorer,
@@ -171,6 +171,10 @@ func Whitelist() map[string][]bakery.Op {
 			Action: "read",
 		}},
 		fmt.Sprintf("/%s/ListVtxos", arkv1.ExplorerService_ServiceDesc.ServiceName): {{
+			Entity: EntityExplorer,
+			Action: "read",
+		}},
+		fmt.Sprintf("/%s/SubscribeForAddress", arkv1.ExplorerService_ServiceDesc.ServiceName): {{
 			Entity: EntityExplorer,
 			Action: "read",
 		}},

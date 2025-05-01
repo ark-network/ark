@@ -17,6 +17,6 @@ type Leaf struct {
 }
 
 type Musig2 struct {
-	CosignersPublicKeys []string
-	SigningType         SigningType
+	CosignersPublicKeys []string    `json:"cosigners_public_keys"`
+	SigningType         SigningType `json:"signing_type"`
 }

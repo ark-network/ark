@@ -103,7 +103,7 @@ func BuildConnectorsTree(
 	return toTxTree(root, initialInput, nil)
 }
 
-// toTxTree converts a node root to tree.VtxoTree matrix
+// toTxTree converts a node root to VtxoTree matrix
 func toTxTree(root node, initialInput *wire.OutPoint, expiry *common.RelativeLocktime) (TxTree, error) {
 	vtxoTree := make(TxTree, 0)
 

@@ -9,6 +9,9 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -30,6 +33,9 @@ type TransportClient interface {
 	GetInfo(ctx context.Context) (*Info, error)
 	RegisterInputsForNextRound(
 		ctx context.Context, inputs []Input,
+	) (string, error)
+	RegisterIntent(
+		ctx context.Context, signature, message string,
 	) (string, error)
 	RegisterNotesForNextRound(
 		ctx context.Context, notes []string,
@@ -58,25 +64,28 @@ type TransportClient interface {
 	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
 	Close()
 	GetTransactionsStream(ctx context.Context) (<-chan TransactionEvent, func(), error)
-	SetNostrRecipient(ctx context.Context, nostrRecipient string, vtxos []SignedVtxoOutpoint) error
-	DeleteNostrRecipient(ctx context.Context, vtxos []SignedVtxoOutpoint) error
 	SubscribeForAddress(ctx context.Context, address string) (<-chan AddressEvent, func(), error)
 }
 
 type Info struct {
-	Version                 string
-	PubKey                  string
-	VtxoTreeExpiry          int64
-	UnilateralExitDelay     int64
-	RoundInterval           int64
-	Network                 string
-	Dust                    uint64
-	BoardingExitDelay       int64
-	ForfeitAddress          string
-	MarketHourStartTime     int64
-	MarketHourEndTime       int64
-	MarketHourPeriod        int64
-	MarketHourRoundInterval int64
+	Version                    string
+	PubKey                     string
+	VtxoTreeExpiry             int64
+	UnilateralExitDelay        int64
+	RoundInterval              int64
+	Network                    string
+	Dust                       uint64
+	BoardingExitDelay          int64
+	BoardingDescriptorTemplate string
+	ForfeitAddress             string
+	MarketHourStartTime        int64
+	MarketHourEndTime          int64
+	MarketHourPeriod           int64
+	MarketHourRoundInterval    int64
+	UtxoMinAmount              int64
+	UtxoMaxAmount              int64
+	VtxoMinAmount              int64
+	VtxoMaxAmount              int64
 }
 
 type RoundEventChannel struct {
@@ -112,6 +121,12 @@ type Vtxo struct {
 	RedeemTx  string
 	IsPending bool
 	SpentBy   string
+	Swept     bool
+	Spent     bool
+}
+
+func (v Vtxo) IsRecoverable() bool {
+	return v.Swept && !v.Spent
 }
 
 func (v Vtxo) Address(server *secp256k1.PublicKey, net common.Network) (string, error) {
@@ -142,6 +157,41 @@ type TapscriptsVtxo struct {
 type Output struct {
 	Address string // onchain or offchain address
 	Amount  uint64
+}
+
+func (o Output) ToTxOut() (*wire.TxOut, bool, error) {
+	var pkScript []byte
+	isOnchain := false
+
+	arkAddress, err := common.DecodeAddress(o.Address)
+	if err != nil {
+		// decode onchain address
+		btcAddress, err := btcutil.DecodeAddress(o.Address, nil)
+		if err != nil {
+			return nil, false, err
+		}
+
+		pkScript, err = txscript.PayToAddrScript(btcAddress)
+		if err != nil {
+			return nil, false, err
+		}
+
+		isOnchain = true
+	} else {
+		pkScript, err = common.P2TRScript(arkAddress.VtxoTapKey)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	if len(pkScript) == 0 {
+		return nil, false, fmt.Errorf("invalid address")
+	}
+
+	return &wire.TxOut{
+		Value:    int64(o.Amount),
+		PkScript: pkScript,
+	}, isOnchain, nil
 }
 
 type RoundStage int
@@ -240,17 +290,6 @@ type RedeemTransaction struct {
 	SpentVtxos     []Vtxo
 	SpendableVtxos []Vtxo
 	Hex            string
-}
-
-type SignedVtxoOutpoint struct {
-	Outpoint
-	Proof OwnershipProof
-}
-
-type OwnershipProof struct {
-	ControlBlock string
-	Script       string
-	Signature    string
 }
 
 type AddressEvent struct {

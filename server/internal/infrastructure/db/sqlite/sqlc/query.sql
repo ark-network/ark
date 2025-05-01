@@ -139,29 +139,6 @@ UPDATE vtxo SET spent = true, spent_by = ? WHERE txid = ? AND vout = ?;
 -- name: UpdateVtxoExpireAt :exec
 UPDATE vtxo SET expire_at = ? WHERE txid = ? AND vout = ?;
 
--- name: UpsertEntity :one
-INSERT INTO entity (nostr_recipient)
-VALUES (?)
-ON CONFLICT(nostr_recipient) DO UPDATE SET
-    nostr_recipient = EXCLUDED.nostr_recipient
-RETURNING id;
-
--- name: UpsertEntityVtxo :exec
-INSERT INTO entity_vtxo (entity_id, vtxo_txid, vtxo_vout)
-VALUES (?, ?, ?)
-ON CONFLICT(entity_id, vtxo_txid, vtxo_vout) DO UPDATE SET
-    entity_id = EXCLUDED.entity_id;
-
--- name: SelectEntitiesByVtxo :many
-SELECT sqlc.embed(entity_vw) FROM entity_vw
-WHERE vtxo_txid = ? AND vtxo_vout = ?;
-
--- name: DeleteEntityVtxo :exec
-DELETE FROM entity_vtxo WHERE entity_id = ?;
-
--- name: DeleteEntity :exec
-DELETE FROM entity WHERE id = ?;
-
 -- name: InsertNote :exec
 INSERT INTO note (id) VALUES (?);
 

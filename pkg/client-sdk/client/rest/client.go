@@ -70,12 +70,10 @@ func (a *restClient) GetInfo(
 	if err != nil {
 		return nil, err
 	}
-
 	boardingExitDelay, err := strconv.Atoi(resp.Payload.BoardingExitDelay)
 	if err != nil {
 		return nil, err
 	}
-
 	roundInterval, err := strconv.Atoi(resp.Payload.RoundInterval)
 	if err != nil {
 		return nil, err
@@ -100,21 +98,42 @@ func (a *restClient) GetInfo(
 	if err != nil {
 		return nil, err
 	}
+	utxoMinAmount, err := strconv.Atoi(resp.Payload.UtxoMinAmount)
+	if err != nil {
+		return nil, err
+	}
+	utxoMaxAmount, err := strconv.Atoi(resp.Payload.UtxoMaxAmount)
+	if err != nil {
+		return nil, err
+	}
+	vtxoMinAmount, err := strconv.Atoi(resp.Payload.VtxoMinAmount)
+	if err != nil {
+		return nil, err
+	}
+	vtxoMaxAmount, err := strconv.Atoi(resp.Payload.VtxoMaxAmount)
+	if err != nil {
+		return nil, err
+	}
 
 	return &client.Info{
-		PubKey:                  resp.Payload.Pubkey,
-		VtxoTreeExpiry:          int64(vtxoTreeExpiry),
-		UnilateralExitDelay:     int64(unilateralExitDelay),
-		RoundInterval:           int64(roundInterval),
-		Network:                 resp.Payload.Network,
-		Dust:                    uint64(dust),
-		BoardingExitDelay:       int64(boardingExitDelay),
-		ForfeitAddress:          resp.Payload.ForfeitAddress,
-		Version:                 resp.Payload.Version,
-		MarketHourStartTime:     int64(nextStartTime),
-		MarketHourEndTime:       int64(nextEndTime),
-		MarketHourPeriod:        int64(period),
-		MarketHourRoundInterval: int64(mhRoundInterval),
+		PubKey:                     resp.Payload.Pubkey,
+		VtxoTreeExpiry:             int64(vtxoTreeExpiry),
+		UnilateralExitDelay:        int64(unilateralExitDelay),
+		RoundInterval:              int64(roundInterval),
+		Network:                    resp.Payload.Network,
+		Dust:                       uint64(dust),
+		BoardingExitDelay:          int64(boardingExitDelay),
+		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
+		ForfeitAddress:             resp.Payload.ForfeitAddress,
+		Version:                    resp.Payload.Version,
+		MarketHourStartTime:        int64(nextStartTime),
+		MarketHourEndTime:          int64(nextEndTime),
+		MarketHourPeriod:           int64(period),
+		MarketHourRoundInterval:    int64(mhRoundInterval),
+		UtxoMinAmount:              int64(utxoMinAmount),
+		UtxoMaxAmount:              int64(utxoMaxAmount),
+		VtxoMinAmount:              int64(vtxoMinAmount),
+		VtxoMaxAmount:              int64(vtxoMaxAmount),
 	}, nil
 }
 
@@ -163,14 +182,34 @@ func (a *restClient) RegisterInputsForNextRound(
 	return resp.Payload.RequestID, nil
 }
 
+func (a *restClient) RegisterIntent(
+	ctx context.Context,
+	signature, message string,
+) (string, error) {
+	body := &models.V1RegisterIntentRequest{
+		Bip322Signature: &models.V1Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
+	}
+	resp, err := a.svc.ArkServiceRegisterIntent(
+		ark_service.NewArkServiceRegisterIntentParams().WithBody(body),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Payload.RequestID, nil
+}
+
 func (a *restClient) RegisterNotesForNextRound(
 	ctx context.Context, notes []string,
 ) (string, error) {
-	body := &models.V1RegisterInputsForNextRoundRequest{
+	body := &models.V1RegisterIntentRequest{
 		Notes: notes,
 	}
-	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
-		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
+	resp, err := a.svc.ArkServiceRegisterIntent(
+		ark_service.NewArkServiceRegisterIntentParams().WithBody(body),
 	)
 	if err != nil {
 		return "", err
@@ -577,33 +616,6 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 	return eventsCh, cancel, nil
 }
 
-func (a *restClient) SetNostrRecipient(
-	ctx context.Context, nostrRecipient string, vtxos []client.SignedVtxoOutpoint,
-) error {
-	body := models.V1SetNostrRecipientRequest{
-		NostrRecipient: nostrRecipient,
-		Vtxos:          toSignedVtxoModel(vtxos),
-	}
-
-	_, err := a.svc.ArkServiceSetNostrRecipient(
-		ark_service.NewArkServiceSetNostrRecipientParams().WithBody(&body),
-	)
-	return err
-}
-
-func (a *restClient) DeleteNostrRecipient(
-	ctx context.Context, vtxos []client.SignedVtxoOutpoint,
-) error {
-	body := models.V1DeleteNostrRecipientRequest{
-		Vtxos: toSignedVtxoModel(vtxos),
-	}
-
-	_, err := a.svc.ArkServiceDeleteNostrRecipient(
-		ark_service.NewArkServiceDeleteNostrRecipientParams().WithBody(&body),
-	)
-	return err
-}
-
 func (c *restClient) SubscribeForAddress(ctx context.Context, addr string) (<-chan client.AddressEvent, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
 	eventsCh := make(chan client.AddressEvent)
@@ -829,27 +841,11 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 			IsPending: v.IsPending,
 			SpentBy:   v.SpentBy,
 			CreatedAt: createdAt,
+			Swept:     v.Swept,
+			Spent:     v.Spent,
 		}
 	}
 	return vtxos
-}
-
-func toSignedVtxoModel(vtxos []client.SignedVtxoOutpoint) []*models.V1SignedVtxoOutpoint {
-	signedVtxos := make([]*models.V1SignedVtxoOutpoint, 0, len(vtxos))
-	for _, v := range vtxos {
-		signedVtxos = append(signedVtxos, &models.V1SignedVtxoOutpoint{
-			Outpoint: &models.V1Outpoint{
-				Txid: v.Outpoint.Txid,
-				Vout: int64(v.Outpoint.VOut),
-			},
-			Proof: &models.V1OwnershipProof{
-				ControlBlock: v.Proof.ControlBlock,
-				Script:       v.Proof.Script,
-				Signature:    v.Proof.Signature,
-			},
-		})
-	}
-	return signedVtxos
 }
 
 type chunk struct {

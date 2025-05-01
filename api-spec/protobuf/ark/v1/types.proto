@@ -84,20 +84,13 @@ message RedeemTransaction {
   string hex = 4;
 }
 
-// This message is used to prove to the server that the user controls the vtxo without revealing the whole VTXO taproot tree.
-message OwnershipProof {
-  string control_block = 1;
-  string script = 2;
-  string signature = 3; // VTXO outpoint signed with script's secret key
-}
-
-message SignedVtxoOutpoint {
-  Outpoint outpoint = 1;
-  OwnershipProof proof = 2;
-}
-
 message Tapscripts {
   repeated string scripts = 1;
+}
+
+message Bip322Signature {
+  string signature = 1;
+  string message = 2;
 }
 
 message MarketHour {

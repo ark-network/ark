@@ -10,7 +10,7 @@ on:
       - 'common/**'
   pull_request:
     branches:
-      - master
+      - '*'
     paths:
       - 'server/**'
       - 'pkg/client-sdk/**'
