@@ -140,3 +140,111 @@ type TxRequestInfo struct {
 	Cosigners      []string
 	LastPing       time.Time
 }
+
+type VtxoChainResp struct {
+	Transactions map[string]ChainWithExpiry
+	Page         PageResp
+}
+
+type VOut int
+
+type CommitmentTxResp struct {
+	StartedAt int64
+	EndAt     int64
+	Batches   map[VOut]Batch
+}
+
+type Batch struct {
+	TotalBatchAmount   uint64
+	TotalForfeitAmount uint64
+	TotalInputVtxos    int32
+	TotalOutputVtxos   int32
+	ExpiresAt          int64
+	Swept              bool
+}
+
+type VtxoTreeResp struct {
+	Nodes []Node
+	Page  PageResp
+}
+
+type Node struct {
+	Txid       string
+	Tx         string
+	ParentTxid string
+	Level      int32
+	LevelIndex int32
+}
+
+type ForfeitTxsResp struct {
+	Txs  []string
+	Page PageResp
+}
+
+type ConnectorResp struct {
+	Connectors []Node
+	Page       PageResp
+}
+
+type SpendableVtxosResp struct {
+	Vtxos []domain.Vtxo
+	Page  PageResp
+}
+
+type VirtualTxsResp struct {
+	Transactions []string
+	Page         PageResp
+}
+
+type SweptCommitmentTxResp struct {
+	SweptBy []string
+}
+
+type Outpoint struct {
+	Txid string
+	Vout uint32
+}
+
+type TxType int
+
+const (
+	TxUnspecified TxType = iota
+	TxReceived
+	TxSent
+)
+
+type TxHistoryResp struct {
+	Records    []TxHistoryRecord
+	Pagination PageResp
+}
+
+type TxHistoryRecord struct {
+	CommitmentTxid string
+	VirtualTxid    string
+	Type           TxType
+	Amount         uint64
+	CreatedAt      time.Time
+	ConfirmedAt    int64
+	Settled        bool
+}
+
+type Page struct {
+	PageSize int
+	PageNum  int
+}
+
+type PageResp struct {
+	Current int
+	Next    int
+	Total   int
+}
+
+type ChainTx struct {
+	Txid string
+	Type string
+}
+
+type ChainWithExpiry struct {
+	Txs       []ChainTx
+	ExpiresAt int64
+}

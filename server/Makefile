@@ -90,4 +90,4 @@ vet_db: recreatedb mig_up mig_down_yes
 ## sqlc: gen sql
 sqlc:
 	@echo "gen sql..."
-	cd ./internal/infrastructure/db/sqlite; sqlc generate
+	@docker run --rm -v ./internal/infrastructure/db/sqlite:/src -w /src sqlc/sqlc generate

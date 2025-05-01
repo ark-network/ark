@@ -50,7 +50,11 @@ func NewRoundRepository(config ...interface{}) (domain.RoundRepository, error) {
 func (r *roundRepository) AddOrUpdateRound(
 	ctx context.Context, round domain.Round,
 ) error {
-	return r.addOrUpdateRound(ctx, round)
+	if err := r.addOrUpdateRound(ctx, round); err != nil {
+		return err
+	}
+
+	return r.addTxs(ctx, round)
 }
 
 func (r *roundRepository) GetRoundWithId(
@@ -98,6 +102,21 @@ func (r *roundRepository) GetExpiredRoundsTxid(
 		txids = append(txids, r.Txid)
 	}
 	return txids, nil
+}
+
+func (r *roundRepository) GetRoundStats(ctx context.Context, roundTxid string) (*domain.RoundStats, error) {
+	// TODO implement
+	return nil, nil
+}
+
+func (r *roundRepository) GetRoundForfeitTxs(ctx context.Context, roundTxid string) ([]domain.ForfeitTx, error) {
+	// TODO implement
+	return nil, nil
+}
+
+func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid string) (tree.TxTree, error) {
+	// TODO implement
+	return nil, nil
 }
 
 func (r *roundRepository) GetSweptRoundsConnectorAddress(
@@ -156,6 +175,10 @@ func (r *roundRepository) Close() {
 	r.store.Close()
 }
 
+func (r *roundRepository) GetTxsWithTxids(ctx context.Context, txids []string) ([]string, error) {
+	return r.findTxs(ctx, txids)
+}
+
 func (r *roundRepository) findRound(
 	ctx context.Context, query *badgerhold.Query,
 ) ([]domain.Round, error) {
@@ -198,4 +221,86 @@ func (r *roundRepository) addOrUpdateRound(
 		return err
 	}
 	return nil
+}
+
+type Tx struct {
+	Txid string
+	Tx   string
+}
+
+func (r *roundRepository) addTxs(
+	ctx context.Context, round domain.Round,
+) (err error) {
+	txs := make(map[string]Tx)
+	if len(round.ForfeitTxs) > 0 || len(round.Connectors) > 0 || len(round.VtxoTree) > 0 {
+		for _, tx := range round.ForfeitTxs {
+			txs[tx.Txid] = Tx{
+				Txid: tx.Txid,
+				Tx:   tx.Tx,
+			}
+		}
+
+		for _, levelTxs := range round.Connectors {
+			for _, tx := range levelTxs {
+				txs[tx.Txid] = Tx{
+					Txid: tx.Txid,
+					Tx:   tx.Tx,
+				}
+			}
+		}
+
+		for _, levelTxs := range round.VtxoTree {
+			for _, tx := range levelTxs {
+				txs[tx.Txid] = Tx{
+					Txid: tx.Txid,
+					Tx:   tx.Tx,
+				}
+			}
+		}
+	}
+
+	if ctx.Value("tx") != nil {
+		tx := ctx.Value("tx").(*badger.Txn)
+		for k, v := range txs {
+			if err = r.store.TxUpsert(tx, k, v); err != nil {
+				return
+			}
+		}
+	} else {
+		for k, v := range txs {
+			if err = r.store.Upsert(k, v); err != nil {
+				return
+			}
+		}
+	}
+	return
+}
+
+func (r *roundRepository) findTxs(
+	ctx context.Context, txids []string,
+) ([]string, error) {
+	resp := make([]string, 0)
+	txs := make([]Tx, 0)
+
+	var ids []interface{}
+	for _, s := range txids {
+		ids = append(ids, s)
+	}
+	query := badgerhold.Where(badgerhold.Key).In(ids...)
+	if ctx.Value("tx") != nil {
+		tx := ctx.Value("tx").(*badger.Txn)
+		if err := r.store.TxFind(tx, &txs, query); err != nil {
+			return nil, err
+		}
+	} else {
+		if err := r.store.Find(&txs, query); err != nil {
+			return nil, err
+		}
+	}
+
+	for _, tx := range txs {
+		resp = append(resp, tx.Tx)
+	}
+
+	return resp, nil
 }

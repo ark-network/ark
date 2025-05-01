@@ -24,6 +24,7 @@ import (
 type service struct {
 	arkv1.ArkServiceClient
 	arkv1.ExplorerServiceClient
+	arkv1.IndexerServiceClient
 }
 
 type grpcClient struct {
@@ -53,7 +54,7 @@ func NewClient(serverUrl string) (client.TransportClient, error) {
 		return nil, err
 	}
 
-	svc := service{arkv1.NewArkServiceClient(conn), arkv1.NewExplorerServiceClient(conn)}
+	svc := service{arkv1.NewArkServiceClient(conn), arkv1.NewExplorerServiceClient(conn), arkv1.NewIndexerServiceClient(conn)}
 	treeCache := utils.NewCache[tree.TxTree]()
 
 	return &grpcClient{conn, svc, treeCache}, nil
@@ -492,4 +493,290 @@ func outpointsFromProto(protoOutpoints []*arkv1.Outpoint) []client.Outpoint {
 		}
 	}
 	return outpoints
+}
+
+// IndexerService methods implementation
+
+func (a *grpcClient) GetCommitmentTx(ctx context.Context, txid string) (*client.CommitmentTxInfo, error) {
+	req := &arkv1.GetCommitmentTxRequest{
+		Txid: txid,
+	}
+	resp, err := a.svc.IndexerServiceClient.GetCommitmentTx(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	batches := make(map[uint32]*client.Batch)
+	for vout, batch := range resp.GetBatches() {
+		batches[vout] = &client.Batch{
+			TotalBatchAmount:   batch.GetTotalBatchAmount(),
+			TotalForfeitAmount: batch.GetTotalForfeitAmount(),
+			TotalInputVtxos:    batch.GetTotalInputVtxos(),
+			TotalOutputVtxos:   batch.GetTotalOutputVtxos(),
+			ExpiresAt:          batch.GetExpiresAt(),
+			Swept:              batch.GetSwept(),
+		}
+	}
+
+	return &client.CommitmentTxInfo{
+		StartedAt: resp.GetStartedAt(),
+		EndedAt:   resp.GetEndedAt(),
+		Batches:   batches,
+	}, nil
+}
+
+func (a *grpcClient) GetVtxoTree(ctx context.Context, batchOutpoint client.Outpoint, page client.PageRequest) (*client.VtxoTreeResponse, error) {
+	req := &arkv1.GetVtxoTreeRequest{
+		BatchOutpoint: &arkv1.IndexerOutpoint{
+			Txid: batchOutpoint.Txid,
+			Vout: batchOutpoint.VOut,
+		},
+		Page: &arkv1.IndexerPageRequest{
+			Size:  page.Size,
+			Index: page.Index,
+		},
+	}
+
+	resp, err := a.svc.IndexerServiceClient.GetVtxoTree(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	nodes := make([]client.IndexerNode, 0, len(resp.GetVtxoTree()))
+	for _, node := range resp.GetVtxoTree() {
+		nodes = append(nodes, client.IndexerNode{
+			Txid:       node.GetTxid(),
+			ParentTxid: node.GetParentTxid(),
+			Level:      node.GetLevel(),
+			LevelIndex: node.GetLevelIndex(),
+		})
+	}
+
+	return &client.VtxoTreeResponse{
+		VtxoTree: nodes,
+		Page: client.PageResponse{
+			Current: resp.GetPage().GetCurrent(),
+			Next:    resp.GetPage().GetNext(),
+			Total:   resp.GetPage().GetTotal(),
+		},
+	}, nil
+}
+
+func (a *grpcClient) GetForfeitTxs(ctx context.Context, batchOutpoint client.Outpoint, page client.PageRequest) (*client.ForfeitTxsResponse, error) {
+	req := &arkv1.GetForfeitTxsRequest{
+		BatchOutpoint: &arkv1.IndexerOutpoint{
+			Txid: batchOutpoint.Txid,
+			Vout: batchOutpoint.VOut,
+		},
+		Page: &arkv1.IndexerPageRequest{
+			Size:  page.Size,
+			Index: page.Index,
+		},
+	}
+
+	resp, err := a.svc.IndexerServiceClient.GetForfeitTxs(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &client.ForfeitTxsResponse{
+		Txs: resp.GetTxs(),
+		Page: client.PageResponse{
+			Current: resp.GetPage().GetCurrent(),
+			Next:    resp.GetPage().GetNext(),
+			Total:   resp.GetPage().GetTotal(),
+		},
+	}, nil
+}
+
+func (a *grpcClient) GetConnectors(ctx context.Context, batchOutpoint client.Outpoint, page client.PageRequest) (*client.ConnectorsResponse, error) {
+	req := &arkv1.GetConnectorsRequest{
+		BatchOutpoint: &arkv1.IndexerOutpoint{
+			Txid: batchOutpoint.Txid,
+			Vout: batchOutpoint.VOut,
+		},
+		Page: &arkv1.IndexerPageRequest{
+			Size:  page.Size,
+			Index: page.Index,
+		},
+	}
+
+	resp, err := a.svc.IndexerServiceClient.GetConnectors(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	connectors := make([]client.IndexerNode, 0, len(resp.GetConnectors()))
+	for _, connector := range resp.GetConnectors() {
+		connectors = append(connectors, client.IndexerNode{
+			Txid:       connector.GetTxid(),
+			ParentTxid: connector.GetParentTxid(),
+			Level:      connector.GetLevel(),
+			LevelIndex: connector.GetLevelIndex(),
+		})
+	}
+
+	return &client.ConnectorsResponse{
+		Connectors: connectors,
+		Page: client.PageResponse{
+			Current: resp.GetPage().GetCurrent(),
+			Next:    resp.GetPage().GetNext(),
+			Total:   resp.GetPage().GetTotal(),
+		},
+	}, nil
+}
+
+func (a *grpcClient) GetSpendableVtxos(ctx context.Context, address string, page client.PageRequest) (*client.SpendableVtxosResponse, error) {
+	req := &arkv1.GetSpendableVtxosRequest{
+		Address: address,
+		Page: &arkv1.IndexerPageRequest{
+			Size:  page.Size,
+			Index: page.Index,
+		},
+	}
+
+	resp, err := a.svc.IndexerServiceClient.GetSpendableVtxos(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	vtxos := make([]client.IndexerVtxo, 0, len(resp.GetVtxos()))
+	for _, vtxo := range resp.GetVtxos() {
+		vtxos = append(vtxos, client.IndexerVtxo{
+			Outpoint: client.Outpoint{
+				Txid: vtxo.GetOutpoint().GetTxid(),
+				VOut: vtxo.GetOutpoint().GetVout(),
+			},
+			CreatedAt: vtxo.GetCreatedAt(),
+			ExpiresAt: vtxo.GetExpiresAt(),
+			Amount:    vtxo.GetAmount(),
+			Script:    vtxo.GetScript(),
+			IsLeaf:    vtxo.GetIsLeaf(),
+			IsSwept:   vtxo.GetIsSwept(),
+			IsSpent:   vtxo.GetIsSpent(),
+			SpentBy:   vtxo.GetSpentBy(),
+		})
+	}
+
+	return &client.SpendableVtxosResponse{
+		Vtxos: vtxos,
+		Page: client.PageResponse{
+			Current: resp.GetPage().GetCurrent(),
+			Next:    resp.GetPage().GetNext(),
+			Total:   resp.GetPage().GetTotal(),
+		},
+	}, nil
+}
+
+func (a *grpcClient) GetTransactionHistory(ctx context.Context, address string, startTime, endTime int64, page client.PageRequest) (*client.TransactionHistoryResponse, error) {
+	req := &arkv1.GetTransactionHistoryRequest{
+		Address:   address,
+		StartTime: startTime,
+		EndTime:   endTime,
+		Page: &arkv1.IndexerPageRequest{
+			Size:  page.Size,
+			Index: page.Index,
+		},
+	}
+
+	resp, err := a.svc.IndexerServiceClient.GetTransactionHistory(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	history := make([]client.TxHistoryRecord, 0, len(resp.GetHistory()))
+	for _, record := range resp.GetHistory() {
+		history = append(history, client.TxHistoryRecord{
+			CommitmentTxid: record.GetCommitmentTxid(),
+			VirtualTxid:    record.GetVirtualTxid(),
+			Type:           client.TxType(record.GetType()),
+			Amount:         record.GetAmount(),
+			CreatedAt:      record.GetCreatedAt(),
+			ConfirmedAt:    record.GetConfirmedAt(),
+			IsSettled:      record.GetIsSettled(),
+		})
+	}
+
+	return &client.TransactionHistoryResponse{
+		History: history,
+		Page: client.PageResponse{
+			Current: resp.GetPage().GetCurrent(),
+			Next:    resp.GetPage().GetNext(),
+			Total:   resp.GetPage().GetTotal(),
+		},
+	}, nil
+}
+
+func (a *grpcClient) GetVtxoChain(ctx context.Context, outpoint client.Outpoint, page client.PageRequest) (*client.VtxoChainResponse, error) {
+	req := &arkv1.GetVtxoChainRequest{
+		Outpoint: &arkv1.IndexerOutpoint{
+			Txid: outpoint.Txid,
+			Vout: outpoint.VOut,
+		},
+		Page: &arkv1.IndexerPageRequest{
+			Size:  page.Size,
+			Index: page.Index,
+		},
+	}
+
+	resp, err := a.svc.IndexerServiceClient.GetVtxoChain(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	graph := make(map[string]*client.ChainWithExpiry)
+	for txid, chain := range resp.GetGraph() {
+		graph[txid] = &client.ChainWithExpiry{
+			Txs:       txChain{chain.GetTxs()}.parse(),
+			ExpiresAt: chain.GetExpiresAt(),
+		}
+	}
+
+	return &client.VtxoChainResponse{
+		Graph: graph,
+		Page: client.PageResponse{
+			Current: resp.GetPage().GetCurrent(),
+			Next:    resp.GetPage().GetNext(),
+			Total:   resp.GetPage().GetTotal(),
+		},
+	}, nil
+}
+
+func (a *grpcClient) GetVirtualTxs(ctx context.Context, txids []string, page client.PageRequest) (*client.VirtualTxsResponse, error) {
+	req := &arkv1.GetVirtualTxsRequest{
+		Txids: txids,
+		Page: &arkv1.IndexerPageRequest{
+			Size:  page.Size,
+			Index: page.Index,
+		},
+	}
+
+	resp, err := a.svc.IndexerServiceClient.GetVirtualTxs(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &client.VirtualTxsResponse{
+		Txs: resp.GetTxs(),
+		Page: client.PageResponse{
+			Current: resp.GetPage().GetCurrent(),
+			Next:    resp.GetPage().GetNext(),
+			Total:   resp.GetPage().GetTotal(),
+		},
+	}, nil
+}
+
+func (a *grpcClient) GetSweptCommitmentTx(ctx context.Context, txid string) (*client.SweptCommitmentTxResponse, error) {
+	req := &arkv1.GetSweptCommitmentTxRequest{
+		Txid: txid,
+	}
+
+	resp, err := a.svc.IndexerServiceClient.GetSweptCommitmentTx(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+
+	return &client.SweptCommitmentTxResponse{
+		SweptBy: resp.GetSweptBy(),
+	}, nil
 }

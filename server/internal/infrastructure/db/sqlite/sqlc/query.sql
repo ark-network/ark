@@ -39,6 +39,19 @@ ON CONFLICT(id) DO UPDATE SET
     version = EXCLUDED.version,
     swept = EXCLUDED.swept;
 
+-- name: GetTxsByTxid :many
+SELECT
+    tx.txid,
+    tx.tx AS data
+FROM tx
+WHERE tx.txid IN (sqlc.slice('ids1'))
+UNION
+SELECT
+    vtxo.txid,
+    vtxo.redeem_tx AS data
+FROM vtxo
+WHERE vtxo.txid IN (sqlc.slice('ids2')) AND vtxo.redeem_tx IS NOT '';
+
 -- name: UpsertTxRequest :exec
 INSERT INTO tx_request (id, round_id) VALUES (?, ?)
 ON CONFLICT(id) DO UPDATE SET round_id = EXCLUDED.round_id;
@@ -83,6 +96,65 @@ WHERE round.txid = ?;
 SELECT round.txid FROM round
 WHERE round.swept = false AND round.ended = true AND round.failed = false;
 
+-- name: GetRoundStats :one
+SELECT
+    r.swept,
+    r.starting_timestamp,
+    r.ending_timestamp,
+    (
+        SELECT COALESCE(SUM(amount), 0)
+        FROM (
+            SELECT DISTINCT v2.*
+            FROM vtxo v2
+                    JOIN tx_request req2 ON req2.id = v2.request_id
+            WHERE req2.round_id = r.id
+        ) as tx_req_inputs_amount
+    ) AS total_forfeit_amount,
+    (
+        SELECT COALESCE(COUNT(v3.txid), 0)
+        FROM vtxo v3
+                 JOIN tx_request req3 ON req3.id = v3.request_id
+        WHERE req3.round_id = r.id
+    ) AS total_input_vtxos,
+    (
+        SELECT COALESCE(SUM(amount), 0)
+        FROM (
+            SELECT DISTINCT rr.*
+            FROM receiver rr
+                JOIN tx_request req4 ON req4.id = rr.request_id
+            WHERE req4.round_id = r.id
+            AND (rr.onchain_address = '' OR rr.onchain_address IS NULL)
+        ) AS tx_req_outputs_amount
+    ) AS total_batch_amount,
+    (
+        SELECT COUNT(*)
+        FROM tx t
+        WHERE t.round_id = r.id
+          AND t.type = 'tree'
+          AND t.is_leaf = 1
+    ) AS total_output_vtxos,
+    (
+        SELECT MAX(v.expire_at)
+        FROM vtxo v
+        WHERE v.round_tx = r.txid
+    ) AS expires_at
+FROM round r
+WHERE r.txid = ?;
+
+-- name: GetRoundForfeitTxs :many
+SELECT tx.* FROM round
+LEFT OUTER JOIN tx ON round.id=tx.round_id
+WHERE round.txid = ? AND tx.type = 'forfeit';
+
+-- name: GetRoundConnectorTreeTxs :many
+SELECT tx.* FROM round
+LEFT OUTER JOIN tx ON round.id=tx.round_id
+WHERE round.txid = ? AND tx.type = 'connector';
+
+-- name: GetSpendableVtxosWithPubKey :many
+SELECT vtxo.* FROM vtxo
+WHERE vtxo.pubkey = ? AND vtxo.spent = false AND vtxo.swept = false;
+
 -- name: SelectSweptRoundsConnectorAddress :many
 SELECT round.connector_address FROM round
 WHERE round.swept = true AND round.failed = false AND round.ended = true AND round.connector_address <> '';
@@ -123,9 +195,12 @@ WHERE redeemed = false AND pubkey = ?;
 SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE txid = ? AND vout = ?;
 
+-- name: SelectAllVtxos :many
+SELECT sqlc.embed(vtxo) FROM vtxo;
+
 -- name: SelectVtxosByRoundTxid :many
 SELECT sqlc.embed(vtxo) FROM vtxo
-WHERE round_tx = ?;
+WHERE round_tx = ? AND (redeem_tx IS NULL or redeem_tx = '');
 
 -- name: MarkVtxoAsRedeemed :exec
 UPDATE vtxo SET redeemed = true WHERE txid = ? AND vout = ?;
@@ -171,4 +246,7 @@ SELECT * FROM market_hour ORDER BY updated_at DESC LIMIT 1;
 -- name: SelectTreeTxsWithRoundTxid :many
 SELECT tx.* FROM round
 LEFT OUTER JOIN tx ON round.id=tx.round_id
-WHERE round.txid = ? AND tx.type = 'tree'
+WHERE round.txid = ? AND tx.type = 'tree';
+
+-- name: SelectVtxosWithPubkey :many
+SELECT sqlc.embed(vtxo) FROM vtxo WHERE pubkey = ?;

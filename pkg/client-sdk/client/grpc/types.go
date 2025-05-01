@@ -204,3 +204,18 @@ func (c connectorsIndexFromProto) parse() map[string]client.Outpoint {
 	}
 	return connectorsIndex
 }
+
+type txChain struct {
+	chain []*arkv1.IndexerChain
+}
+
+func (c txChain) parse() []client.ChainTx {
+	txs := make([]client.ChainTx, 0, len(c.chain))
+	for _, tx := range c.chain {
+		txs = append(txs, client.ChainTx{
+			Txid: tx.GetTxid(),
+			Type: tx.GetType().String(),
+		})
+	}
+	return txs
+}
