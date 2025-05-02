@@ -115,4 +115,3 @@ SELECT vtxo.*
 FROM tx_request
 LEFT OUTER JOIN vtxo
 ON tx_request.id=vtxo.request_id;
-

@@ -19,11 +19,6 @@ type vtxoRepository struct {
 	store *badgerhold.Store
 }
 
-func (r *vtxoRepository) GetSpendableVtxosWithPubKey(ctx context.Context, pubkey string) ([]domain.Vtxo, error) {
-	// TODO implement
-	return nil, nil
-}
-
 func NewVtxoRepository(config ...interface{}) (domain.VtxoRepository, error) {
 	if len(config) != 2 {
 		return nil, fmt.Errorf("invalid config")
@@ -102,7 +97,7 @@ func (r *vtxoRepository) GetVtxosForRound(
 	return r.findVtxos(ctx, query)
 }
 
-func (r *vtxoRepository) GetAllNonRedeemedVtxos(
+func (r *vtxoRepository) GetAllVtxos(
 	ctx context.Context, pubkey string,
 ) ([]domain.Vtxo, []domain.Vtxo, error) {
 	query := badgerhold.Where("Redeemed").Eq(false)
@@ -129,10 +124,6 @@ func (r *vtxoRepository) GetAllNonRedeemedVtxos(
 func (r *vtxoRepository) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtxo, error) {
 	query := badgerhold.Where("Redeemed").Eq(false).And("Swept").Eq(false)
 	return r.findVtxos(ctx, query)
-}
-
-func (r *vtxoRepository) GetAll(ctx context.Context) ([]domain.Vtxo, error) {
-	return r.findVtxos(ctx, &badgerhold.Query{})
 }
 
 func (r *vtxoRepository) SweepVtxos(
@@ -179,27 +170,6 @@ func (r *vtxoRepository) UpdateExpireAt(ctx context.Context, vtxos []domain.Vtxo
 	}
 
 	return err
-}
-
-func (r *vtxoRepository) GetAllVtxosWithPubKey(
-	ctx context.Context, pubkey string,
-) ([]domain.Vtxo, []domain.Vtxo, error) {
-	query := badgerhold.Where("PubKey").Eq(pubkey)
-	vtxos, err := r.findVtxos(ctx, query)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	spentVtxos := make([]domain.Vtxo, 0, len(vtxos))
-	unspentVtxos := make([]domain.Vtxo, 0, len(vtxos))
-	for _, vtxo := range vtxos {
-		if vtxo.Spent || vtxo.Swept {
-			spentVtxos = append(spentVtxos, vtxo)
-		} else {
-			unspentVtxos = append(unspentVtxos, vtxo)
-		}
-	}
-	return unspentVtxos, spentVtxos, nil
 }
 
 func (r *vtxoRepository) Close() {

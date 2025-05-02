@@ -20,16 +20,10 @@ import (
 )
 
 const (
-	dummyPtx = "cHNidP8BADwBAAAAAaqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
-	f1       = "cHNidP8BADwBAAAAAauqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
-	f2       = "cHNidP8BADwBAAAAAayqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
-	f3       = "cHNidP8BADwBAAAAAa2qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
-	f4       = "cHNidP8BADwBAAAAAa6qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
+	emptyPtx = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx  = "0200000000000000000000"
 	pubkey   = "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967"
 	pubkey2  = "33ffb3dee353b1a9ebe4ced64b946238d0a4ac364f275d771da6ad2445d07ae0"
-	txida    = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	txidb    = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
 )
 
 var (
@@ -37,41 +31,41 @@ var (
 		{
 			{
 				Txid:       randomString(32),
-				Tx:         dummyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: randomString(32),
 			},
 		},
 		{
 			{
 				Txid:       randomString(32),
-				Tx:         dummyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: randomString(32),
 			},
 			{
 				Txid:       randomString(32),
-				Tx:         dummyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: randomString(32),
 			},
 		},
 		{
 			{
 				Txid:       randomString(32),
-				Tx:         dummyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: randomString(32),
 			},
 			{
 				Txid:       randomString(32),
-				Tx:         dummyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: randomString(32),
 			},
 			{
-				Txid:       txidb,
-				Tx:         dummyPtx,
+				Txid:       randomString(32),
+				Tx:         emptyPtx,
 				ParentTxid: randomString(32),
 			},
 			{
-				Txid:       txida,
-				Tx:         dummyPtx,
+				Txid:       randomString(32),
+				Tx:         emptyPtx,
 				ParentTxid: randomString(32),
 			},
 		},
@@ -80,46 +74,28 @@ var (
 		{
 			{
 				Txid:       randomString(32),
-				Tx:         dummyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: randomString(32),
 			},
 		},
 		{
 			{
 				Txid:       randomString(32),
-				Tx:         dummyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: randomString(32),
 			},
 			{
 				Txid:       randomString(32),
-				Tx:         dummyPtx,
+				Tx:         emptyPtx,
 				ParentTxid: randomString(32),
 			},
 		},
 	}
 
-	f1Tx = func() domain.ForfeitTx {
+	emptyForfeitTx = func() domain.ForfeitTx {
 		return domain.ForfeitTx{
 			Txid: randomString(32),
-			Tx:   f1,
-		}
-	}
-	f2Tx = func() domain.ForfeitTx {
-		return domain.ForfeitTx{
-			Txid: randomString(32),
-			Tx:   f2,
-		}
-	}
-	f3Tx = func() domain.ForfeitTx {
-		return domain.ForfeitTx{
-			Txid: randomString(32),
-			Tx:   f3,
-		}
-	}
-	f4Tx = func() domain.ForfeitTx {
-		return domain.ForfeitTx{
-			Txid: randomString(32),
-			Tx:   f4,
+			Tx:   emptyPtx,
 		}
 	}
 )
@@ -232,7 +208,7 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 					domain.RoundFinalized{
 						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
 						Txid:       randomString(32),
-						ForfeitTxs: []domain.ForfeitTx{f1Tx(), f2Tx(), f3Tx(), f4Tx()},
+						ForfeitTxs: []domain.ForfeitTx{emptyForfeitTx(), emptyForfeitTx(), emptyForfeitTx(), emptyForfeitTx()},
 						Timestamp:  1701190300,
 					},
 				},
@@ -368,7 +344,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 			domain.RoundFinalized{
 				Id:         roundId,
 				Txid:       txid,
-				ForfeitTxs: []domain.ForfeitTx{f1Tx(), f2Tx(), f3Tx(), f4Tx()},
+				ForfeitTxs: []domain.ForfeitTx{emptyForfeitTx(), emptyForfeitTx(), emptyForfeitTx(), emptyForfeitTx()},
 				Timestamp:  now.Add(60 * time.Second).Unix(),
 			},
 		}
@@ -392,11 +368,6 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.NotNil(t, roundByTxid)
 		require.Condition(t, roundsMatch(*finalizedRound, *roundByTxid))
-
-		txs, err := svc.Rounds().GetTxsWithTxids(ctx, []string{txida, txidb})
-		require.NoError(t, err)
-		require.NotNil(t, txs)
-		require.Equal(t, 2, len(txs))
 	})
 }
 
@@ -440,12 +411,12 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.Error(t, err)
 		require.Empty(t, vtxos)
 
-		spendableVtxos, spentVtxos, err := svc.Vtxos().GetAllNonRedeemedVtxos(ctx, pubkey)
+		spendableVtxos, spentVtxos, err := svc.Vtxos().GetAllVtxos(ctx, pubkey)
 		require.NoError(t, err)
 		require.Empty(t, spendableVtxos)
 		require.Empty(t, spentVtxos)
 
-		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllNonRedeemedVtxos(ctx, "")
+		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, "")
 		require.NoError(t, err)
 
 		numberOfVtxos := len(spendableVtxos) + len(spentVtxos)
@@ -453,15 +424,11 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		err = svc.Vtxos().AddVtxos(ctx, newVtxos)
 		require.NoError(t, err)
 
-		vtxos, err = svc.Vtxos().GetAll(ctx)
-		require.NoError(t, err)
-		require.Equal(t, 5, len(vtxos))
-
 		vtxos, err = svc.Vtxos().GetVtxos(ctx, vtxoKeys)
 		require.NoError(t, err)
 		require.Exactly(t, userVtxos, vtxos)
 
-		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllNonRedeemedVtxos(ctx, pubkey)
+		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, pubkey)
 		require.NoError(t, err)
 
 		sortedVtxos := sortVtxos(userVtxos)
@@ -473,7 +440,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 		require.Exactly(t, sortedSpendableVtxos, sortedVtxos)
 		require.Empty(t, spentVtxos)
 
-		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllNonRedeemedVtxos(ctx, "")
+		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, "")
 		require.NoError(t, err)
 		require.Len(t, append(spendableVtxos, spentVtxos...), numberOfVtxos+len(newVtxos))
 
@@ -487,7 +454,7 @@ func testVtxoRepository(t *testing.T, svc ports.RepoManager) {
 			require.True(t, v.Spent)
 		}
 
-		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllNonRedeemedVtxos(ctx, pubkey)
+		spendableVtxos, spentVtxos, err = svc.Vtxos().GetAllVtxos(ctx, pubkey)
 		require.NoError(t, err)
 		require.Exactly(t, vtxos[1:], spendableVtxos)
 		require.Len(t, spentVtxos, len(vtxoKeys[:1]))

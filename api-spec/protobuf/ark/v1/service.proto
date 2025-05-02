@@ -138,7 +138,7 @@ message Musig2 {
 
 message RegisterOutputsForNextRoundRequest {
   string request_id = 1;
-  // List of receivers for to convert to leaves in the next VTXO tree.
+  // List of receivers for to convert to leaves in the next VTXO tree. 
   repeated Output outputs = 2;
   optional Musig2 musig2 = 3;
 }
@@ -159,7 +159,7 @@ message SubmitTreeSignaturesRequest {
 message SubmitTreeSignaturesResponse {}
 
 message SubmitSignedForfeitTxsRequest {
-  // Forfeit txs signed by the user.
+  // Forfeit txs signed by the user. 
   repeated string signed_forfeit_txs = 1;
   // The user has to sign also the round tx if he registerd a boarding UTXO.
   optional string signed_round_tx = 2;
@@ -173,7 +173,7 @@ message GetEventStreamResponse {
     RoundFinalizedEvent round_finalized = 2;
     RoundFailed round_failed = 3;
     RoundSigningEvent round_signing = 4;
-    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5;
+    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5; 
   }
 }
 
