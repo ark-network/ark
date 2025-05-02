@@ -1,4 +1,4 @@
-.PHONY: genrest test vet lint prepare-wasm-test
+.PHONY: genrest test vet lint migrate sqlc build-wasm test-wasm
 
 client_dir = $(or $(REST_DIR),$(PWD)/client/rest/service)
 
@@ -27,13 +27,20 @@ lint:
 	@echo "Linting code..."
 	@golangci-lint run --fix
 
+## migrate: creates sqlite migration file(eg. make FILE=init migrate)
+migrate:
+	@docker run --rm -v ./store/sql/migration:/migration migrate/migrate create -ext sql -dir /migration $(FILE)
+
+## sqlc: gen sql
+sqlc:
+	@echo "gen sql..."
+	@docker run --rm -v ./store/sql:/src -w /src sqlc/sqlc generate
+
 ## wasm: compiles the client-sdk to wasm
 WASM_DIR = wasm
 BUILD_DIR = build
 VERSION := $(shell git describe --tags --always --dirty)
 GO_VERSION := $(shell go version | cut -d' ' -f3)
-
-.PHONY: build-wasm
 
 build-wasm:
 	@mkdir -p $(BUILD_DIR)

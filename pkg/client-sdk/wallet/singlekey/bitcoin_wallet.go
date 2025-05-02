@@ -208,7 +208,7 @@ func (s *bitcoinWallet) SignTransaction(
 
 				switch c := closure.(type) {
 				case *tree.CSVMultisigClosure:
-					for _, key := range c.MultisigClosure.PubKeys {
+					for _, key := range c.PubKeys {
 						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
 							sign = true
 							break
@@ -222,14 +222,14 @@ func (s *bitcoinWallet) SignTransaction(
 						}
 					}
 				case *tree.CLTVMultisigClosure:
-					for _, key := range c.MultisigClosure.PubKeys {
+					for _, key := range c.PubKeys {
 						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
 							sign = true
 							break
 						}
 					}
 				case *tree.ConditionMultisigClosure:
-					for _, key := range c.MultisigClosure.PubKeys {
+					for _, key := range c.PubKeys {
 						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
 							sign = true
 							break

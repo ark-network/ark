@@ -63,7 +63,7 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runClarkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
+	_, err = runArkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
@@ -82,9 +82,11 @@ func TestMain(m *testing.M) {
 func TestSettleInSameRound(t *testing.T) {
 	ctx := context.Background()
 	alice, grpcAlice := setupArkSDK(t)
+	defer alice.Stop()
 	defer grpcAlice.Close()
 
 	bob, grpcBob := setupArkSDK(t)
+	defer bob.Stop()
 	defer grpcBob.Close()
 
 	aliceAddr, aliceBoardingAddress, err := alice.Receive(ctx)
@@ -255,7 +257,7 @@ func TestSettleInSameRound(t *testing.T) {
 
 func TestUnilateralExit(t *testing.T) {
 	var receive utils.ArkReceive
-	receiveStr, err := runClarkCommand("receive")
+	receiveStr, err := runArkCommand("receive")
 	require.NoError(t, err)
 
 	err = json.Unmarshal([]byte(receiveStr), &receive)
@@ -266,18 +268,18 @@ func TestUnilateralExit(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runClarkCommand("settle", "--password", utils.Password)
+	_, err = runArkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
 
 	var balance utils.ArkBalance
-	balanceStr, err := runClarkCommand("balance")
+	balanceStr, err := runArkCommand("balance")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
 
-	_, err = runClarkCommand("redeem", "--force", "--password", utils.Password)
+	_, err = runArkCommand("redeem", "--force", "--password", utils.Password)
 	require.NoError(t, err)
 
 	err = utils.GenerateBlock()
@@ -285,7 +287,7 @@ func TestUnilateralExit(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	balanceStr, err = runClarkCommand("balance")
+	balanceStr, err = runArkCommand("balance")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.Zero(t, balance.Offchain.Total)
@@ -297,7 +299,7 @@ func TestUnilateralExit(t *testing.T) {
 
 func TestCollaborativeExit(t *testing.T) {
 	var receive utils.ArkReceive
-	receiveStr, err := runClarkCommand("receive")
+	receiveStr, err := runArkCommand("receive")
 	require.NoError(t, err)
 
 	err = json.Unmarshal([]byte(receiveStr), &receive)
@@ -308,18 +310,19 @@ func TestCollaborativeExit(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runClarkCommand("settle", "--password", utils.Password)
+	_, err = runArkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runClarkCommand("redeem", "--amount", "1000", "--address", redeemAddress, "--password", utils.Password)
+	_, err = runArkCommand("redeem", "--amount", "1000", "--address", redeemAddress, "--password", utils.Password)
 	require.NoError(t, err)
 }
 
 func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	ctx := context.Background()
 	client, grpcClient := setupArkSDK(t)
+	defer client.Stop()
 	defer grpcClient.Close()
 
 	arkAddr, boardingAddress, err := client.Receive(ctx)
@@ -390,6 +393,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 	t.Run("default vtxo script", func(t *testing.T) {
 		ctx := context.Background()
 		sdkClient, grpcClient := setupArkSDK(t)
+		defer sdkClient.Stop()
 		defer grpcClient.Close()
 
 		offchainAddress, boardingAddress, err := sdkClient.Receive(ctx)
@@ -484,6 +488,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 	t.Run("cltv vtxo script", func(t *testing.T) {
 		ctx := context.Background()
 		alice, grpcTransportClient := setupArkSDK(t)
+		defer alice.Stop()
 		defer grpcTransportClient.Close()
 
 		bobPrivKey, err := secp256k1.GeneratePrivateKey()
@@ -735,7 +740,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 
 func TestChainOutOfRoundTransactions(t *testing.T) {
 	var receive utils.ArkReceive
-	receiveStr, err := runClarkCommand("receive")
+	receiveStr, err := runArkCommand("receive")
 	require.NoError(t, err)
 
 	err = json.Unmarshal([]byte(receiveStr), &receive)
@@ -746,28 +751,28 @@ func TestChainOutOfRoundTransactions(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runClarkCommand("settle", "--password", utils.Password)
+	_, err = runArkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runClarkCommand("send", "--amount", "10000", "--to", receive.Offchain, "--password", utils.Password)
+	_, err = runArkCommand("send", "--amount", "10000", "--to", receive.Offchain, "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
 
 	var balance utils.ArkBalance
-	balanceStr, err := runClarkCommand("balance")
+	balanceStr, err := runArkCommand("balance")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
 
-	_, err = runClarkCommand("send", "--amount", "10000", "--to", receive.Offchain, "--password", utils.Password)
+	_, err = runArkCommand("send", "--amount", "10000", "--to", receive.Offchain, "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(1 * time.Second)
 
-	balanceStr, err = runClarkCommand("balance")
+	balanceStr, err = runArkCommand("balance")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
@@ -782,9 +787,11 @@ func TestCollisionBetweenInRoundAndRedeemVtxo(t *testing.T) {
 
 	ctx := context.Background()
 	alice, grpcAlice := setupArkSDK(t)
+	defer alice.Stop()
 	defer grpcAlice.Close()
 
 	bob, grpcBob := setupArkSDK(t)
+	defer bob.Stop()
 	defer grpcBob.Close()
 
 	_, aliceBoardingAddress, err := alice.Receive(ctx)
@@ -852,9 +859,11 @@ func TestCollisionBetweenInRoundAndRedeemVtxo(t *testing.T) {
 func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 	ctx := context.Background()
 	alice, grpcAlice := setupArkSDK(t)
+	defer alice.Stop()
 	defer grpcAlice.Close()
 
 	bob, grpcBob := setupArkSDK(t)
+	defer bob.Stop()
 	defer grpcBob.Close()
 
 	aliceAddr, boardingAddress, err := alice.Receive(ctx)
@@ -958,18 +967,18 @@ func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 func TestRedeemNotes(t *testing.T) {
 	note := generateNote(t, 10_000)
 
-	balanceBeforeStr, err := runClarkCommand("balance")
+	balanceBeforeStr, err := runArkCommand("balance")
 	require.NoError(t, err)
 
 	var balanceBefore utils.ArkBalance
 	require.NoError(t, json.Unmarshal([]byte(balanceBeforeStr), &balanceBefore))
 
-	_, err = runClarkCommand("redeem-notes", "--notes", note, "--password", utils.Password)
+	_, err = runArkCommand("redeem-notes", "--notes", note, "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(2 * time.Second)
 
-	balanceAfterStr, err := runClarkCommand("balance")
+	balanceAfterStr, err := runArkCommand("balance")
 	require.NoError(t, err)
 
 	var balanceAfter utils.ArkBalance
@@ -977,13 +986,14 @@ func TestRedeemNotes(t *testing.T) {
 
 	require.Greater(t, balanceAfter.Offchain.Total, balanceBefore.Offchain.Total)
 
-	_, err = runClarkCommand("redeem-notes", "--notes", note, "--password", utils.Password)
+	_, err = runArkCommand("redeem-notes", "--notes", note, "--password", utils.Password)
 	require.Error(t, err)
 }
 
 func TestSendToCLTVMultisigClosure(t *testing.T) {
 	ctx := context.Background()
 	alice, grpcAlice := setupArkSDK(t)
+	defer alice.Stop()
 	defer grpcAlice.Close()
 
 	bobPrivKey, err := secp256k1.GeneratePrivateKey()
@@ -1173,6 +1183,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 func TestSendToConditionMultisigClosure(t *testing.T) {
 	ctx := context.Background()
 	alice, grpcAlice := setupArkSDK(t)
+	defer alice.Stop()
 	defer grpcAlice.Close()
 
 	bobPrivKey, err := secp256k1.GeneratePrivateKey()
@@ -1375,7 +1386,7 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 
 func TestSweep(t *testing.T) {
 	var receive utils.ArkReceive
-	receiveStr, err := runClarkCommand("receive")
+	receiveStr, err := runArkCommand("receive")
 	require.NoError(t, err)
 
 	err = json.Unmarshal([]byte(receiveStr), &receive)
@@ -1386,7 +1397,7 @@ func TestSweep(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runClarkCommand("settle", "--password", utils.Password)
+	_, err = runArkCommand("settle", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
@@ -1397,24 +1408,24 @@ func TestSweep(t *testing.T) {
 	time.Sleep(20 * time.Second)
 
 	var balance utils.ArkBalance
-	balanceStr, err := runClarkCommand("balance")
+	balanceStr, err := runArkCommand("balance")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.Zero(t, balance.Offchain.Total) // all funds should be swept
 
 	// redeem the note
-	_, err = runClarkCommand("recover", "--password", utils.Password)
+	_, err = runArkCommand("recover", "--password", utils.Password)
 	require.NoError(t, err)
 
 	time.Sleep(3 * time.Second)
 
-	balanceStr, err = runClarkCommand("balance")
+	balanceStr, err = runArkCommand("balance")
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total) // funds should be recovered
 }
 
-func runClarkCommand(arg ...string) (string, error) {
+func runArkCommand(arg ...string) (string, error) {
 	args := append([]string{"ark"}, arg...)
 	return utils.RunDockerExec("arkd", args...)
 }
@@ -1528,9 +1539,8 @@ func setupServerWallet() error {
 
 func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.TransportClient) {
 	appDataStore, err := store.NewStore(store.Config{
-		ConfigStoreType:  types.FileStore,
+		ConfigStoreType:  types.InMemoryStore,
 		AppDataStoreType: types.KVStore,
-		BaseDir:          t.TempDir(),
 	})
 	require.NoError(t, err)
 

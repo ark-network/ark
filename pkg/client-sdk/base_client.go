@@ -107,7 +107,7 @@ func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
 		return "", "", err
 	}
 
-	if a.Config.UtxoMaxAmount == 0 {
+	if a.UtxoMaxAmount == 0 {
 		boardingAddr.Address = ""
 	}
 
@@ -144,14 +144,12 @@ func (a *arkClient) Reset(ctx context.Context) {
 	}
 }
 
-func (a *arkClient) Stop() error {
+func (a *arkClient) Stop() {
 	if a.txStreamCtxCancel != nil {
 		a.txStreamCtxCancel()
 	}
 
 	a.store.Close()
-
-	return nil
 }
 
 func (a *arkClient) ListVtxos(
@@ -475,7 +473,7 @@ func filterByOutpoints(vtxos []client.Vtxo, outpoints []client.Outpoint) []clien
 	filtered := make([]client.Vtxo, 0, len(vtxos))
 	for _, vtxo := range vtxos {
 		for _, outpoint := range outpoints {
-			if vtxo.Outpoint.Equals(outpoint) {
+			if vtxo.Equals(outpoint) {
 				filtered = append(filtered, vtxo)
 			}
 		}

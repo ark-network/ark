@@ -270,7 +270,7 @@ func LoadArkClientWithWallet(
 }
 
 func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
-	if err := a.arkClient.init(ctx, args); err != nil {
+	if err := a.init(ctx, args); err != nil {
 		return err
 	}
 
@@ -281,7 +281,7 @@ func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
 			return err
 		}
 		go a.listenForArkTxs(txStreamCtx)
-		if a.Config.UtxoMaxAmount != 0 {
+		if a.UtxoMaxAmount != 0 {
 			go a.listenForBoardingTxs(txStreamCtx)
 		}
 	}
@@ -290,7 +290,7 @@ func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
 }
 
 func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWithWalletArgs) error {
-	if err := a.arkClient.initWithWallet(ctx, args); err != nil {
+	if err := a.initWithWallet(ctx, args); err != nil {
 		return err
 	}
 
@@ -301,7 +301,7 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 			return err
 		}
 		go a.listenForArkTxs(txStreamCtx)
-		if a.Config.UtxoMaxAmount != 0 {
+		if a.UtxoMaxAmount != 0 {
 			go a.listenForBoardingTxs(txStreamCtx)
 		}
 	}
@@ -321,7 +321,7 @@ func (a *covenantlessArkClient) Balance(
 		return nil, err
 	}
 
-	if a.Config.UtxoMaxAmount == 0 {
+	if a.UtxoMaxAmount == 0 {
 		balance, amountByExpiration, err := a.getOffchainBalance(
 			ctx, computeVtxoExpiration,
 		)
@@ -445,7 +445,7 @@ func (a *covenantlessArkClient) OnboardAgainAllExpiredBoardings(
 		return "", err
 	}
 
-	if a.Config.UtxoMaxAmount == 0 {
+	if a.UtxoMaxAmount == 0 {
 		return "", fmt.Errorf("operation not allowed by the server")
 	}
 
@@ -722,7 +722,7 @@ func (a *covenantlessArkClient) CollaborativeExit(
 		return "", err
 	}
 
-	if a.Config.UtxoMaxAmount == 0 {
+	if a.UtxoMaxAmount == 0 {
 		return "", fmt.Errorf("operation not allowed by the server")
 	}
 
@@ -780,7 +780,7 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 		return nil, err
 	}
 
-	if a.Config.WithTransactionFeed {
+	if a.WithTransactionFeed {
 		history, err := a.store.TransactionStore().GetAllTransactions(ctx)
 		if err != nil {
 			return nil, err
@@ -1934,7 +1934,7 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 			return err
 		}
 
-		return a.arkClient.client.SubmitTreeNonces(ctx, event.ID, session.GetPublicKey(), nonces)
+		return a.client.SubmitTreeNonces(ctx, event.ID, session.GetPublicKey(), nonces)
 	}
 
 	errChan := make(chan error, len(signerSessions))
@@ -1980,7 +1980,7 @@ func (a *covenantlessArkClient) handleRoundSigningNoncesGenerated(
 			return err
 		}
 
-		return a.arkClient.client.SubmitTreeSignatures(
+		return a.client.SubmitTreeSignatures(
 			ctx,
 			event.ID,
 			session.GetPublicKey(),
@@ -2119,7 +2119,7 @@ func (a *covenantlessArkClient) validateVtxoTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := tree.ValidateVtxoTree(
-			event.Tree, roundTx, a.Config.ServerPubKey, a.VtxoTreeExpiry,
+			event.Tree, roundTx, a.ServerPubKey, a.VtxoTreeExpiry,
 		); err != nil {
 			return err
 		}
@@ -2159,7 +2159,7 @@ func (a *covenantlessArkClient) validateVtxoTree(
 		}
 
 		for _, vtxo := range vtxosInput {
-			if _, ok := event.ConnectorsIndex[vtxo.Outpoint.String()]; !ok {
+			if _, ok := event.ConnectorsIndex[vtxo.String()]; !ok {
 				return fmt.Errorf("missing connector index for vtxo %s", vtxo.String())
 			}
 		}
@@ -2295,7 +2295,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 	signedForfeits := make([]string, 0, len(vtxosToSign))
 
 	for _, vtxo := range vtxosToSign {
-		connectorOutpoint := connectorsIndex[vtxo.Outpoint.String()]
+		connectorOutpoint := connectorsIndex[vtxo.String()]
 
 		var connector *wire.TxOut
 		for _, node := range connectorsTxs {
@@ -2313,7 +2313,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 		}
 
 		if connector == nil {
-			return nil, fmt.Errorf("connector not found for vtxo %s", vtxo.Outpoint.String())
+			return nil, fmt.Errorf("connector not found for vtxo %s", vtxo.String())
 		}
 
 		vtxoScript, err := tree.ParseVtxoScript(vtxo.Tapscripts)
@@ -3269,7 +3269,7 @@ func buildRedeemTx(
 
 	for _, vtxo := range vtxos {
 		if len(vtxo.Tapscripts) <= 0 {
-			return "", fmt.Errorf("missing tapscripts for vtxo %s", vtxo.Vtxo.Txid)
+			return "", fmt.Errorf("missing tapscripts for vtxo %s", vtxo.Txid)
 		}
 
 		vtxoTxID, err := chainhash.NewHashFromStr(vtxo.Txid)

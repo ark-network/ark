@@ -72,6 +72,7 @@ func (e *explorerSvc) GetFeeRate() (float64, error) {
 	if err != nil {
 		return 0, err
 	}
+	// nolint:all
 	defer resp.Body.Close()
 
 	var response map[string]float64
@@ -134,7 +135,7 @@ func (e *explorerSvc) GetTxs(addr string) ([]tx, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -157,6 +158,7 @@ func (e explorerSvc) IsRBFTx(txid, txHex string) (bool, string, int64, error) {
 		return false, "", -1, err
 	}
 
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -188,6 +190,7 @@ func (e *explorerSvc) GetTxOutspends(txid string) ([]spentStatus, error) {
 		return nil, err
 	}
 
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -210,6 +213,7 @@ func (e *explorerSvc) GetUtxos(addr string) ([]utxo, error) {
 		return nil, err
 	}
 
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -278,6 +282,7 @@ func (e *explorerSvc) GetTxBlockTime(
 	if err != nil {
 		return false, 0, err
 	}
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -311,6 +316,7 @@ func (e *explorerSvc) getTxHex(txid string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -333,6 +339,7 @@ func (e *explorerSvc) broadcast(txHex string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// nolint:all
 	defer resp.Body.Close()
 	bodyResponse, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -352,6 +359,7 @@ func (e *explorerSvc) mempoolIsRBFTx(url, txid string) (bool, string, int64, err
 		return false, "", -1, err
 	}
 
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
