@@ -22,6 +22,61 @@ func (q *Queries) ContainsNote(ctx context.Context, id int64) (int64, error) {
 	return column_1, err
 }
 
+const deleteEntity = `-- name: DeleteEntity :exec
+DELETE FROM entity WHERE id = ?
+`
+
+func (q *Queries) DeleteEntity(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEntity, id)
+	return err
+}
+
+const deleteEntityVtxo = `-- name: DeleteEntityVtxo :exec
+DELETE FROM entity_vtxo WHERE entity_id = ?
+`
+
+func (q *Queries) DeleteEntityVtxo(ctx context.Context, entityID int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEntityVtxo, entityID)
+	return err
+}
+
+const getExistingRounds = `-- name: GetExistingRounds :many
+SELECT txid FROM round WHERE txid IN (/*SLICE:txids*/?)
+`
+
+func (q *Queries) GetExistingRounds(ctx context.Context, txids []string) ([]string, error) {
+	query := getExistingRounds
+	var queryParams []interface{}
+	if len(txids) > 0 {
+		for _, v := range txids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:txids*/?", strings.Repeat(",?", len(txids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:txids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var txid string
+		if err := rows.Scan(&txid); err != nil {
+			return nil, err
+		}
+		items = append(items, txid)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getLatestMarketHour = `-- name: GetLatestMarketHour :one
 SELECT id, start_time, end_time, period, round_interval, updated_at FROM market_hour ORDER BY updated_at DESC LIMIT 1
 `
@@ -472,6 +527,52 @@ func (q *Queries) SelectExpiredRoundsTxid(ctx context.Context) ([]string, error)
 			return nil, err
 		}
 		items = append(items, txid)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const selectLeafVtxosByRoundTxid = `-- name: SelectLeafVtxosByRoundTxid :many
+SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.request_id, vtxo.redeem_tx FROM vtxo
+WHERE round_tx = ? AND (redeem_tx IS NULL or redeem_tx = '')
+`
+
+type SelectLeafVtxosByRoundTxidRow struct {
+	Vtxo Vtxo
+}
+
+func (q *Queries) SelectLeafVtxosByRoundTxid(ctx context.Context, roundTx string) ([]SelectLeafVtxosByRoundTxidRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectLeafVtxosByRoundTxid, roundTx)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectLeafVtxosByRoundTxidRow
+	for rows.Next() {
+		var i SelectLeafVtxosByRoundTxidRow
+		if err := rows.Scan(
+			&i.Vtxo.Txid,
+			&i.Vtxo.Vout,
+			&i.Vtxo.Pubkey,
+			&i.Vtxo.Amount,
+			&i.Vtxo.RoundTx,
+			&i.Vtxo.SpentBy,
+			&i.Vtxo.Spent,
+			&i.Vtxo.Redeemed,
+			&i.Vtxo.Swept,
+			&i.Vtxo.ExpireAt,
+			&i.Vtxo.CreatedAt,
+			&i.Vtxo.RequestID,
+			&i.Vtxo.RedeemTx,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -963,7 +1064,7 @@ func (q *Queries) SelectVtxoByOutpoint(ctx context.Context, arg SelectVtxoByOutp
 
 const selectVtxosByRoundTxid = `-- name: SelectVtxosByRoundTxid :many
 SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.request_id, vtxo.redeem_tx FROM vtxo
-WHERE round_tx = ? AND (redeem_tx IS NULL or redeem_tx = '')
+WHERE round_tx = ?
 `
 
 type SelectVtxosByRoundTxidRow struct {

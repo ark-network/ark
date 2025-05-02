@@ -200,7 +200,7 @@ SELECT sqlc.embed(vtxo) FROM vtxo;
 
 -- name: SelectVtxosByRoundTxid :many
 SELECT sqlc.embed(vtxo) FROM vtxo
-WHERE round_tx = ? AND (redeem_tx IS NULL or redeem_tx = '');
+WHERE round_tx = ?;
 
 -- name: MarkVtxoAsRedeemed :exec
 UPDATE vtxo SET redeemed = true WHERE txid = ? AND vout = ?;
@@ -250,3 +250,10 @@ WHERE round.txid = ? AND tx.type = 'tree';
 
 -- name: SelectVtxosWithPubkey :many
 SELECT sqlc.embed(vtxo) FROM vtxo WHERE pubkey = ?;
+
+-- name: GetExistingRounds :many
+SELECT txid FROM round WHERE txid IN (sqlc.slice('txids'));
+
+-- name: SelectLeafVtxosByRoundTxid :many
+SELECT sqlc.embed(vtxo) FROM vtxo
+WHERE round_tx = ? AND (redeem_tx IS NULL or redeem_tx = '');

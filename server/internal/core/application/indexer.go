@@ -27,10 +27,12 @@ const (
 
 type IndexerService interface {
 	GetCommitmentTxInfo(ctx context.Context, txid string) (*CommitmentTxResp, error)
+	GetCommitmentTxLeaves(ctx context.Context, txid string, page *Page) (*CommitmentTxLeavesResp, error)
 	GetVtxoTree(ctx context.Context, batchOutpoint Outpoint, page *Page) (*VtxoTreeResp, error)
-	GetForfeitTxs(ctx context.Context, batchOutpoint Outpoint, page *Page) (*ForfeitTxsResp, error)
-	GetConnectors(ctx context.Context, batchOutpoint Outpoint, page *Page) (*ConnectorResp, error)
-	GetSpendableVtxos(ctx context.Context, pubkey string, page *Page) (*SpendableVtxosResp, error)
+	GetVtxoTreeLeaves(ctx context.Context, batchOutpoint Outpoint, page *Page) (*VtxoTreeLeavesResp, error)
+	GetForfeitTxs(ctx context.Context, txid string, page *Page) (*ForfeitTxsResp, error)
+	GetConnectors(ctx context.Context, txid string, page *Page) (*ConnectorResp, error)
+	GetVtxos(ctx context.Context, pubkeys []string, spendableOnly, spendOnly bool, page *Page) (*SpendableVtxosResp, error)
 	GetTransactionHistory(ctx context.Context, pubkey string, start, end int64, page *Page) (*TxHistoryResp, error)
 	GetVtxoChain(ctx context.Context, vtxoKey Outpoint, page *Page) (*VtxoChainResp, error)
 	GetVirtualTxs(ctx context.Context, txids []string, page *Page) (*VirtualTxsResp, error)
@@ -64,18 +66,34 @@ func (i *indexerService) GetCommitmentTxInfo(
 	batches := make(map[VOut]Batch)
 	// TODO: currently commitment tx has only one batch, in future multiple batches will be supported
 	batches[0] = Batch{
-		TotalBatchAmount:   roundStats.TotalBatchAmount,
-		TotalForfeitAmount: roundStats.TotalForfeitAmount,
-		TotalInputVtxos:    roundStats.TotalInputVtxos,
-		TotalOutputVtxos:   roundStats.TotalOutputVtxos,
-		ExpiresAt:          roundStats.ExpiresAt,
-		Swept:              roundStats.Swept,
+		TotalOutputAmount: roundStats.TotalBatchAmount,
+		TotalOutputVtxos:  roundStats.TotalOutputVtxos,
+		ExpiresAt:         roundStats.ExpiresAt,
+		Swept:             roundStats.Swept,
 	}
 
 	return &CommitmentTxResp{
-		StartedAt: roundStats.Started,
-		EndAt:     roundStats.Ended,
-		Batches:   batches,
+		StartedAt:         roundStats.Started,
+		EndAt:             roundStats.Ended,
+		Batches:           batches,
+		TotalInputAmount:  roundStats.TotalForfeitAmount,
+		TotalInputtVtxos:  roundStats.TotalInputVtxos,
+		TotalOutputVtxos:  roundStats.TotalOutputVtxos,
+		TotalOutputAmount: roundStats.TotalBatchAmount,
+	}, nil
+}
+
+func (i *indexerService) GetCommitmentTxLeaves(ctx context.Context, txid string, page *Page) (*CommitmentTxLeavesResp, error) {
+	leaves, err := i.repoManager.Vtxos().GetLeafVtxosForRound(ctx, txid)
+	if err != nil {
+		return nil, err
+	}
+
+	paginatedLeaves, pageResp := paginate(leaves, page, maxPageSizeVtxoTree)
+
+	return &CommitmentTxLeavesResp{
+		Leaves: paginatedLeaves,
+		Page:   pageResp,
 	}, nil
 }
 
@@ -93,8 +111,22 @@ func (i *indexerService) GetVtxoTree(ctx context.Context, batchOutpoint Outpoint
 	}, nil
 }
 
-func (i *indexerService) GetForfeitTxs(ctx context.Context, batchOutpoint Outpoint, page *Page) (*ForfeitTxsResp, error) {
-	forfeitTxs, err := i.repoManager.Rounds().GetRoundForfeitTxs(ctx, batchOutpoint.Txid) //TODO batch thing
+func (i *indexerService) GetVtxoTreeLeaves(ctx context.Context, outpoint Outpoint, page *Page) (*VtxoTreeLeavesResp, error) {
+	leaves, err := i.repoManager.Vtxos().GetLeafVtxosForRound(ctx, outpoint.Txid)
+	if err != nil {
+		return nil, err
+	}
+
+	paginatedLeaves, pageResp := paginate(leaves, page, maxPageSizeVtxoTree)
+
+	return &VtxoTreeLeavesResp{
+		Leaves: paginatedLeaves,
+		Page:   pageResp,
+	}, nil
+}
+
+func (i *indexerService) GetForfeitTxs(ctx context.Context, txid string, page *Page) (*ForfeitTxsResp, error) {
+	forfeitTxs, err := i.repoManager.Rounds().GetRoundForfeitTxs(ctx, txid)
 	if err != nil {
 		return nil, err
 	}
@@ -113,8 +145,8 @@ func (i *indexerService) GetForfeitTxs(ctx context.Context, batchOutpoint Outpoi
 
 }
 
-func (i *indexerService) GetConnectors(ctx context.Context, batchOutpoint Outpoint, page *Page) (*ConnectorResp, error) {
-	connectorTree, err := i.repoManager.Rounds().GetRoundConnectorTree(ctx, batchOutpoint.Txid) //TODO batch thing
+func (i *indexerService) GetConnectors(ctx context.Context, txid string, page *Page) (*ConnectorResp, error) {
+	connectorTree, err := i.repoManager.Rounds().GetRoundConnectorTree(ctx, txid)
 	if err != nil {
 		return nil, err
 	}
@@ -127,16 +159,24 @@ func (i *indexerService) GetConnectors(ctx context.Context, batchOutpoint Outpoi
 	}, nil
 }
 
-func (i *indexerService) GetSpendableVtxos(ctx context.Context, pubkey string, page *Page) (*SpendableVtxosResp, error) {
-	vtxos, err := i.repoManager.Vtxos().GetSpendableVtxosWithPubKey(ctx, pubkey)
+func (i *indexerService) GetVtxos(
+	ctx context.Context, pubkeys []string, spendableOnly, spentOnly bool, page *Page,
+) (*SpendableVtxosResp, error) {
+	if spendableOnly && spentOnly {
+		return nil, fmt.Errorf("spendable and spent only can't be true at the same time")
+	}
+
+	vtxos, err := i.repoManager.Vtxos().GetAllVtxosWithPubKeys(
+		ctx, pubkeys, spendableOnly, spentOnly,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	spendableVtxosPaged, pageResp := paginate(vtxos, page, maxPageSizeSpendableVtxos)
+	pagedVtxos, pageResp := paginate(vtxos, page, maxPageSizeSpendableVtxos)
 
 	return &SpendableVtxosResp{
-		Vtxos: spendableVtxosPaged,
+		Vtxos: pagedVtxos,
 		Page:  pageResp,
 	}, nil
 }
@@ -149,7 +189,19 @@ func (i *indexerService) GetTransactionHistory(
 		return nil, err
 	}
 
-	txs, err := vtxosToTxs(spendable, spent)
+	var roundTxids map[string]any
+	if len(spent) > 0 {
+		txids := make([]string, 0, len(spent))
+		for _, vtxo := range spent {
+			txids = append(txids, vtxo.SpentBy)
+		}
+		roundTxids, err = i.repoManager.Rounds().GetExistingRounds(ctx, txids)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	txs, err := vtxosToTxs(spendable, spent, roundTxids)
 	if err != nil {
 		return nil, err
 	}
@@ -158,8 +210,8 @@ func (i *indexerService) GetTransactionHistory(
 	txsPaged, pageResp := paginate(txs, page, maxPageSizeTxHistory)
 
 	return &TxHistoryResp{
-		Records:    txsPaged,
-		Pagination: pageResp,
+		Records: txsPaged,
+		Page:    pageResp,
 	}, nil
 }
 
@@ -188,11 +240,6 @@ func filterByDate(txs []TxHistoryRecord, start, end int64) []TxHistoryRecord {
 	return filteredTxs
 }
 
-type vtxoKeyWithCreatedAt struct {
-	domain.VtxoKey
-	CreatedAt int64
-}
-
 func (i *indexerService) GetVtxoChain(ctx context.Context, vtxoKey Outpoint, page *Page) (*VtxoChainResp, error) {
 	chainMap := make(map[vtxoKeyWithCreatedAt]ChainWithExpiry)
 
@@ -200,8 +247,17 @@ func (i *indexerService) GetVtxoChain(ctx context.Context, vtxoKey Outpoint, pag
 		Txid: vtxoKey.Txid,
 		VOut: vtxoKey.Vout,
 	}
+	vtxos, err := i.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{outpoint})
+	if err != nil {
+		return nil, err
+	}
 
-	if err := i.buildChain(ctx, outpoint, chainMap, true); err != nil {
+	if len(vtxos) == 0 {
+		return nil, fmt.Errorf("vtxo not found for outpoint: %v", outpoint)
+	}
+	vtxo := vtxos[0]
+
+	if err := i.buildChain(ctx, vtxo, chainMap); err != nil {
 		return nil, err
 	}
 
@@ -211,44 +267,36 @@ func (i *indexerService) GetVtxoChain(ctx context.Context, vtxoKey Outpoint, pag
 	}
 
 	sort.Slice(chainSlice, func(i, j int) bool {
-		return chainSlice[i].CreatedAt < chainSlice[j].CreatedAt
+		return chainSlice[i].CreatedAt > chainSlice[j].CreatedAt
 	})
 
 	pagedChainSlice, pageResp := paginate(chainSlice, page, maxPageSizeVtxoChain)
 
-	txMap := make(map[string]ChainWithExpiry)
+	chain := make([]ChainWithExpiry, 0, len(pagedChainSlice))
 	for _, vtxo := range pagedChainSlice {
-		txMap[vtxo.Txid] = chainMap[vtxo]
+		chain = append(chain, chainMap[vtxo])
 	}
 
 	return &VtxoChainResp{
-		Transactions: txMap,
-		Page:         pageResp,
+		Chain:              chain,
+		Page:               pageResp,
+		RootCommitmentTxid: vtxo.RoundTxid,
+		Depth:              getMaxDepth(chainMap),
 	}, nil
 }
 
 func (i *indexerService) buildChain(
 	ctx context.Context,
-	outpoint domain.VtxoKey,
+	vtxo domain.Vtxo,
 	chain map[vtxoKeyWithCreatedAt]ChainWithExpiry,
-	isFirst bool,
 ) error {
-	vtxos, err := i.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{outpoint})
-	if err != nil {
-		return err
-	}
-
-	if isFirst && len(vtxos) == 0 {
-		return fmt.Errorf("vtxo not found for outpoint: %v", outpoint)
-	}
-
-	vtxo := vtxos[0]
 	key := vtxoKeyWithCreatedAt{
-		VtxoKey:   outpoint,
+		VtxoKey:   vtxo.VtxoKey,
 		CreatedAt: vtxo.CreatedAt,
 	}
 	if _, ok := chain[key]; !ok {
 		chain[key] = ChainWithExpiry{
+			Txid:      vtxo.VtxoKey.Txid,
 			Txs:       make([]ChainTx, 0),
 			ExpiresAt: vtxo.ExpireAt,
 		}
@@ -264,6 +312,7 @@ func (i *indexerService) buildChain(
 			Type: "commitment",
 		})
 		chain[key] = ChainWithExpiry{
+			Txid:      vtxo.VtxoKey.Txid,
 			Txs:       txs,
 			ExpiresAt: chain[key].ExpiresAt,
 		}
@@ -282,6 +331,7 @@ func (i *indexerService) buildChain(
 			Type: "virtual",
 		})
 		chain[key] = ChainWithExpiry{
+			Txid:      chain[key].Txid,
 			Txs:       txs,
 			ExpiresAt: chain[key].ExpiresAt,
 		}
@@ -289,8 +339,16 @@ func (i *indexerService) buildChain(
 			Txid: in.PreviousOutPoint.Hash.String(),
 			VOut: in.PreviousOutPoint.Index,
 		}
+		vtxos, err := i.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{parentOutpoint})
+		if err != nil {
+			return err
+		}
 
-		if err := i.buildChain(ctx, parentOutpoint, chain, false); err != nil {
+		if len(vtxos) == 0 {
+			return fmt.Errorf("vtxo not found for outpoint: %v", parentOutpoint)
+		}
+
+		if err := i.buildChain(ctx, vtxos[0], chain); err != nil {
 			return err
 		}
 	}
@@ -319,7 +377,7 @@ func (i *indexerService) GetSweptCommitmentTx(ctx context.Context, txid string) 
 	return &SweptCommitmentTxResp{}, nil
 }
 
-func paginate[T any](items []T, params *Page, maxSize int) ([]T, PageResp) {
+func paginate[T any](items []T, params *Page, maxSize int32) ([]T, PageResp) {
 	if params == nil {
 		return items, PageResp{}
 	}
@@ -330,8 +388,8 @@ func paginate[T any](items []T, params *Page, maxSize int) ([]T, PageResp) {
 		params.PageNum = 1
 	}
 
-	totalCount := len(items)
-	totalPages := int(math.Ceil(float64(totalCount) / float64(params.PageSize)))
+	totalCount := int32(len(items))
+	totalPages := int32(math.Ceil(float64(totalCount) / float64(params.PageSize)))
 	next := min(params.PageNum+1, totalPages)
 
 	resp := PageResp{
@@ -374,7 +432,7 @@ func flattenNodes(t [][]tree.Node) []Node {
 	return result
 }
 
-func vtxosToTxs(spendable, spent []domain.Vtxo) ([]TxHistoryRecord, error) {
+func vtxosToTxs(spendable, spent []domain.Vtxo, roundTxids map[string]any) ([]TxHistoryRecord, error) {
 	txs := make([]TxHistoryRecord, 0)
 
 	// Receivals
@@ -399,10 +457,14 @@ func vtxosToTxs(spendable, spent []domain.Vtxo) ([]TxHistoryRecord, error) {
 		commitmentTxid := vtxo.RoundTxid
 		virtualTxid := ""
 		settled := !vtxo.IsPending()
+		settledBy := ""
 		if vtxo.IsPending() {
 			virtualTxid = vtxo.Txid
 			commitmentTxid = ""
 			settled = vtxo.SpentBy != ""
+			if _, ok := roundTxids[vtxo.SpentBy]; settled && ok {
+				settledBy = vtxo.SpentBy
+			}
 		}
 
 		txs = append(txs, TxHistoryRecord{
@@ -412,6 +474,7 @@ func vtxosToTxs(spendable, spent []domain.Vtxo) ([]TxHistoryRecord, error) {
 			Type:           TxReceived,
 			CreatedAt:      time.Unix(vtxo.CreatedAt, 0),
 			Settled:        settled,
+			SettledBy:      settledBy,
 		})
 	}
 
@@ -523,4 +586,50 @@ func getVtxo(usedVtxos []domain.Vtxo, spentByVtxos []domain.Vtxo) domain.Vtxo {
 		return spentByVtxos[0]
 	}
 	return domain.Vtxo{}
+}
+
+type vtxoKeyWithCreatedAt struct {
+	domain.VtxoKey
+	CreatedAt int64
+}
+
+func getMaxDepth(chainMap map[vtxoKeyWithCreatedAt]ChainWithExpiry) int32 {
+	memo := make(map[string]int32)
+
+	// Create a lookup from txid to ChainWithExpiry
+	txidToChain := make(map[string]ChainWithExpiry)
+	for _, chain := range chainMap {
+		txidToChain[chain.Txid] = chain
+	}
+
+	// DFS function to get depth from a given txid
+	var dfs func(string) int32
+	dfs = func(txid string) int32 {
+		if val, ok := memo[txid]; ok {
+			return val
+		}
+		chain := txidToChain[txid]
+		if len(chain.Txs) == 1 && chain.Txs[0].Type == "commitment" {
+			memo[txid] = 1
+			return 1
+		}
+		maxDepth := int32(0)
+		for _, child := range chain.Txs {
+			depth := dfs(child.Txid)
+			maxDepth = max(depth, maxDepth)
+		}
+		memo[txid] = maxDepth + 1
+		return memo[txid]
+	}
+
+	// Compute max depth starting from all root txids in the map
+	max := int32(0)
+	for _, chain := range chainMap {
+		depth := dfs(chain.Txid)
+		if depth > max {
+			max = depth
+		}
+	}
+
+	return max
 }
