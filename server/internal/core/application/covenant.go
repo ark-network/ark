@@ -513,7 +513,7 @@ func (s *covenantService) ListVtxos(ctx context.Context, address string) ([]doma
 
 	pubkey := hex.EncodeToString(schnorr.SerializePubKey(decodedAddress.VtxoTapKey))
 
-	return s.repoManager.Vtxos().GetAllVtxos(ctx, pubkey)
+	return s.repoManager.Vtxos().GetAllNonRedeemedVtxos(ctx, pubkey)
 }
 
 func (s *covenantService) GetEventsChannel(ctx context.Context) <-chan domain.RoundEvent {

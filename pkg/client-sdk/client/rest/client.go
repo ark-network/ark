@@ -28,6 +28,7 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
+// restClient implements the TransportClient interface for REST communication
 type restClient struct {
 	serverURL      string
 	svc            ark_service.ClientService
@@ -36,6 +37,7 @@ type restClient struct {
 	treeCache      *utils.Cache[tree.TxTree]
 }
 
+// NewClient creates a new REST client for the Ark service
 func NewClient(serverURL string) (client.TransportClient, error) {
 	if len(serverURL) <= 0 {
 		return nil, fmt.Errorf("missing server url")
@@ -746,26 +748,16 @@ func toRoundStage(stage models.V1RoundStage) client.RoundStage {
 	}
 }
 
-type connectorsIndexFromProto struct {
-	connectorsIndex map[string]models.V1Outpoint
-}
-
-func (c connectorsIndexFromProto) parse() map[string]client.Outpoint {
-	connectorsIndex := make(map[string]client.Outpoint)
-	for vtxoOutpointStr, connectorOutpoint := range c.connectorsIndex {
-		connectorsIndex[vtxoOutpointStr] = client.Outpoint{
-			Txid: connectorOutpoint.Txid,
-			VOut: uint32(connectorOutpoint.Vout),
-		}
-	}
-	return connectorsIndex
-}
-
+// treeFromProto is a wrapper type for V1Tree
 type treeFromProto struct {
 	*models.V1Tree
 }
 
 func (t treeFromProto) parse() tree.TxTree {
+	if t.V1Tree == nil || t.Levels == nil {
+		return tree.TxTree{}
+	}
+
 	vtxoTree := make(tree.TxTree, 0, len(t.Levels))
 	for _, l := range t.Levels {
 		level := make([]tree.Node, 0, len(l.Nodes))
@@ -793,6 +785,22 @@ func (t treeFromProto) parse() tree.TxTree {
 	}
 
 	return vtxoTree
+}
+
+// connectorsIndexFromProto is a wrapper type for map[string]models.V1Outpoint
+type connectorsIndexFromProto struct {
+	connectorsIndex map[string]models.V1Outpoint
+}
+
+func (c connectorsIndexFromProto) parse() map[string]client.Outpoint {
+	connectorsIndex := make(map[string]client.Outpoint)
+	for vtxoOutpointStr, connectorOutpoint := range c.connectorsIndex {
+		connectorsIndex[vtxoOutpointStr] = client.Outpoint{
+			Txid: connectorOutpoint.Txid,
+			VOut: uint32(connectorOutpoint.Vout),
+		}
+	}
+	return connectorsIndex
 }
 
 func outpointsFromRest(restOutpoints []*models.V1Outpoint) []client.Outpoint {

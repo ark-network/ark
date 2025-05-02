@@ -144,3 +144,126 @@ type TxRequestInfo struct {
 	Cosigners      []string
 	LastPing       time.Time
 }
+
+type VtxoChainResp struct {
+	Chain              []ChainWithExpiry
+	Page               PageResp
+	Depth              int32
+	RootCommitmentTxid string
+}
+
+type VOut int
+
+type CommitmentTxResp struct {
+	StartedAt         int64
+	EndAt             int64
+	Batches           map[VOut]Batch
+	TotalInputAmount  uint64
+	TotalInputtVtxos  int32
+	TotalOutputAmount uint64
+	TotalOutputVtxos  int32
+}
+
+type CommitmentTxLeavesResp struct {
+	Leaves []domain.Vtxo
+	Page   PageResp
+}
+
+type Batch struct {
+	TotalOutputAmount uint64
+	TotalOutputVtxos  int32
+	ExpiresAt         int64
+	Swept             bool
+}
+
+type VtxoTreeResp struct {
+	Nodes []Node
+	Page  PageResp
+}
+
+type VtxoTreeLeavesResp struct {
+	Leaves []domain.Vtxo
+	Page   PageResp
+}
+
+type Node struct {
+	Txid       string
+	Tx         string
+	ParentTxid string
+	Level      int32
+	LevelIndex int32
+}
+
+type ForfeitTxsResp struct {
+	Txs  []string
+	Page PageResp
+}
+
+type ConnectorResp struct {
+	Connectors []Node
+	Page       PageResp
+}
+
+type SpendableVtxosResp struct {
+	Vtxos []domain.Vtxo
+	Page  PageResp
+}
+
+type VirtualTxsResp struct {
+	Transactions []string
+	Page         PageResp
+}
+
+type SweptCommitmentTxResp struct {
+	SweptBy []string
+}
+
+type Outpoint struct {
+	Txid string
+	Vout uint32
+}
+
+type TxType int
+
+const (
+	TxUnspecified TxType = iota
+	TxReceived
+	TxSent
+)
+
+type TxHistoryResp struct {
+	Records []TxHistoryRecord
+	Page    PageResp
+}
+
+type TxHistoryRecord struct {
+	CommitmentTxid string
+	VirtualTxid    string
+	Type           TxType
+	Amount         uint64
+	CreatedAt      time.Time
+	Settled        bool
+	SettledBy      string
+}
+
+type Page struct {
+	PageSize int32
+	PageNum  int32
+}
+
+type PageResp struct {
+	Current int32
+	Next    int32
+	Total   int32
+}
+
+type ChainTx struct {
+	Txid string
+	Type string
+}
+
+type ChainWithExpiry struct {
+	Txid      string
+	Txs       []ChainTx
+	ExpiresAt int64
+}
