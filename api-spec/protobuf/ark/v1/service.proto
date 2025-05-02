@@ -91,16 +91,16 @@ message GetInfoResponse {
   int64 round_interval = 4;
   string network = 5;
   int64 dust = 6;
-  int64 boarding_exit_delay = 7;
-  string boarding_descriptor_template = 8;
-  repeated string vtxo_descriptor_templates = 9;
-  string forfeit_address = 10;
-  MarketHour market_hour = 11;
-  string version = 12;
-  int64 utxo_min_amount = 13; // -1 means native dust limit (default)
-  int64 utxo_max_amount = 14; // -1 means no limit (default), 0 means boarding not allowed
-  int64 vtxo_min_amount = 15; // -1 means native dust limit (default)
-  int64 vtxo_max_amount = 16; // -1 means no limit (default)
+  string boarding_descriptor_template = 7;
+  repeated string vtxo_descriptor_templates = 8;
+  string forfeit_address = 9;
+  MarketHour market_hour = 10;
+  string version = 11;
+  int64 utxo_min_amount = 12; // -1 means native dust limit (default)
+  int64 utxo_max_amount = 13; // -1 means no limit (default), 0 means boarding not allowed
+  int64 vtxo_min_amount = 14; // -1 means native dust limit (default)
+  int64 vtxo_max_amount = 15; // -1 means no limit (default)
+  int64 boarding_exit_delay = 16;
 }
 
 message GetBoardingAddressRequest {

@@ -495,10 +495,6 @@
           "type": "string",
           "format": "int64"
         },
-        "boardingExitDelay": {
-          "type": "string",
-          "format": "int64"
-        },
         "boardingDescriptorTemplate": {
           "type": "string"
         },
@@ -536,6 +532,10 @@
           "type": "string",
           "format": "int64",
           "title": "-1 means no limit (default)"
+        },
+        "boardingExitDelay": {
+          "type": "string",
+          "format": "int64"
         }
       }
     },
