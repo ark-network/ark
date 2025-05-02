@@ -85,6 +85,7 @@ func TestWasm(t *testing.T) {
 		Headless: playwright.Bool(true),
 	})
 	require.NoError(t, err)
+	// nolint:all
 	defer browser.Close()
 
 	alicePage, err := browser.NewPage()

@@ -501,7 +501,7 @@ func (a *grpcClient) GetCommitmentTx(ctx context.Context, txid string) (*client.
 	req := &arkv1.GetCommitmentTxRequest{
 		Txid: txid,
 	}
-	resp, err := a.svc.IndexerServiceClient.GetCommitmentTx(ctx, req)
+	resp, err := a.svc.GetCommitmentTx(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -537,7 +537,7 @@ func (a *grpcClient) GetVtxoTree(ctx context.Context, batchOutpoint client.Outpo
 		},
 	}
 
-	resp, err := a.svc.IndexerServiceClient.GetVtxoTree(ctx, req)
+	resp, err := a.svc.GetVtxoTree(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -574,7 +574,7 @@ func (a *grpcClient) GetForfeitTxs(ctx context.Context, batchOutpoint client.Out
 		},
 	}
 
-	resp, err := a.svc.IndexerServiceClient.GetForfeitTxs(ctx, req)
+	resp, err := a.svc.GetForfeitTxs(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -601,7 +601,7 @@ func (a *grpcClient) GetConnectors(ctx context.Context, batchOutpoint client.Out
 		},
 	}
 
-	resp, err := a.svc.IndexerServiceClient.GetConnectors(ctx, req)
+	resp, err := a.svc.GetConnectors(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -635,7 +635,7 @@ func (a *grpcClient) GetSpendableVtxos(ctx context.Context, address string, page
 		},
 	}
 
-	resp, err := a.svc.IndexerServiceClient.GetSpendableVtxos(ctx, req)
+	resp, err := a.svc.GetSpendableVtxos(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -679,7 +679,7 @@ func (a *grpcClient) GetTransactionHistory(ctx context.Context, address string, 
 		},
 	}
 
-	resp, err := a.svc.IndexerServiceClient.GetTransactionHistory(ctx, req)
+	resp, err := a.svc.GetTransactionHistory(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -719,7 +719,7 @@ func (a *grpcClient) GetVtxoChain(ctx context.Context, outpoint client.Outpoint,
 		},
 	}
 
-	resp, err := a.svc.IndexerServiceClient.GetVtxoChain(ctx, req)
+	resp, err := a.svc.GetVtxoChain(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -751,7 +751,7 @@ func (a *grpcClient) GetVirtualTxs(ctx context.Context, txids []string, page cli
 		},
 	}
 
-	resp, err := a.svc.IndexerServiceClient.GetVirtualTxs(ctx, req)
+	resp, err := a.svc.GetVirtualTxs(ctx, req)
 	if err != nil {
 		return nil, err
 	}
@@ -771,7 +771,7 @@ func (a *grpcClient) GetSweptCommitmentTx(ctx context.Context, txid string) (*cl
 		Txid: txid,
 	}
 
-	resp, err := a.svc.IndexerServiceClient.GetSweptCommitmentTx(ctx, req)
+	resp, err := a.svc.GetSweptCommitmentTx(ctx, req)
 	if err != nil {
 		return nil, err
 	}

@@ -905,6 +905,7 @@ func listenToStream(url string, chunkCh chan chunk) {
 		chunkCh <- chunk{err: err}
 		return
 	}
+	// nolint:all
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
