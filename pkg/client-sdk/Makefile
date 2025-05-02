@@ -50,3 +50,12 @@ test-wasm:
 	@sleep 3
 	@echo "Running tests..."
 	@cd ./test/wasm && go test -v
+
+## migrate: creates pg migration file(eg. make FILE=init migrate)
+migrate:
+	@docker run --rm -v ./store/sql/migration:/migration migrate/migrate create -ext sql -dir /migration $(FILE)
+
+## sqlc: gen sql
+sqlc:
+	@echo "gen sql..."
+	@docker run --rm -v ./store/sql:/src -w /src sqlc/sqlc generate
