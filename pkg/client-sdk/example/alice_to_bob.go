@@ -5,12 +5,10 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
-	"path"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
@@ -48,7 +46,7 @@ func main() {
 
 	log.Info("alice is setting up her ark wallet...")
 
-	aliceArkClient, err = setupArkClient("alice")
+	aliceArkClient, err = setupArkClient()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -94,7 +92,7 @@ func main() {
 
 	fmt.Println("")
 	log.Info("bob is setting up his ark wallet...")
-	bobArkClient, err = setupArkClient("bob")
+	bobArkClient, err = setupArkClient()
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -169,12 +167,10 @@ func main() {
 	time.Sleep(500 * time.Second)
 }
 
-func setupArkClient(wallet string) (arksdk.ArkClient, error) {
-	dbDir := common.AppDataDir(path.Join("ark-example", wallet), false)
+func setupArkClient() (arksdk.ArkClient, error) {
 	appDataStore, err := store.NewStore(store.Config{
 		ConfigStoreType:  types.FileStore,
 		AppDataStoreType: types.KVStore,
-		BaseDir:          dbDir,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup app data store: %s", err)
