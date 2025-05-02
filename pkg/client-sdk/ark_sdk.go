@@ -40,7 +40,7 @@ type ArkClient interface {
 	SignTransaction(ctx context.Context, tx string) (string, error)
 	NotifyIncomingFunds(ctx context.Context, address string) ([]types.Vtxo, error)
 	Reset(ctx context.Context)
-	Stop() error
+	Stop()
 }
 
 type Receiver interface {

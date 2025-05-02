@@ -144,14 +144,12 @@ func (a *arkClient) Reset(ctx context.Context) {
 	}
 }
 
-func (a *arkClient) Stop() error {
+func (a *arkClient) Stop() {
 	if a.txStreamCtxCancel != nil {
 		a.txStreamCtxCancel()
 	}
 
 	a.store.Close()
-
-	return nil
 }
 
 func (a *arkClient) ListVtxos(

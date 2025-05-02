@@ -32,15 +32,11 @@ func main() {
 	)
 	defer func() {
 		if aliceArkClient != nil {
-			if err := bobArkClient.Stop(); err != nil {
-				log.Error(err)
-			}
+			aliceArkClient.Stop()
 		}
 
 		if bobArkClient != nil {
-			if err := aliceArkClient.Stop(); err != nil {
-				log.Error(err)
-			}
+			bobArkClient.Stop()
 		}
 	}()
 
