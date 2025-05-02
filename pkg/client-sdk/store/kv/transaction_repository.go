@@ -28,7 +28,10 @@ type txStore struct {
 func NewTransactionStore(
 	dir string, logger badger.Logger,
 ) (types.TransactionStore, error) {
-	badgerDb, err := createDB(filepath.Join(dir, transactionStoreDir), logger)
+	if dir != "" {
+		dir = filepath.Join(dir, transactionStoreDir)
+	}
+	badgerDb, err := createDB(dir, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open round events store: %s", err)
 	}

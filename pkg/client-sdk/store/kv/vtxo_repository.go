@@ -25,7 +25,10 @@ type vtxoStore struct {
 }
 
 func NewVtxoStore(dir string, logger badger.Logger) (types.VtxoStore, error) {
-	badgerDb, err := createDB(filepath.Join(dir, vtxoStoreDir), logger)
+	if dir != "" {
+		dir = filepath.Join(dir, vtxoStoreDir)
+	}
+	badgerDb, err := createDB(dir, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open round events store: %s", err)
 	}

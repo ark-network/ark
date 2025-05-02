@@ -57,7 +57,6 @@ func TestService(t *testing.T) {
 				config: store.Config{
 					ConfigStoreType:  types.InMemoryStore,
 					AppDataStoreType: types.KVStore,
-					BaseDir:          dbDir,
 				},
 			},
 			{
