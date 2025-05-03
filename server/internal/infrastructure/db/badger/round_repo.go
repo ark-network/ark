@@ -179,6 +179,20 @@ func (r *roundRepository) GetTxsWithTxids(ctx context.Context, txids []string) (
 	return r.findTxs(ctx, txids)
 }
 
+func (r *roundRepository) GetExistingRounds(ctx context.Context, txids []string) (map[string]any, error) {
+	query := badgerhold.Where("Txid").In(txids)
+	rounds, err := r.findRound(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := make(map[string]any)
+	for _, round := range rounds {
+		resp[round.Txid] = nil
+	}
+	return resp, nil
+}
+
 func (r *roundRepository) findRound(
 	ctx context.Context, query *badgerhold.Query,
 ) ([]domain.Round, error) {
