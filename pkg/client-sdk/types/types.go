@@ -14,6 +14,7 @@ const (
 	InMemoryStore = "inmemory"
 	FileStore     = "file"
 	KVStore       = "kv"
+	SQLStore      = "sql"
 )
 
 type Config struct {
@@ -26,6 +27,7 @@ type Config struct {
 	RoundInterval              int64
 	UnilateralExitDelay        common.RelativeLocktime
 	Dust                       uint64
+	BoardingExitDelay          common.RelativeLocktime
 	BoardingDescriptorTemplate string
 	ExplorerURL                string
 	ForfeitAddress             string
@@ -154,7 +156,6 @@ type Utxo struct {
 	Txid        string
 	VOut        uint32
 	Amount      uint64
-	Asset       string // liquid only
 	Delay       common.RelativeLocktime
 	SpendableAt time.Time
 	CreatedAt   time.Time

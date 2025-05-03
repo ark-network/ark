@@ -10,7 +10,6 @@ import (
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
@@ -74,6 +73,7 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		Network:                    resp.GetNetwork(),
 		Dust:                       uint64(resp.GetDust()),
 		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
+		BoardingExitDelay:          resp.GetBoardingExitDelay(),
 		ForfeitAddress:             resp.GetForfeitAddress(),
 		Version:                    resp.GetVersion(),
 		MarketHourStartTime:        resp.GetMarketHour().GetNextStartTime(),
@@ -114,13 +114,31 @@ func (a *grpcClient) RegisterInputsForNextRound(
 	return resp.GetRequestId(), nil
 }
 
+func (a *grpcClient) RegisterIntent(
+	ctx context.Context,
+	signature, message string,
+) (string, error) {
+	req := &arkv1.RegisterIntentRequest{
+		Bip322Signature: &arkv1.Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
+	}
+
+	resp, err := a.svc.RegisterIntent(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	return resp.GetRequestId(), nil
+}
+
 func (a *grpcClient) RegisterNotesForNextRound(
 	ctx context.Context, notes []string,
 ) (string, error) {
-	req := &arkv1.RegisterInputsForNextRoundRequest{
+	req := &arkv1.RegisterIntentRequest{
 		Notes: notes,
 	}
-	resp, err := a.svc.RegisterInputsForNextRound(ctx, req)
+	resp, err := a.svc.RegisterIntent(ctx, req)
 	if err != nil {
 		return "", err
 	}
@@ -145,7 +163,7 @@ func (a *grpcClient) RegisterOutputsForNextRound(
 }
 
 func (a *grpcClient) SubmitTreeNonces(
-	ctx context.Context, roundID, cosignerPubkey string, nonces bitcointree.TreeNonces,
+	ctx context.Context, roundID, cosignerPubkey string, nonces tree.TreeNonces,
 ) error {
 	var nonceBuffer bytes.Buffer
 
@@ -169,7 +187,7 @@ func (a *grpcClient) SubmitTreeNonces(
 }
 
 func (a *grpcClient) SubmitTreeSignatures(
-	ctx context.Context, roundID, cosignerPubkey string, signatures bitcointree.TreePartialSigs,
+	ctx context.Context, roundID, cosignerPubkey string, signatures tree.TreePartialSigs,
 ) error {
 	var sigsBuffer bytes.Buffer
 
@@ -416,27 +434,6 @@ func (c *grpcClient) GetTransactionsStream(
 	return eventsCh, closeFn, nil
 }
 
-func (a *grpcClient) SetNostrRecipient(
-	ctx context.Context, nostrRecipient string, vtxos []client.SignedVtxoOutpoint,
-) error {
-	req := &arkv1.SetNostrRecipientRequest{
-		NostrRecipient: nostrRecipient,
-		Vtxos:          signedVtxosToProto(vtxos),
-	}
-	_, err := a.svc.SetNostrRecipient(ctx, req)
-	return err
-}
-
-func (a *grpcClient) DeleteNostrRecipient(
-	ctx context.Context, vtxos []client.SignedVtxoOutpoint,
-) error {
-	req := &arkv1.DeleteNostrRecipientRequest{
-		Vtxos: signedVtxosToProto(vtxos),
-	}
-	_, err := a.svc.DeleteNostrRecipient(ctx, req)
-	return err
-}
-
 func (c *grpcClient) SubscribeForAddress(
 	ctx context.Context, addr string,
 ) (<-chan client.AddressEvent, func(), error) {
@@ -484,24 +481,6 @@ func (c *grpcClient) SubscribeForAddress(
 	}
 
 	return eventsCh, closeFn, nil
-}
-
-func signedVtxosToProto(vtxos []client.SignedVtxoOutpoint) []*arkv1.SignedVtxoOutpoint {
-	protoVtxos := make([]*arkv1.SignedVtxoOutpoint, len(vtxos))
-	for i, v := range vtxos {
-		protoVtxos[i] = &arkv1.SignedVtxoOutpoint{
-			Outpoint: &arkv1.Outpoint{
-				Txid: v.Outpoint.Txid,
-				Vout: uint32(v.Outpoint.VOut),
-			},
-			Proof: &arkv1.OwnershipProof{
-				ControlBlock: v.Proof.ControlBlock,
-				Script:       v.Proof.Script,
-				Signature:    v.Proof.Signature,
-			},
-		}
-	}
-	return protoVtxos
 }
 
 func outpointsFromProto(protoOutpoints []*arkv1.Outpoint) []client.Outpoint {

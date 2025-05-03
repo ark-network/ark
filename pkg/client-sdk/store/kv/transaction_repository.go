@@ -28,7 +28,10 @@ type txStore struct {
 func NewTransactionStore(
 	dir string, logger badger.Logger,
 ) (types.TransactionStore, error) {
-	badgerDb, err := createDB(filepath.Join(dir, transactionStoreDir), logger)
+	if dir != "" {
+		dir = filepath.Join(dir, transactionStoreDir)
+	}
+	badgerDb, err := createDB(dir, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open round events store: %s", err)
 	}
@@ -42,7 +45,7 @@ func NewTransactionStore(
 func (s *txStore) AddTransactions(
 	_ context.Context, txs []types.Transaction,
 ) (int, error) {
-	count := 0
+	addedTxs := make([]types.Transaction, 0, len(txs))
 	for _, tx := range txs {
 		if err := s.db.Insert(tx.TransactionKey.String(), &tx); err != nil {
 			if errors.Is(err, badgerhold.ErrKeyExists) {
@@ -50,12 +53,14 @@ func (s *txStore) AddTransactions(
 			}
 			return -1, err
 		}
-		count++
+		addedTxs = append(addedTxs, tx)
 	}
 
-	go s.sendEvent(types.TransactionEvent{Type: types.TxsAdded, Txs: txs})
+	if len(addedTxs) > 0 {
+		go s.sendEvent(types.TransactionEvent{Type: types.TxsAdded, Txs: addedTxs})
+	}
 
-	return count, nil
+	return len(addedTxs), nil
 }
 
 func (s *txStore) SettleTransactions(
@@ -66,16 +71,23 @@ func (s *txStore) SettleTransactions(
 		return -1, err
 	}
 
+	settledTxs := make([]types.Transaction, 0, len(txs))
 	for _, tx := range txs {
+		if tx.Settled {
+			continue
+		}
 		tx.Settled = true
 		if err := s.db.Upsert(tx.TransactionKey.String(), &tx); err != nil {
 			return -1, err
 		}
+		settledTxs = append(settledTxs, tx)
 	}
 
-	go s.sendEvent(types.TransactionEvent{Type: types.TxsSettled, Txs: txs})
+	if len(settledTxs) > 0 {
+		go s.sendEvent(types.TransactionEvent{Type: types.TxsSettled, Txs: settledTxs})
+	}
 
-	return len(txs), nil
+	return len(settledTxs), nil
 }
 
 func (s *txStore) ConfirmTransactions(
@@ -86,16 +98,23 @@ func (s *txStore) ConfirmTransactions(
 		return -1, err
 	}
 
+	confirmedTxs := make([]types.Transaction, 0, len(txs))
 	for _, tx := range txs {
+		if !tx.CreatedAt.IsZero() {
+			continue
+		}
 		tx.CreatedAt = timestamp
 		if err := s.db.Upsert(tx.TransactionKey.String(), &tx); err != nil {
 			return -1, err
 		}
+		confirmedTxs = append(confirmedTxs, tx)
 	}
 
-	go s.sendEvent(types.TransactionEvent{Type: types.TxsConfirmed, Txs: txs})
+	if len(confirmedTxs) > 0 {
+		go s.sendEvent(types.TransactionEvent{Type: types.TxsConfirmed, Txs: confirmedTxs})
+	}
 
-	return len(txs), nil
+	return len(confirmedTxs), nil
 }
 
 func (s *txStore) RbfTransactions(
@@ -109,6 +128,10 @@ func (s *txStore) RbfTransactions(
 	txs, err := s.GetTransactions(ctx, txids)
 	if err != nil {
 		return -1, err
+	}
+
+	if len(txs) == 0 {
+		return 0, nil
 	}
 
 	txsToAdd := make([]types.Transaction, 0, len(txs))

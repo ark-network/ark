@@ -22,24 +22,6 @@ func (q *Queries) ContainsNote(ctx context.Context, id int64) (int64, error) {
 	return column_1, err
 }
 
-const deleteEntity = `-- name: DeleteEntity :exec
-DELETE FROM entity WHERE id = ?
-`
-
-func (q *Queries) DeleteEntity(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, deleteEntity, id)
-	return err
-}
-
-const deleteEntityVtxo = `-- name: DeleteEntityVtxo :exec
-DELETE FROM entity_vtxo WHERE entity_id = ?
-`
-
-func (q *Queries) DeleteEntityVtxo(ctx context.Context, entityID int64) error {
-	_, err := q.db.ExecContext(ctx, deleteEntityVtxo, entityID)
-	return err
-}
-
 const getExistingRounds = `-- name: GetExistingRounds :many
 SELECT txid FROM round WHERE txid IN (/*SLICE:txids*/?)
 `
@@ -495,48 +477,6 @@ func (q *Queries) SelectAllVtxos(ctx context.Context) ([]SelectAllVtxosRow, erro
 			&i.Vtxo.CreatedAt,
 			&i.Vtxo.RequestID,
 			&i.Vtxo.RedeemTx,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const selectEntitiesByVtxo = `-- name: SelectEntitiesByVtxo :many
-SELECT entity_vw.id, entity_vw.nostr_recipient, entity_vw.vtxo_txid, entity_vw.vtxo_vout FROM entity_vw
-WHERE vtxo_txid = ? AND vtxo_vout = ?
-`
-
-type SelectEntitiesByVtxoParams struct {
-	VtxoTxid sql.NullString
-	VtxoVout sql.NullInt64
-}
-
-type SelectEntitiesByVtxoRow struct {
-	EntityVw EntityVw
-}
-
-func (q *Queries) SelectEntitiesByVtxo(ctx context.Context, arg SelectEntitiesByVtxoParams) ([]SelectEntitiesByVtxoRow, error) {
-	rows, err := q.db.QueryContext(ctx, selectEntitiesByVtxo, arg.VtxoTxid, arg.VtxoVout)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []SelectEntitiesByVtxoRow
-	for rows.Next() {
-		var i SelectEntitiesByVtxoRow
-		if err := rows.Scan(
-			&i.EntityVw.ID,
-			&i.EntityVw.NostrRecipient,
-			&i.EntityVw.VtxoTxid,
-			&i.EntityVw.VtxoVout,
 		); err != nil {
 			return nil, err
 		}
@@ -1263,39 +1203,6 @@ type UpdateVtxoRequestIdParams struct {
 
 func (q *Queries) UpdateVtxoRequestId(ctx context.Context, arg UpdateVtxoRequestIdParams) error {
 	_, err := q.db.ExecContext(ctx, updateVtxoRequestId, arg.RequestID, arg.Txid, arg.Vout)
-	return err
-}
-
-const upsertEntity = `-- name: UpsertEntity :one
-INSERT INTO entity (nostr_recipient)
-VALUES (?)
-ON CONFLICT(nostr_recipient) DO UPDATE SET
-    nostr_recipient = EXCLUDED.nostr_recipient
-RETURNING id
-`
-
-func (q *Queries) UpsertEntity(ctx context.Context, nostrRecipient string) (int64, error) {
-	row := q.db.QueryRowContext(ctx, upsertEntity, nostrRecipient)
-	var id int64
-	err := row.Scan(&id)
-	return id, err
-}
-
-const upsertEntityVtxo = `-- name: UpsertEntityVtxo :exec
-INSERT INTO entity_vtxo (entity_id, vtxo_txid, vtxo_vout)
-VALUES (?, ?, ?)
-ON CONFLICT(entity_id, vtxo_txid, vtxo_vout) DO UPDATE SET
-    entity_id = EXCLUDED.entity_id
-`
-
-type UpsertEntityVtxoParams struct {
-	EntityID int64
-	VtxoTxid string
-	VtxoVout int64
-}
-
-func (q *Queries) UpsertEntityVtxo(ctx context.Context, arg UpsertEntityVtxoParams) error {
-	_, err := q.db.ExecContext(ctx, upsertEntityVtxo, arg.EntityID, arg.VtxoTxid, arg.VtxoVout)
 	return err
 }
 

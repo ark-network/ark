@@ -1,9 +1,5 @@
 package tree
 
-import (
-	"github.com/vulpemventures/go-elements/psetv2"
-)
-
 type SigningType uint8
 
 const (
@@ -13,8 +9,6 @@ const (
 	SignBranch
 )
 
-type TreeFactory func(outpoint psetv2.InputArgs) (TxTree, error)
-
 // Leaf is the output leaf of a TxTree
 type Leaf struct {
 	Script     string
@@ -23,6 +17,6 @@ type Leaf struct {
 }
 
 type Musig2 struct {
-	CosignersPublicKeys []string
-	SigningType         SigningType
+	CosignersPublicKeys []string    `json:"cosigners_public_keys"`
+	SigningType         SigningType `json:"signing_type"`
 }

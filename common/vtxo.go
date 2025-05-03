@@ -17,7 +17,6 @@ type TaprootMerkleProof struct {
 }
 
 // TaprootTree is an interface wrapping the methods needed to spend a vtxo taproot contract
-// the implementation depends on the chain (liquid or bitcoin)
 type TaprootTree interface {
 	GetLeaves() []chainhash.Hash
 	GetTaprootMerkleProof(leafhash chainhash.Hash) (*TaprootMerkleProof, error)

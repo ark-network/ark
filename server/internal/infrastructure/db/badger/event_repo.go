@@ -103,6 +103,7 @@ func (r *eventRepository) Close() {
 	close(r.done)
 	r.wg.Wait()
 	close(r.chUpdates)
+	// nolint:all
 	r.store.Close()
 }
 

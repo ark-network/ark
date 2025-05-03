@@ -44,7 +44,7 @@ func main() {
 		&balanceCommand,
 		&redeemCommand,
 		&notesCommand,
-		&registerNostrCommand,
+		&recoverCommand,
 	)
 	app.Flags = []cli.Flag{
 		datadirFlag,
@@ -77,8 +77,8 @@ var (
 	}
 	networkFlag = &cli.StringFlag{
 		Name:  "network",
-		Usage: "network to use liquid, testnet, regtest, signet for bitcoin, or liquid, liquidtestnet, liquidregtest for liquid)",
-		Value: "liquid",
+		Usage: "network to use mainnet, testnet, regtest, signet, mutinynet for bitcoin)",
+		Value: "mainnet",
 	}
 	explorerFlag = &cli.StringFlag{
 		Name:  "explorer",
@@ -139,11 +139,6 @@ var (
 		Name:    "notes",
 		Aliases: []string{"n"},
 		Usage:   "notes to redeem",
-	}
-	nostrProfileFlag = &cli.StringFlag{
-		Name:    "profile",
-		Aliases: []string{"p"},
-		Usage:   "nostr profile to register",
 	}
 	restFlag = &cli.BoolFlag{
 		Name:        "rest",
@@ -230,12 +225,13 @@ var (
 			return redeemNotes(ctx)
 		},
 	}
-	registerNostrCommand = cli.Command{
-		Name:  "register-nostr",
-		Usage: "Register Nostr profile",
-		Flags: []cli.Flag{nostrProfileFlag, passwordFlag},
+
+	recoverCommand = cli.Command{
+		Name:  "recover",
+		Usage: "Recover unspent and swept vtxos",
+		Flags: []cli.Flag{passwordFlag},
 		Action: func(ctx *cli.Context) error {
-			return registerNostrProfile(ctx)
+			return recoverVtxos(ctx)
 		},
 	}
 )
@@ -273,11 +269,12 @@ func config(ctx *cli.Context) error {
 		"server_url":                   cfgData.ServerUrl,
 		"server_pubkey":                hex.EncodeToString(cfgData.ServerPubKey.SerializeCompressed()),
 		"wallet_type":                  cfgData.WalletType,
-		"client_tyep":                  cfgData.ClientType,
+		"client_type":                  cfgData.ClientType,
 		"network":                      cfgData.Network.Name,
 		"vtxo_tree_expiry":             cfgData.VtxoTreeExpiry,
 		"unilateral_exit_delay":        cfgData.UnilateralExitDelay,
 		"dust":                         cfgData.Dust,
+		"boarding_exit_delay":          cfgData.BoardingExitDelay,
 		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
 		"explorer_url":                 cfgData.ExplorerURL,
 		"forfeit_address":              cfgData.ForfeitAddress,
@@ -347,30 +344,15 @@ func send(ctx *cli.Context) error {
 		return fmt.Errorf("missing destination, use --to and --amount or --receivers")
 	}
 
-	configData, err := arkSdkClient.GetConfigData(ctx.Context)
-	if err != nil {
-		return err
-	}
-
-	net, err := getNetwork(ctx, configData)
-	if err != nil {
-		return err
-	}
-
-	isBitcoin := isBtcChain(net)
-
 	var receivers []arksdk.Receiver
+	var err error
 	if receiversJSON != "" {
-		receivers, err = parseReceivers(receiversJSON, isBitcoin)
+		receivers, err = parseReceivers(receiversJSON)
 		if err != nil {
 			return err
 		}
 	} else {
-		if isBitcoin {
-			receivers = []arksdk.Receiver{arksdk.NewBitcoinReceiver(to, amount)}
-		} else {
-			receivers = []arksdk.Receiver{arksdk.NewLiquidReceiver(to, amount)}
-		}
+		receivers = []arksdk.Receiver{arksdk.NewBitcoinReceiver(to, amount)}
 	}
 
 	password, err := readPassword(ctx)
@@ -381,10 +363,7 @@ func send(ctx *cli.Context) error {
 		return err
 	}
 
-	if isBitcoin {
-		return sendCovenantLess(ctx, receivers, zeroFees)
-	}
-	return sendCovenant(ctx, receivers)
+	return sendCovenantLess(ctx, receivers, zeroFees)
 }
 
 func balance(ctx *cli.Context) error {
@@ -447,9 +426,7 @@ func redeem(ctx *cli.Context) error {
 	})
 }
 
-func registerNostrProfile(ctx *cli.Context) error {
-	profile := ctx.String(nostrProfileFlag.Name)
-
+func recoverVtxos(ctx *cli.Context) error {
 	password, err := readPassword(ctx)
 	if err != nil {
 		return err
@@ -458,7 +435,13 @@ func registerNostrProfile(ctx *cli.Context) error {
 		return err
 	}
 
-	return arkSdkClient.SetNostrNotificationRecipient(ctx.Context, profile)
+	txid, err := arkSdkClient.Settle(ctx.Context, arksdk.WithRecoverableVtxos)
+	if err != nil {
+		return err
+	}
+	return printJSON(map[string]interface{}{
+		"txid": txid,
+	})
 }
 
 func redeemNotes(ctx *cli.Context) error {
@@ -501,18 +484,8 @@ func getArkSdkClient(ctx *cli.Context) (arksdk.ArkClient, error) {
 		return nil, fmt.Errorf("CLI not initialized, run 'init' cmd to initialize")
 	}
 
-	net, err := getNetwork(ctx, cfgData)
-	if err != nil {
-		return nil, err
-	}
-
-	if isBtcChain(net) {
-		return loadOrCreateClient(
-			arksdk.LoadCovenantlessClient, arksdk.NewCovenantlessClient, sdkRepository,
-		)
-	}
 	return loadOrCreateClient(
-		arksdk.LoadCovenantClient, arksdk.NewCovenantClient, sdkRepository,
+		arksdk.LoadArkClient, arksdk.NewArkClient, sdkRepository,
 	)
 }
 
@@ -530,40 +503,15 @@ func loadOrCreateClient(
 	return client, err
 }
 
-func getNetwork(ctx *cli.Context, cfgData *types.Config) (string, error) {
-	if cfgData == nil {
-		return ctx.String(networkFlag.Name), nil
-	}
-
-	return cfgData.Network.Name, nil
-}
-
-func isBtcChain(network string) bool {
-	return network == common.Bitcoin.Name ||
-		network == common.BitcoinTestNet.Name ||
-		network == common.BitcoinTestNet4.Name ||
-		network == common.BitcoinSigNet.Name ||
-		network == common.BitcoinMutinyNet.Name ||
-		network == common.BitcoinRegTest.Name
-}
-
-func parseReceivers(receveirsJSON string, isBitcoin bool) ([]arksdk.Receiver, error) {
+func parseReceivers(receveirsJSON string) ([]arksdk.Receiver, error) {
 	list := make([]map[string]interface{}, 0)
 	if err := json.Unmarshal([]byte(receveirsJSON), &list); err != nil {
 		return nil, err
 	}
-	receivers := make([]arksdk.Receiver, 0, len(list))
-	if isBitcoin {
-		for _, v := range list {
-			receivers = append(receivers, arksdk.NewBitcoinReceiver(
-				v["to"].(string), uint64(v["amount"].(float64)),
-			))
-		}
-		return receivers, nil
-	}
 
+	receivers := make([]arksdk.Receiver, 0, len(list))
 	for _, v := range list {
-		receivers = append(receivers, arksdk.NewLiquidReceiver(
+		receivers = append(receivers, arksdk.NewBitcoinReceiver(
 			v["to"].(string), uint64(v["amount"].(float64)),
 		))
 	}
@@ -604,31 +552,6 @@ func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver, withZeroFee
 		return printJSON(map[string]string{"redeem_tx": redeemTx})
 	}
 	return printJSON(map[string]string{"txid": ptx.UnsignedTx.TxHash().String()})
-}
-
-func sendCovenant(ctx *cli.Context, receivers []arksdk.Receiver) error {
-	var onchainReceivers, offchainReceivers []arksdk.Receiver
-
-	for _, receiver := range receivers {
-		if receiver.IsOnchain() {
-			onchainReceivers = append(onchainReceivers, receiver)
-		} else {
-			offchainReceivers = append(offchainReceivers, receiver)
-		}
-	}
-
-	if len(onchainReceivers) > 0 {
-		return fmt.Errorf("onchain receivers not allowed")
-	}
-
-	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
-	txid, err := arkSdkClient.SendOffChain(
-		ctx.Context, computeExpiration, offchainReceivers, false,
-	)
-	if err != nil {
-		return err
-	}
-	return printJSON(map[string]interface{}{"txid": txid})
 }
 
 func readPassword(ctx *cli.Context) ([]byte, error) {

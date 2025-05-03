@@ -33,8 +33,17 @@ type storeData struct {
 	UnilateralExitDelay        string `json:"unilateral_exit_delay"`
 	Dust                       string `json:"dust"`
 	ForfeitAddress             string `json:"forfeit_address"`
+	BoardingExitDelay          string `json:"boarding_exit_delay"`
 	BoardingDescriptorTemplate string `json:"boarding_descriptor_template"`
 	WithTransactionFeed        string `json:"with_transaction_feed"`
+	MarketHourStartTime        string `json:"market_hour_start_time"`
+	MarketHourEndTime          string `json:"market_hour_end_time"`
+	MarketHourPeriod           string `json:"market_hour_period"`
+	MarketHourRoundInterval    string `json:"market_hour_round_interval"`
+	UtxoMinAmount              string `json:"utxo_min_amount"`
+	UtxoMaxAmount              string `json:"utxo_max_amount"`
+	VtxoMinAmount              string `json:"vtxo_min_amount"`
+	VtxoMaxAmount              string `json:"vtxo_max_amount"`
 }
 
 type configStore struct {
@@ -66,7 +75,16 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 		Dust:                       fmt.Sprintf("%d", data.Dust),
 		ExplorerURL:                data.ExplorerURL,
 		ForfeitAddress:             data.ForfeitAddress,
+		BoardingExitDelay:          fmt.Sprintf("%d", data.BoardingExitDelay.Value),
 		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
+		MarketHourStartTime:        fmt.Sprintf("%d", data.MarketHourStartTime),
+		MarketHourEndTime:          fmt.Sprintf("%d", data.MarketHourEndTime),
+		MarketHourPeriod:           fmt.Sprintf("%d", data.MarketHourPeriod),
+		MarketHourRoundInterval:    fmt.Sprintf("%d", data.MarketHourRoundInterval),
+		UtxoMinAmount:              fmt.Sprintf("%d", data.UtxoMinAmount),
+		UtxoMaxAmount:              fmt.Sprintf("%d", data.UtxoMaxAmount),
+		VtxoMinAmount:              fmt.Sprintf("%d", data.VtxoMinAmount),
+		VtxoMaxAmount:              fmt.Sprintf("%d", data.VtxoMaxAmount),
 	}
 	return s.writeData(sd)
 }
@@ -92,8 +110,17 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 	vtxoTreeExpiry, _ := strconv.Atoi(s.store.Call("getItem", "vtxo_tree_expiry").String())
 	roundInterval, _ := strconv.Atoi(s.store.Call("getItem", "round_interval").String())
 	unilateralExitDelay, _ := strconv.Atoi(s.store.Call("getItem", "unilateral_exit_delay").String())
+	boardingExitDelay, _ := strconv.Atoi(s.store.Call("getItem", "boarding_exit_delay").String())
 	dust, _ := strconv.Atoi(s.store.Call("getItem", "dust").String())
 	withTxFeed, _ := strconv.ParseBool(s.store.Call("getItem", "with_transaction_feed").String())
+	mhStartTime, _ := strconv.Atoi(s.store.Call("getItem", "market_hour_start_time").String())
+	mhEndTime, _ := strconv.Atoi(s.store.Call("getItem", "market_hour_end_time").String())
+	mhPeriod, _ := strconv.Atoi(s.store.Call("getItem", "market_hour_period").String())
+	mhRoundInterval, _ := strconv.Atoi(s.store.Call("getItem", "market_round_interval").String())
+	utxoMinAmount, _ := strconv.Atoi(s.store.Call("getItem", "utxo_min_amount").String())
+	utxoMaxAmount, _ := strconv.Atoi(s.store.Call("getItem", "utxo_max_amount").String())
+	vtxoMinAmount, _ := strconv.Atoi(s.store.Call("getItem", "vtxo_min_amount").String())
+	vtxoMaxAmount, _ := strconv.Atoi(s.store.Call("getItem", "vtxo_max_amount").String())
 
 	vtxoTreeExpiryType := common.LocktimeTypeBlock
 	if vtxoTreeExpiry >= 512 {
@@ -103,6 +130,11 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 	unilateralExitDelayType := common.LocktimeTypeBlock
 	if unilateralExitDelay >= 512 {
 		unilateralExitDelayType = common.LocktimeTypeSecond
+	}
+
+	boardingExitDelayType := common.LocktimeTypeBlock
+	if boardingExitDelay >= 512 {
+		boardingExitDelayType = common.LocktimeTypeSecond
 	}
 
 	return &types.Config{
@@ -117,8 +149,17 @@ func (s *configStore) GetData(ctx context.Context) (*types.Config, error) {
 		Dust:                       uint64(dust),
 		ExplorerURL:                s.store.Call("getItem", "explorer_url").String(),
 		ForfeitAddress:             s.store.Call("getItem", "forfeit_address").String(),
+		BoardingExitDelay:          common.RelativeLocktime{Value: uint32(boardingExitDelay), Type: boardingExitDelayType},
 		BoardingDescriptorTemplate: s.store.Call("getItem", "boarding_descriptor_template").String(),
 		WithTransactionFeed:        withTxFeed,
+		MarketHourStartTime:        int64(mhStartTime),
+		MarketHourEndTime:          int64(mhEndTime),
+		MarketHourPeriod:           int64(mhPeriod),
+		MarketHourRoundInterval:    int64(mhRoundInterval),
+		UtxoMinAmount:              int64(utxoMinAmount),
+		UtxoMaxAmount:              int64(utxoMaxAmount),
+		VtxoMinAmount:              int64(vtxoMinAmount),
+		VtxoMaxAmount:              int64(vtxoMaxAmount),
 	}, nil
 }
 

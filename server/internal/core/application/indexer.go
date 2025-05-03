@@ -296,7 +296,7 @@ func (i *indexerService) buildChain(
 	}
 	if _, ok := chain[key]; !ok {
 		chain[key] = ChainWithExpiry{
-			Txid:      vtxo.VtxoKey.Txid,
+			Txid:      vtxo.Txid,
 			Txs:       make([]ChainTx, 0),
 			ExpiresAt: vtxo.ExpireAt,
 		}
@@ -312,7 +312,7 @@ func (i *indexerService) buildChain(
 			Type: "commitment",
 		})
 		chain[key] = ChainWithExpiry{
-			Txid:      vtxo.VtxoKey.Txid,
+			Txid:      vtxo.Txid,
 			Txs:       txs,
 			ExpiresAt: chain[key].ExpiresAt,
 		}

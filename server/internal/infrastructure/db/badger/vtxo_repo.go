@@ -252,6 +252,7 @@ func (r *vtxoRepository) GetAllVtxosWithPubKeys(
 }
 
 func (r *vtxoRepository) Close() {
+	// nolint:all
 	r.store.Close()
 }
 
@@ -259,7 +260,7 @@ func (r *vtxoRepository) addVtxos(
 	ctx context.Context, vtxos []domain.Vtxo,
 ) error {
 	for _, vtxo := range vtxos {
-		vtxoKey := vtxo.VtxoKey.Hash()
+		vtxoKey := vtxo.Hash()
 		var insertFn func() error
 		if ctx.Value("tx") != nil {
 			tx := ctx.Value("tx").(*badger.Txn)
@@ -377,11 +378,11 @@ func (r *vtxoRepository) updateVtxo(ctx context.Context, vtxo *domain.Vtxo) erro
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
 		updateFn = func() error {
-			return r.store.TxUpdate(tx, vtxo.VtxoKey.Hash(), *vtxo)
+			return r.store.TxUpdate(tx, vtxo.Hash(), *vtxo)
 		}
 	} else {
 		updateFn = func() error {
-			return r.store.Update(vtxo.VtxoKey.Hash(), *vtxo)
+			return r.store.Update(vtxo.Hash(), *vtxo)
 		}
 	}
 

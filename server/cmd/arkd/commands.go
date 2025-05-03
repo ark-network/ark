@@ -350,6 +350,7 @@ func post[T any](url, body, key, macaroon, tlsCert string) (result T, err error)
 	if err != nil {
 		return
 	}
+	// nolint:all
 	defer resp.Body.Close()
 
 	buf, err := io.ReadAll(resp.Body)
@@ -396,6 +397,7 @@ func get[T any](url, key, macaroon, tlsCert string) (result T, err error) {
 	if err != nil {
 		return
 	}
+	// nolint:all
 	defer resp.Body.Close()
 
 	buf, err := io.ReadAll(resp.Body)
@@ -460,6 +462,7 @@ func getBalance(url, macaroon, tlsCert string) (*balance, error) {
 	if err != nil {
 		return nil, err
 	}
+	// nolint:all
 	defer resp.Body.Close()
 
 	buf, err := io.ReadAll(resp.Body)
@@ -513,6 +516,7 @@ func getStatus(url, tlsCert string) (*status, error) {
 	if err != nil {
 		return nil, err
 	}
+	// nolint:all
 	defer resp.Body.Close()
 
 	buf, err := io.ReadAll(resp.Body)

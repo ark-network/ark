@@ -2,12 +2,27 @@ package store
 
 import (
 	"context"
+	"embed"
+	"errors"
 	"fmt"
+	"path/filepath"
 
 	filestore "github.com/ark-network/ark/pkg/client-sdk/store/file"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
 	kvstore "github.com/ark-network/ark/pkg/client-sdk/store/kv"
+	sqlstore "github.com/ark-network/ark/pkg/client-sdk/store/sql"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
+	"github.com/golang-migrate/migrate/v4"
+	sqlitemigrate "github.com/golang-migrate/migrate/v4/database/sqlite"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/golang-migrate/migrate/v4/source/iofs"
+)
+
+//go:embed sql/migration/*
+var migrations embed.FS
+
+const (
+	sqliteDbFile = "sqlite.db"
 )
 
 type service struct {
@@ -53,6 +68,32 @@ func NewStore(storeConfig Config) (types.Store, error) {
 				return nil, err
 			}
 			txStore, err = kvstore.NewTransactionStore(dir, nil)
+		case types.SQLStore:
+			dbFile := filepath.Join(dir, sqliteDbFile)
+			db, err := sqlstore.OpenDb(dbFile)
+			if err != nil {
+				return nil, err
+			}
+			driver, err := sqlitemigrate.WithInstance(db, &sqlitemigrate.Config{})
+			if err != nil {
+				return nil, fmt.Errorf("failed to init driver: %s", err)
+			}
+
+			source, err := iofs.New(migrations, "sql/migration")
+			if err != nil {
+				return nil, fmt.Errorf("failed to embed migrations: %s", err)
+			}
+
+			m, err := migrate.NewWithInstance("iofs", source, "arkdb", driver)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create migration instance: %s", err)
+			}
+
+			if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+				return nil, fmt.Errorf("failed to run migrations: %s", err)
+			}
+			vtxoStore = sqlstore.NewVtxoStore(db)
+			txStore = sqlstore.NewTransactionStore(db)
 		default:
 			err = fmt.Errorf("unknown appdata store type")
 		}

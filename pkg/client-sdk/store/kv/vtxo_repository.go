@@ -25,7 +25,10 @@ type vtxoStore struct {
 }
 
 func NewVtxoStore(dir string, logger badger.Logger) (types.VtxoStore, error) {
-	badgerDb, err := createDB(filepath.Join(dir, vtxoStoreDir), logger)
+	if dir != "" {
+		dir = filepath.Join(dir, vtxoStoreDir)
+	}
+	badgerDb, err := createDB(dir, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open round events store: %s", err)
 	}
@@ -37,18 +40,22 @@ func NewVtxoStore(dir string, logger badger.Logger) (types.VtxoStore, error) {
 }
 
 func (s *vtxoStore) AddVtxos(_ context.Context, vtxos []types.Vtxo) (int, error) {
-	count := 0
+	addedVtxos := make([]types.Vtxo, 0, len(vtxos))
 	for _, vtxo := range vtxos {
-		if err := s.db.Insert(vtxo.VtxoKey.String(), &vtxo); err != nil {
+		if err := s.db.Insert(vtxo.String(), &vtxo); err != nil {
 			if errors.Is(err, badgerhold.ErrKeyExists) {
 				continue
 			}
 			return -1, err
 		}
-		count++
+		addedVtxos = append(addedVtxos, vtxo)
 	}
-	go s.sendEvent(types.VtxoEvent{Type: types.VtxosAdded, Vtxos: vtxos})
-	return count, nil
+
+	if len(addedVtxos) > 0 {
+		go s.sendEvent(types.VtxoEvent{Type: types.VtxosAdded, Vtxos: vtxos})
+	}
+
+	return len(addedVtxos), nil
 }
 
 func (s *vtxoStore) SpendVtxos(ctx context.Context, outpoints []types.VtxoKey, spentBy string) (int, error) {
@@ -57,24 +64,29 @@ func (s *vtxoStore) SpendVtxos(ctx context.Context, outpoints []types.VtxoKey, s
 		return -1, err
 	}
 
-	count := 0
+	spentVtxos := make([]types.Vtxo, 0, len(vtxos))
 	for _, vtxo := range vtxos {
+		if vtxo.Spent {
+			continue
+		}
 		vtxo.Spent = true
 		vtxo.SpentBy = spentBy
-		if err := s.db.Update(vtxo.VtxoKey.String(), &vtxo); err != nil {
+		if err := s.db.Update(vtxo.String(), &vtxo); err != nil {
 			return -1, err
 		}
-		count++
+		spentVtxos = append(spentVtxos, vtxo)
 	}
 
-	go s.sendEvent(types.VtxoEvent{Type: types.VtxosSpent, Vtxos: vtxos})
+	if len(spentVtxos) > 0 {
+		go s.sendEvent(types.VtxoEvent{Type: types.VtxosSpent, Vtxos: vtxos})
+	}
 
-	return count, nil
+	return len(spentVtxos), nil
 }
 
 func (s *vtxoStore) UpdateVtxos(ctx context.Context, vtxos []types.Vtxo) (int, error) {
 	for _, vtxo := range vtxos {
-		if err := s.db.Upsert(vtxo.VtxoKey.String(), &vtxo); err != nil {
+		if err := s.db.Upsert(vtxo.String(), &vtxo); err != nil {
 			return -1, err
 		}
 	}

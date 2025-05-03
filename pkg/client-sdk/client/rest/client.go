@@ -14,7 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice"
@@ -73,6 +72,10 @@ func (a *restClient) GetInfo(
 	if err != nil {
 		return nil, err
 	}
+	boardingExitDelay, err := strconv.Atoi(resp.Payload.BoardingExitDelay)
+	if err != nil {
+		return nil, err
+	}
 	roundInterval, err := strconv.Atoi(resp.Payload.RoundInterval)
 	if err != nil {
 		return nil, err
@@ -121,6 +124,7 @@ func (a *restClient) GetInfo(
 		RoundInterval:              int64(roundInterval),
 		Network:                    resp.Payload.Network,
 		Dust:                       uint64(dust),
+		BoardingExitDelay:          int64(boardingExitDelay),
 		BoardingDescriptorTemplate: resp.Payload.BoardingDescriptorTemplate,
 		ForfeitAddress:             resp.Payload.ForfeitAddress,
 		Version:                    resp.Payload.Version,
@@ -180,14 +184,34 @@ func (a *restClient) RegisterInputsForNextRound(
 	return resp.Payload.RequestID, nil
 }
 
+func (a *restClient) RegisterIntent(
+	ctx context.Context,
+	signature, message string,
+) (string, error) {
+	body := &models.V1RegisterIntentRequest{
+		Bip322Signature: &models.V1Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
+	}
+	resp, err := a.svc.ArkServiceRegisterIntent(
+		ark_service.NewArkServiceRegisterIntentParams().WithBody(body),
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return resp.Payload.RequestID, nil
+}
+
 func (a *restClient) RegisterNotesForNextRound(
 	ctx context.Context, notes []string,
 ) (string, error) {
-	body := &models.V1RegisterInputsForNextRoundRequest{
+	body := &models.V1RegisterIntentRequest{
 		Notes: notes,
 	}
-	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
-		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
+	resp, err := a.svc.ArkServiceRegisterIntent(
+		ark_service.NewArkServiceRegisterIntentParams().WithBody(body),
 	)
 	if err != nil {
 		return "", err
@@ -223,7 +247,7 @@ func (a *restClient) RegisterOutputsForNextRound(
 
 func (a *restClient) SubmitTreeNonces(
 	ctx context.Context, roundID, cosignerPubkey string,
-	nonces bitcointree.TreeNonces,
+	nonces tree.TreeNonces,
 ) error {
 	var nonceBuffer bytes.Buffer
 
@@ -250,7 +274,7 @@ func (a *restClient) SubmitTreeNonces(
 
 func (a *restClient) SubmitTreeSignatures(
 	ctx context.Context, roundID, cosignerPubkey string,
-	signatures bitcointree.TreePartialSigs,
+	signatures tree.TreePartialSigs,
 ) error {
 	var sigsBuffer bytes.Buffer
 
@@ -381,7 +405,7 @@ func (c *restClient) GetEventStream(
 				case resp.Result.RoundSigningNoncesGenerated != nil:
 					e := resp.Result.RoundSigningNoncesGenerated
 					reader := hex.NewDecoder(strings.NewReader(e.TreeNonces))
-					nonces, err := bitcointree.DecodeNonces(reader)
+					nonces, err := tree.DecodeNonces(reader)
 					if err != nil {
 						_err = err
 						break
@@ -592,33 +616,6 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 	}(ctx, eventsCh, chunkCh)
 
 	return eventsCh, cancel, nil
-}
-
-func (a *restClient) SetNostrRecipient(
-	ctx context.Context, nostrRecipient string, vtxos []client.SignedVtxoOutpoint,
-) error {
-	body := models.V1SetNostrRecipientRequest{
-		NostrRecipient: nostrRecipient,
-		Vtxos:          toSignedVtxoModel(vtxos),
-	}
-
-	_, err := a.svc.ArkServiceSetNostrRecipient(
-		ark_service.NewArkServiceSetNostrRecipientParams().WithBody(&body),
-	)
-	return err
-}
-
-func (a *restClient) DeleteNostrRecipient(
-	ctx context.Context, vtxos []client.SignedVtxoOutpoint,
-) error {
-	body := models.V1DeleteNostrRecipientRequest{
-		Vtxos: toSignedVtxoModel(vtxos),
-	}
-
-	_, err := a.svc.ArkServiceDeleteNostrRecipient(
-		ark_service.NewArkServiceDeleteNostrRecipientParams().WithBody(&body),
-	)
-	return err
 }
 
 func (c *restClient) SubscribeForAddress(ctx context.Context, addr string) (<-chan client.AddressEvent, func(), error) {
@@ -852,27 +849,11 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 			IsPending: v.IsPending,
 			SpentBy:   v.SpentBy,
 			CreatedAt: createdAt,
+			Swept:     v.Swept,
+			Spent:     v.Spent,
 		}
 	}
 	return vtxos
-}
-
-func toSignedVtxoModel(vtxos []client.SignedVtxoOutpoint) []*models.V1SignedVtxoOutpoint {
-	signedVtxos := make([]*models.V1SignedVtxoOutpoint, 0, len(vtxos))
-	for _, v := range vtxos {
-		signedVtxos = append(signedVtxos, &models.V1SignedVtxoOutpoint{
-			Outpoint: &models.V1Outpoint{
-				Txid: v.Outpoint.Txid,
-				Vout: int64(v.Outpoint.VOut),
-			},
-			Proof: &models.V1OwnershipProof{
-				ControlBlock: v.Proof.ControlBlock,
-				Script:       v.Proof.Script,
-				Signature:    v.Proof.Signature,
-			},
-		})
-	}
-	return signedVtxos
 }
 
 type chunk struct {
@@ -890,6 +871,7 @@ func listenToStream(url string, chunkCh chan chunk) {
 		chunkCh <- chunk{err: err}
 		return
 	}
+	// nolint:all
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {

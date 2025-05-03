@@ -130,4 +130,6 @@ type CoinSelectOptions struct {
 	WithExpirySorting bool
 	// If specified, coin selector will select only coins in the list.
 	OutpointsFilter []client.Outpoint
+	// If true, coin selector will select recoverable (swept but unspent) vtxos first.
+	SelectRecoverableVtxos bool
 }

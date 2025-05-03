@@ -16,13 +16,10 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/vulpemventures/go-elements/psetv2"
-	"github.com/vulpemventures/go-elements/transaction"
 )
 
 const (
 	BitcoinExplorer = "bitcoin"
-	LiquidExplorer  = "liquid"
 )
 
 type Explorer interface {
@@ -75,6 +72,7 @@ func (e *explorerSvc) GetFeeRate() (float64, error) {
 	if err != nil {
 		return 0, err
 	}
+	// nolint:all
 	defer resp.Body.Close()
 
 	var response map[string]float64
@@ -111,12 +109,9 @@ func (e *explorerSvc) GetTxHex(txid string) (string, error) {
 
 func (e *explorerSvc) Broadcast(txStr string) (string, error) {
 	clone := strings.Clone(txStr)
-	txStr, txid, err := parseLiquidTx(txStr)
+	txStr, txid, err := parseBitcoinTx(clone)
 	if err != nil {
-		txStr, txid, err = parseBitcoinTx(clone)
-		if err != nil {
-			return "", err
-		}
+		return "", err
 	}
 
 	e.cache.Set(txid, txStr)
@@ -140,7 +135,7 @@ func (e *explorerSvc) GetTxs(addr string) ([]tx, error) {
 	if err != nil {
 		return nil, err
 	}
-
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -163,6 +158,7 @@ func (e explorerSvc) IsRBFTx(txid, txHex string) (bool, string, int64, error) {
 		return false, "", -1, err
 	}
 
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -194,6 +190,7 @@ func (e *explorerSvc) GetTxOutspends(txid string) ([]spentStatus, error) {
 		return nil, err
 	}
 
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -216,6 +213,7 @@ func (e *explorerSvc) GetUtxos(addr string) ([]utxo, error) {
 		return nil, err
 	}
 
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -284,6 +282,7 @@ func (e *explorerSvc) GetTxBlockTime(
 	if err != nil {
 		return false, 0, err
 	}
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -317,6 +316,7 @@ func (e *explorerSvc) getTxHex(txid string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -339,6 +339,7 @@ func (e *explorerSvc) broadcast(txHex string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// nolint:all
 	defer resp.Body.Close()
 	bodyResponse, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -358,6 +359,7 @@ func (e *explorerSvc) mempoolIsRBFTx(url, txid string) (bool, string, int64, err
 		return false, "", -1, err
 	}
 
+	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -417,39 +419,6 @@ func (e *explorerSvc) esploraIsRBFTx(txid, txHex string) (bool, string, int64, e
 	return false, "", -1, nil
 }
 
-func parseLiquidTx(txStr string) (string, string, error) {
-	tx, err := transaction.NewTxFromHex(txStr)
-	if err != nil {
-		pset, err := psetv2.NewPsetFromBase64(txStr)
-		if err != nil {
-			return "", "", err
-		}
-
-		tx, err = psetv2.Extract(pset)
-		if err != nil {
-			return "", "", err
-		}
-
-		txhex, err := tx.ToHex()
-		if err != nil {
-			return "", "", err
-		}
-
-		txid := tx.TxHash().String()
-
-		return txhex, txid, nil
-	}
-
-	txhex, err := tx.ToHex()
-	if err != nil {
-		return "", "", err
-	}
-
-	txid := tx.TxHash().String()
-
-	return txhex, txid, nil
-}
-
 func parseBitcoinTx(txStr string) (string, string, error) {
 	var tx wire.MsgTx
 
@@ -491,7 +460,6 @@ func newUtxo(explorerUtxo utxo, delay common.RelativeLocktime, tapscripts []stri
 		Txid:        explorerUtxo.Txid,
 		VOut:        explorerUtxo.Vout,
 		Amount:      explorerUtxo.Amount,
-		Asset:       explorerUtxo.Asset,
 		Delay:       delay,
 		SpendableAt: time.Unix(utxoTime, 0).Add(time.Duration(delay.Seconds()) * time.Second),
 		CreatedAt:   createdAt,

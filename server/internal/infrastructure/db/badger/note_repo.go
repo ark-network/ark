@@ -55,6 +55,7 @@ func NewNoteRepository(config ...interface{}) (domain.NoteRepository, error) {
 }
 
 func (n *noteRepository) Close() {
+	// nolint:all
 	n.store.Close()
 }
 
