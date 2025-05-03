@@ -389,6 +389,19 @@ func (r *roundRepository) GetTxsWithTxids(ctx context.Context, txids []string) (
 	return resp, nil
 }
 
+func (r *roundRepository) GetExistingRounds(ctx context.Context, txids []string) (map[string]any, error) {
+	rows, err := r.querier.GetExistingRounds(ctx, txids)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := make(map[string]any)
+	for _, row := range rows {
+		resp[row] = nil
+	}
+	return resp, nil
+}
+
 func rowToReceiver(row queries.RequestReceiverVw) domain.Receiver {
 	return domain.Receiver{
 		Amount:         uint64(row.Amount.Int64),
