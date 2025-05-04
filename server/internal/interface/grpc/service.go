@@ -101,8 +101,8 @@ func NewService(
 }
 
 func (s *service) Start() error {
-	withoutAppSvc := false
-	if err := s.start(withoutAppSvc); err != nil {
+	withAppSvc := true
+	if err := s.start(withAppSvc); err != nil {
 		return err
 	}
 	if s.appConfig.UnlockerService() != nil {
