@@ -1,0 +1,21 @@
+version: v1
+managed:
+  enabled: true
+  go_package_prefix:
+    default: github.com/ark-network/btc-wallet/api-spec/protobuf/gen
+    except:
+      - buf.build/googleapis/googleapis
+plugins:
+  # Golang
+  - plugin: go
+    out: api-spec/protobuf/gen
+    opt: paths=source_relative
+  - plugin: go-grpc
+    out: api-spec/protobuf/gen
+    opt: paths=source_relative,require_unimplemented_servers=false
+  - plugin: grpc-gateway
+    out: api-spec/protobuf/gen
+    opt: paths=source_relative
+  #OpenApi
+  - plugin: openapiv2
+    out: api-spec/openapi/swagger
