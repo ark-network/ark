@@ -1,0 +1,43 @@
+version: '3.9'
+
+services:
+  ark-wallet-daemon:
+    build:
+      context: ../
+      dockerfile: server/pkg/ark-wallet-daemon/Dockerfile
+    image: ark-wallet-daemon:latest
+    container_name: ark-wallet-daemon
+    ports:
+      - "6060:6060"
+    env_file:
+      - ${ENV_FILE}
+    environment:
+      - ARK_WALLET_DAEMON_DATADIR=/app/wallet-data
+    volumes:
+      - ark_wallet_daemon_data:/app/wallet-data
+
+  arkd:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: arkd:latest
+    container_name: arkd
+    depends_on:
+      - ark-wallet-daemon
+    ports:
+      - "7070:7070"
+    env_file:
+      - ${ENV_FILE}
+    volumes:
+      - arkd_data:/app/data
+      - arkd_wallet_data:/app/wallet-data
+
+volumes:
+  ark_wallet_daemon_data:
+  arkd_data:
+  arkd_wallet_data:
+
+networks:
+  default:
+    name: nigiri
+    external: true

@@ -35,23 +35,21 @@ lint:
 	@echo "Linting code..."
 	@golangci-lint run --fix
 
-## run: run arkd in dev mode with bitcoind on regtest
+## run: run arkd and ark-wallet-daemon in dev mode with bitcoind on regtest using docker compose
 run: clean
-	@echo "Running arkd with Bitcoin Core in dev mode on regtest ..."
-	$(call setup_env, envs/bitcoind.regtest.env)
-	go run ./cmd/arkd
+	@echo "Running arkd and ark-wallet-daemon with Bitcoin Core in dev mode on regtest ..."
+	docker compose --env-file envs/bitcoind.regtest.env -f docker-compose.yml up --build -d
 
-## run-neutrino: run arkd in dev mode with neutrino on regtest
+## run-neutrino: run arkd and ark-wallet-daemon in dev mode with neutrino on regtest using docker compose
 run-neutrino: clean
-	@echo "Running arkd with Neutrino in dev mode on regtest ..."
-	$(call setup_env, envs/neutrino.regtest.env)
-	go run ./cmd/arkd
+	@echo "Running arkd and ark-wallet-daemon with Neutrino in dev mode on regtest ..."
+	export ENV_FILE=envs/neutrino.regtest.env ; \
+	docker compose --env-file $$ENV_FILE -f docker-compose.yml up --build -d
 
-## run-neutrino-mutinynet: run arkd in dev mode with neutrino on mutinynet
+## run-neutrino-mutinynet: run arkd and ark-wallet-daemon in dev mode with neutrino on mutinynet using docker compose
 run-neutrino-mutinynet: clean
-	@echo "Running arkd with Neutrino in dev mode on mutinynet ..."
-	$(call setup_env, envs/neutrino.mutinynet.env)
-	go run ./cmd/arkd
+	@echo "Running arkd and ark-wallet-daemon with Neutrino in dev mode on mutinynet ..."
+	docker compose --env-file envs/neutrino.mutinynet.env -f docker-compose.yml up --build -d
 
 ## test: runs unit and component tests
 test:
