@@ -263,26 +263,60 @@ func (a *grpcClient) GetConnectors(
 }
 
 func (a *grpcClient) GetVtxos(
-	ctx context.Context, addresses []string, opts ...indexer.GetVtxosRequestOption,
+	ctx context.Context, opts ...indexer.GetVtxosRequestOption,
 ) (*indexer.VtxosResponse, error) {
 	var page *arkv1.IndexerPageRequest
 	var spendableOnly, spentOnly bool
-	if len(opts) > 0 {
-		opt := opts[0]
-		if opt.GetPage() != nil {
-			page = &arkv1.IndexerPageRequest{
-				Size:  opt.GetPage().Size,
-				Index: opt.GetPage().Index,
-			}
-		}
-		spendableOnly = opt.GetSpendableOnly()
-		spentOnly = opt.GetSpentOnly()
+	if len(opts) <= 0 {
+		return nil, fmt.Errorf("missing opts")
 	}
+	opt := opts[0]
+	if opt.GetPage() != nil {
+		page = &arkv1.IndexerPageRequest{
+			Size:  opt.GetPage().Size,
+			Index: opt.GetPage().Index,
+		}
+	}
+	spendableOnly = opt.GetSpendableOnly()
+	spentOnly = opt.GetSpentOnly()
 	if spentOnly && spentOnly == spendableOnly {
 		return nil, status.Errorf(codes.InvalidArgument, "spendableOnly and spentOnly cannot be both true")
 	}
+	if len(opt.GetOutpoints()) > 0 {
+		resp, err := a.svc.GetVtxosByOutpoint(ctx, &arkv1.GetVtxosByOutpointRequest{
+			Outpoints: opt.GetOutpoints(),
+			Page:      page,
+		})
+		if err != nil {
+			return nil, err
+		}
+		vtxos := make([]indexer.Vtxo, 0, len(resp.GetVtxos()))
+		for _, vtxo := range resp.GetVtxos() {
+			vtxos = append(vtxos, indexer.Vtxo{
+				Outpoint: indexer.Outpoint{
+					Txid: vtxo.GetOutpoint().GetTxid(),
+					VOut: vtxo.GetOutpoint().GetVout(),
+				},
+				CreatedAt:      vtxo.GetCreatedAt(),
+				ExpiresAt:      vtxo.GetExpiresAt(),
+				Amount:         vtxo.GetAmount(),
+				Script:         vtxo.GetScript(),
+				IsLeaf:         vtxo.GetIsLeaf(),
+				IsSwept:        vtxo.GetIsSwept(),
+				IsSpent:        vtxo.GetIsSpent(),
+				SpentBy:        vtxo.GetSpentBy(),
+				CommitmentTxid: vtxo.GetCommitmentTxid(),
+			})
+		}
+
+		return &indexer.VtxosResponse{
+			Vtxos: vtxos,
+			Page:  parsePage(resp.GetPage()),
+		}, nil
+	}
+
 	req := &arkv1.GetVtxosRequest{
-		Addresses:     addresses,
+		Addresses:     opt.GetAddresses(),
 		SpendableOnly: spendableOnly,
 		SpentOnly:     spentOnly,
 		Page:          page,
@@ -300,14 +334,15 @@ func (a *grpcClient) GetVtxos(
 				Txid: vtxo.GetOutpoint().GetTxid(),
 				VOut: vtxo.GetOutpoint().GetVout(),
 			},
-			CreatedAt: vtxo.GetCreatedAt(),
-			ExpiresAt: vtxo.GetExpiresAt(),
-			Amount:    vtxo.GetAmount(),
-			Script:    vtxo.GetScript(),
-			IsLeaf:    vtxo.GetIsLeaf(),
-			IsSwept:   vtxo.GetIsSwept(),
-			IsSpent:   vtxo.GetIsSpent(),
-			SpentBy:   vtxo.GetSpentBy(),
+			CreatedAt:      vtxo.GetCreatedAt(),
+			ExpiresAt:      vtxo.GetExpiresAt(),
+			Amount:         vtxo.GetAmount(),
+			Script:         vtxo.GetScript(),
+			IsLeaf:         vtxo.GetIsLeaf(),
+			IsSwept:        vtxo.GetIsSwept(),
+			IsSpent:        vtxo.GetIsSpent(),
+			SpentBy:        vtxo.GetSpentBy(),
+			CommitmentTxid: vtxo.GetCommitmentTxid(),
 		})
 	}
 
