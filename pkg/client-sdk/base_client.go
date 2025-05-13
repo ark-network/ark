@@ -9,6 +9,9 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
+	"github.com/ark-network/ark/pkg/client-sdk/indexer"
+	grpcindexer "github.com/ark-network/ark/pkg/client-sdk/indexer/grpc"
+	restindexer "github.com/ark-network/ark/pkg/client-sdk/indexer/rest"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
@@ -55,6 +58,7 @@ type arkClient struct {
 	store    types.Store
 	explorer explorer.Explorer
 	client   client.TransportClient
+	indexer  indexer.Indexer
 
 	txStreamCtxCancel context.CancelFunc
 }
@@ -224,6 +228,11 @@ func (a *arkClient) initWithWallet(
 		return fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
+	indexerSvc, err := getIndexer(args.ClientType, args.ServerUrl)
+	if err != nil {
+		return fmt.Errorf("failed to setup indexer: %s", err)
+	}
+
 	network := utils.NetworkFromString(info.Network)
 
 	buf, err := hex.DecodeString(info.PubKey)
@@ -288,6 +297,7 @@ func (a *arkClient) initWithWallet(
 	a.wallet = args.Wallet
 	a.explorer = explorerSvc
 	a.client = clientSvc
+	a.indexer = indexerSvc
 
 	return nil
 }
@@ -314,6 +324,11 @@ func (a *arkClient) init(
 	explorerSvc, err := getExplorer(args.ExplorerURL, info.Network)
 	if err != nil {
 		return fmt.Errorf("failed to setup explorer: %s", err)
+	}
+
+	indexerSvc, err := getIndexer(args.ClientType, args.ServerUrl)
+	if err != nil {
+		return fmt.Errorf("failed to setup indexer: %s", err)
 	}
 
 	network := utils.NetworkFromString(info.Network)
@@ -385,6 +400,7 @@ func (a *arkClient) init(
 	a.wallet = walletSvc
 	a.explorer = explorerSvc
 	a.client = clientSvc
+	a.indexer = indexerSvc
 
 	return nil
 }
@@ -433,6 +449,16 @@ func getExplorer(explorerURL, network string) (explorer.Explorer, error) {
 		}
 	}
 	return explorer.NewExplorer(explorerURL, utils.NetworkFromString(network)), nil
+}
+
+func getIndexer(clientType, serverUrl string) (indexer.Indexer, error) {
+	if clientType != GrpcClient && clientType != RestClient {
+		return nil, fmt.Errorf("invalid client type")
+	}
+	if clientType == GrpcClient {
+		return grpcindexer.NewClient(serverUrl)
+	}
+	return restindexer.NewClient(serverUrl)
 }
 
 func getWallet(
