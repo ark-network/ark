@@ -410,6 +410,57 @@ func local_request_IndexerService_GetVtxos_0(ctx context.Context, marshaler runt
 	return msg, metadata, err
 }
 
+var filter_IndexerService_GetVtxosByOutpoint_0 = &utilities.DoubleArray{Encoding: map[string]int{"outpoints": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+
+func request_IndexerService_GetVtxosByOutpoint_0(ctx context.Context, marshaler runtime.Marshaler, client IndexerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetVtxosByOutpointRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	io.Copy(io.Discard, req.Body)
+	val, ok := pathParams["outpoints"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "outpoints")
+	}
+	protoReq.Outpoints, err = runtime.StringSlice(val, ",")
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "outpoints", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetVtxosByOutpoint_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.GetVtxosByOutpoint(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_IndexerService_GetVtxosByOutpoint_0(ctx context.Context, marshaler runtime.Marshaler, server IndexerServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetVtxosByOutpointRequest
+		metadata runtime.ServerMetadata
+		err      error
+	)
+	val, ok := pathParams["outpoints"]
+	if !ok {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "outpoints")
+	}
+	protoReq.Outpoints, err = runtime.StringSlice(val, ",")
+	if err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "outpoints", err)
+	}
+	if err := req.ParseForm(); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	if err := runtime.PopulateQueryParameters(&protoReq, req.Form, filter_IndexerService_GetVtxosByOutpoint_0); err != nil {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.GetVtxosByOutpoint(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 var filter_IndexerService_GetTransactionHistory_0 = &utilities.DoubleArray{Encoding: map[string]int{"address": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 
 func request_IndexerService_GetTransactionHistory_0(ctx context.Context, marshaler runtime.Marshaler, client IndexerServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
@@ -762,6 +813,26 @@ func RegisterIndexerServiceHandlerServer(ctx context.Context, mux *runtime.Serve
 		}
 		forward_IndexerService_GetVtxos_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetVtxosByOutpoint_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxosByOutpoint", runtime.WithHTTPPathPattern("/v1/getVtxosByOutpoint/{outpoints}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_IndexerService_GetVtxosByOutpoint_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_IndexerService_GetVtxosByOutpoint_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_IndexerService_GetTransactionHistory_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -1001,6 +1072,23 @@ func RegisterIndexerServiceHandlerClient(ctx context.Context, mux *runtime.Serve
 		}
 		forward_IndexerService_GetVtxos_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_IndexerService_GetVtxosByOutpoint_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.IndexerService/GetVtxosByOutpoint", runtime.WithHTTPPathPattern("/v1/getVtxosByOutpoint/{outpoints}"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_IndexerService_GetVtxosByOutpoint_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_IndexerService_GetVtxosByOutpoint_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_IndexerService_GetTransactionHistory_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -1080,6 +1168,7 @@ var (
 	pattern_IndexerService_GetVtxoTree_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "batch", "batch_outpoint.txid", "batch_outpoint.vout", "tree"}, ""))
 	pattern_IndexerService_GetVtxoTreeLeaves_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4, 2, 5}, []string{"v1", "batch", "batch_outpoint.txid", "batch_outpoint.vout", "tree", "leaves"}, ""))
 	pattern_IndexerService_GetVtxos_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "getVtxos", "addresses"}, ""))
+	pattern_IndexerService_GetVtxosByOutpoint_0    = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "getVtxosByOutpoint", "outpoints"}, ""))
 	pattern_IndexerService_GetTransactionHistory_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "history", "address"}, ""))
 	pattern_IndexerService_GetVtxoChain_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2, 1, 0, 4, 1, 5, 3, 2, 4}, []string{"v1", "vtxo", "outpoint.txid", "outpoint.vout", "chain"}, ""))
 	pattern_IndexerService_GetVirtualTxs_0         = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 1, 0, 4, 1, 5, 2}, []string{"v1", "virtualTx", "txids"}, ""))
@@ -1094,6 +1183,7 @@ var (
 	forward_IndexerService_GetVtxoTree_0           = runtime.ForwardResponseMessage
 	forward_IndexerService_GetVtxoTreeLeaves_0     = runtime.ForwardResponseMessage
 	forward_IndexerService_GetVtxos_0              = runtime.ForwardResponseMessage
+	forward_IndexerService_GetVtxosByOutpoint_0    = runtime.ForwardResponseMessage
 	forward_IndexerService_GetTransactionHistory_0 = runtime.ForwardResponseMessage
 	forward_IndexerService_GetVtxoChain_0          = runtime.ForwardResponseMessage
 	forward_IndexerService_GetVirtualTxs_0         = runtime.ForwardResponseMessage

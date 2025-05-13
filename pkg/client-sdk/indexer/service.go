@@ -9,7 +9,7 @@ type Indexer interface {
 	GetVtxoTreeLeaves(ctx context.Context, batchOutpoint Outpoint, opts ...RequestOption) (*VtxoTreeLeavesResponse, error)
 	GetForfeitTxs(ctx context.Context, txid string, opts ...RequestOption) (*ForfeitTxsResponse, error)
 	GetConnectors(ctx context.Context, txid string, opts ...RequestOption) (*ConnectorsResponse, error)
-	GetVtxos(ctx context.Context, addresses []string, opts ...GetVtxosRequestOption) (*VtxosResponse, error)
+	GetVtxos(ctx context.Context, opts ...GetVtxosRequestOption) (*VtxosResponse, error)
 	GetTransactionHistory(ctx context.Context, address string, opts ...GetTxHistoryRequestOption) (*TxHistoryResponse, error)
 	GetVtxoChain(ctx context.Context, outpoint Outpoint, opts ...RequestOption) (*VtxoChainResponse, error)
 	GetVirtualTxs(ctx context.Context, txids []string, opts ...RequestOption) (*VirtualTxsResponse, error)
@@ -103,15 +103,16 @@ type Outpoint struct {
 	VOut uint32
 }
 type Vtxo struct {
-	Outpoint  Outpoint
-	CreatedAt int64
-	ExpiresAt int64
-	Amount    uint64
-	Script    string
-	IsLeaf    bool
-	IsSwept   bool
-	IsSpent   bool
-	SpentBy   string
+	Outpoint       Outpoint
+	CreatedAt      int64
+	ExpiresAt      int64
+	Amount         uint64
+	Script         string
+	IsLeaf         bool
+	IsSwept        bool
+	IsSpent        bool
+	SpentBy        string
+	CommitmentTxid string
 }
 
 type TxType int
