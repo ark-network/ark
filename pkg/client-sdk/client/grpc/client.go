@@ -132,19 +132,6 @@ func (a *grpcClient) RegisterIntent(
 	return resp.GetRequestId(), nil
 }
 
-func (a *grpcClient) RegisterNotesForNextRound(
-	ctx context.Context, notes []string,
-) (string, error) {
-	req := &arkv1.RegisterIntentRequest{
-		Notes: notes,
-	}
-	resp, err := a.svc.RegisterIntent(ctx, req)
-	if err != nil {
-		return "", err
-	}
-	return resp.GetRequestId(), nil
-}
-
 func (a *grpcClient) RegisterOutputsForNextRound(
 	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {

@@ -204,21 +204,6 @@ func (a *restClient) RegisterIntent(
 	return resp.Payload.RequestID, nil
 }
 
-func (a *restClient) RegisterNotesForNextRound(
-	ctx context.Context, notes []string,
-) (string, error) {
-	body := &models.V1RegisterIntentRequest{
-		Notes: notes,
-	}
-	resp, err := a.svc.ArkServiceRegisterIntent(
-		ark_service.NewArkServiceRegisterIntentParams().WithBody(body),
-	)
-	if err != nil {
-		return "", err
-	}
-	return resp.Payload.RequestID, nil
-}
-
 func (a *restClient) RegisterOutputsForNextRound(
 	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {

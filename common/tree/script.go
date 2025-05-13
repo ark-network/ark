@@ -49,7 +49,7 @@ type Closure interface {
 	// extraWitnessSize is here to count the condition witness size
 	// or any other witness size that can't be computed from the script
 	WitnessSize(extraWitnessSize ...int) int
-	Witness(controlBlock []byte, signatures map[string][]byte) (wire.TxWitness, error)
+	Witness(controlBlock []byte, opts map[string][]byte) (wire.TxWitness, error)
 }
 
 // MultisigClosure is a closure that contains a list of public keys and a

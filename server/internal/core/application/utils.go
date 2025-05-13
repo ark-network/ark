@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -23,11 +22,10 @@ const (
 type timedTxRequest struct {
 	domain.TxRequest
 	boardingInputs []ports.BoardingInput
-	notes          []note.Note
 	timestamp      time.Time
 	pingTimestamp  time.Time
 	musig2Data     *tree.Musig2
-	recoveredVtxos []domain.Vtxo
+	custodialVtxos []domain.Vtxo
 }
 
 type txRequestsQueue struct {
@@ -54,32 +52,10 @@ func (m *txRequestsQueue) len() int64 {
 	return count
 }
 
-func (m *txRequestsQueue) pushWithNotes(request domain.TxRequest, notes []note.Note) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	if _, ok := m.requests[request.Id]; ok {
-		return fmt.Errorf("duplicated tx request %s", request.Id)
-	}
-
-	for _, note := range notes {
-		for _, txRequest := range m.requests {
-			for _, rNote := range txRequest.notes {
-				if note.ID == rNote.ID {
-					return fmt.Errorf("duplicated note %s", note)
-				}
-			}
-		}
-	}
-
-	m.requests[request.Id] = &timedTxRequest{request, make([]ports.BoardingInput, 0), notes, time.Now(), time.Time{}, nil, make([]domain.Vtxo, 0)}
-	return nil
-}
-
 func (m *txRequestsQueue) push(
 	request domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
-	recoveredVtxos []domain.Vtxo,
+	custodialVtxos []domain.Vtxo,
 	musig2Data *tree.Musig2,
 ) error {
 	m.lock.Lock()
@@ -109,9 +85,9 @@ func (m *txRequestsQueue) push(
 		}
 	}
 
-	for _, vtxo := range recoveredVtxos {
+	for _, vtxo := range custodialVtxos {
 		for _, request := range m.requests {
-			for _, pVtxo := range request.recoveredVtxos {
+			for _, pVtxo := range request.custodialVtxos {
 				if vtxo.Txid == pVtxo.Txid && vtxo.VOut == pVtxo.VOut {
 					return fmt.Errorf("duplicated vtxo recovery, %s:%d already used by tx request %s", vtxo.Txid, vtxo.VOut, request.Id)
 				}
@@ -120,11 +96,11 @@ func (m *txRequestsQueue) push(
 	}
 
 	now := time.Now()
-	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, make([]note.Note, 0), now, now, musig2Data, recoveredVtxos}
+	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, now, now, musig2Data, custodialVtxos}
 	return nil
 }
 
-func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []note.Note, []*tree.Musig2, []domain.Vtxo) {
+func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []*tree.Musig2, []domain.Vtxo) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -161,18 +137,16 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 
 	requests := make([]domain.TxRequest, 0, num)
 	boardingInputs := make([]ports.BoardingInput, 0)
-	notes := make([]note.Note, 0)
 	musig2Data := make([]*tree.Musig2, 0)
-	recoveredVtxos := make([]domain.Vtxo, 0)
+	custodialVtxos := make([]domain.Vtxo, 0)
 	for _, p := range requestsByTime[:num] {
 		boardingInputs = append(boardingInputs, p.boardingInputs...)
 		requests = append(requests, p.TxRequest)
 		musig2Data = append(musig2Data, p.musig2Data)
-		notes = append(notes, p.notes...)
-		recoveredVtxos = append(recoveredVtxos, p.recoveredVtxos...)
+		custodialVtxos = append(custodialVtxos, p.custodialVtxos...)
 		delete(m.requests, p.Id)
 	}
-	return requests, boardingInputs, notes, musig2Data, recoveredVtxos
+	return requests, boardingInputs, musig2Data, custodialVtxos
 }
 
 func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musig2) error {
@@ -194,11 +168,7 @@ func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musi
 		sumOfInputs += boardingInput.Amount
 	}
 
-	for _, note := range r.notes {
-		sumOfInputs += uint64(note.Value)
-	}
-
-	for _, vtxo := range r.recoveredVtxos {
+	for _, vtxo := range r.custodialVtxos {
 		sumOfInputs += vtxo.Amount
 	}
 

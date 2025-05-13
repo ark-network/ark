@@ -1,43 +1,44 @@
 package note
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"strings"
 
+	"github.com/ark-network/ark/common"
+	"github.com/ark-network/ark/common/bip322"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcutil/base58"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 )
 
-const noteHRP = "arknote"
+const (
+	preimageSize            = 32
+	noteHRP                 = "arknote"
+	fakeOutpointOutputIndex = uint32(0)
+)
 
-// Note represents a note signed by the issuer
+// Note contains the data of a note
 type Note struct {
-	Data
-	Signature []byte
+	Preimage []byte
+	Value    uint32
 }
 
-// Data contains the data of a note
-type Data struct {
-	ID    uint64
-	Value uint32
-}
-
-// New generate a new note data struct with a random ID and the given value
-// it must be signed by the issuer and then converted to a Note using Data.ToNote(signature)
-func New(value uint32) (*Data, error) {
-	randomBytes := make([]byte, 8)
-	_, err := rand.Read(randomBytes)
+// New generate a new note data struct with a random preimage and the given value
+func New(value uint32) (*Note, error) {
+	randomPreimage := make([]byte, preimageSize)
+	_, err := rand.Read(randomPreimage)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate random ID: %w", err)
+		return nil, fmt.Errorf("failed to generate random preimage: %w", err)
 	}
 
-	id := binary.BigEndian.Uint64(randomBytes)
-
-	return &Data{
-		ID:    id,
-		Value: value,
+	return &Note{
+		Preimage: randomPreimage,
+		Value:    value,
 	}, nil
 }
 
@@ -62,54 +63,22 @@ func NewFromString(s string) (*Note, error) {
 	return note, nil
 }
 
-// Serialize converts Data to a byte slice
-func (n *Data) Serialize() []byte {
-	buf := make([]byte, 12)
-	binary.BigEndian.PutUint64(buf[:8], n.ID)
-	binary.BigEndian.PutUint32(buf[8:], n.Value)
+// Serialize converts Note's data to a byte slice
+func (n *Note) Serialize() []byte {
+	buf := make([]byte, preimageSize+4)
+	copy(buf[:preimageSize], n.Preimage)
+	binary.BigEndian.PutUint32(buf[preimageSize:], n.Value)
 	return buf
 }
 
 // Deserialize converts a byte slice to Data
-func (n *Data) Deserialize(data []byte) error {
-	if len(data) != 12 {
-		return fmt.Errorf("invalid data length: expected 12 bytes, got %d", len(data))
-	}
-
-	n.ID = binary.BigEndian.Uint64(data[:8])
-	n.Value = binary.BigEndian.Uint32(data[8:])
-	return nil
-}
-
-// Hash returns the SHA256 hash of the serialized Data
-func (n *Data) Hash() []byte {
-	hash := sha256.Sum256(n.Serialize())
-	return hash[:]
-}
-
-// Serialize converts the Note to a byte slice
-func (n *Note) Serialize() []byte {
-	detailsBytes := n.Data.Serialize()
-	return append(detailsBytes, n.Signature...)
-}
-
-// Deserialize converts a byte slice to a Note
 func (n *Note) Deserialize(data []byte) error {
-	if len(data) < 12 {
-		return fmt.Errorf("invalid data length: expected at least 12 bytes, got %d", len(data))
+	if len(data) != preimageSize+4 {
+		return fmt.Errorf("invalid data length: expected %d bytes, got %d", preimageSize+4, len(data))
 	}
 
-	dataCopy := &Data{}
-	if err := dataCopy.Deserialize(data[:12]); err != nil {
-		return err
-	}
-
-	n.Data = *dataCopy
-
-	if len(data) > 12 {
-		n.Signature = data[12:]
-	}
-
+	n.Preimage = data[:preimageSize]
+	n.Value = binary.BigEndian.Uint32(data[preimageSize:])
 	return nil
 }
 
@@ -118,10 +87,108 @@ func (n Note) String() string {
 	return noteHRP + base58.Encode(n.Serialize())
 }
 
-// ToNote creates a Note from Data with the given signature
-func (n *Data) ToNote(signature []byte) *Note {
-	return &Note{
-		Data:      *n,
-		Signature: signature,
+func (n Note) PreimageHash() [32]byte {
+	return sha256.Sum256(n.Preimage)
+}
+
+func (n Note) VtxoScript() tree.TapscriptsVtxoScript {
+	// this vtxo script is not valid because it doesn't contain any CHECKSIG
+	// Validate() will always fail
+	// that's not a problem because none of the real vtxos will be locked by that script
+	// it's a way to allow fake "note vtxo" to be standard in the bip322 proof
+	return tree.TapscriptsVtxoScript{
+		Closures: []tree.Closure{&NoteClosure{PreimageHash: n.PreimageHash()}},
 	}
+}
+
+func (n Note) BIP322Input() (*bip322.Input, error) {
+	vtxoScript := n.VtxoScript()
+	taprootKey, _, err := vtxoScript.TapTree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get taproot key: %w", err)
+	}
+
+	p2trPkScript, err := common.P2TRScript(taprootKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get p2tr pk script: %w", err)
+	}
+
+	return &bip322.Input{
+		OutPoint: &wire.OutPoint{
+			Hash:  n.PreimageHash(),
+			Index: fakeOutpointOutputIndex,
+		},
+		Sequence: wire.MaxTxInSequenceNum,
+		WitnessUtxo: &wire.TxOut{
+			PkScript: p2trPkScript,
+			Value:    int64(n.Value),
+		},
+	}, nil
+}
+
+// implements tree.Closure interface,
+// can't be used in a classic vtxo script but only in the fake vtxo note script
+type NoteClosure struct {
+	PreimageHash [32]byte
+}
+
+// Script returns the tapscript for the note closure
+func (n *NoteClosure) Script() ([]byte, error) {
+	return txscript.NewScriptBuilder().
+		AddOp(txscript.OP_SHA256).
+		AddData(n.PreimageHash[:]).
+		AddOp(txscript.OP_EQUAL).
+		Script()
+}
+
+// Decode attempts to decode a script into a NoteClosure
+func (n *NoteClosure) Decode(script []byte) (bool, error) {
+	tokenizer := txscript.MakeScriptTokenizer(0, script)
+
+	if !tokenizer.Next() || tokenizer.Opcode() != txscript.OP_SHA256 {
+		return false, nil
+	}
+
+	if !tokenizer.Next() || len(tokenizer.Data()) != 32 {
+		return false, nil
+	}
+	copy(n.PreimageHash[:], tokenizer.Data())
+
+	if !tokenizer.Next() || tokenizer.Opcode() != txscript.OP_EQUAL {
+		return false, nil
+	}
+
+	if tokenizer.Next() {
+		return false, nil
+	}
+
+	rebuiltScript, err := n.Script()
+	if err != nil {
+		return false, fmt.Errorf("failed to rebuild script: %w", err)
+	}
+
+	if !bytes.Equal(rebuiltScript, script) {
+		return false, nil
+	}
+	return true, nil
+}
+
+// WitnessSize returns the size of the witness data excluding the control block and script
+func (n *NoteClosure) WitnessSize(_ ...int) int {
+	return 32 // preimage is always 32 bytes
+}
+
+// Witness returns the witness stack for spending the fake vtxo note
+func (n *NoteClosure) Witness(controlBlock []byte, opts map[string][]byte) (wire.TxWitness, error) {
+	preimage, ok := opts["preimage"]
+	if !ok {
+		return nil, fmt.Errorf("missing preimage for hash %x", n.PreimageHash)
+	}
+
+	script, err := n.Script()
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate script: %w", err)
+	}
+
+	return wire.TxWitness{preimage, script, controlBlock}, nil
 }

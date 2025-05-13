@@ -561,12 +561,6 @@
             "$ref": "#/definitions/v1RequestInput"
           }
         },
-        "notes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
         "signingType": {
           "type": "string"
         },
