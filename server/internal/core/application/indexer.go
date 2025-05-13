@@ -225,7 +225,7 @@ func (i *indexerService) GetTransactionHistory(
 		}
 	}
 
-	txs, err := vtxosToTxs(spendable, spent, roundTxids)
+	txs, err := i.vtxosToTxs(ctx, spendable, spent, roundTxids)
 	if err != nil {
 		return nil, err
 	}
@@ -456,7 +456,9 @@ func flattenNodes(t [][]tree.Node) []Node {
 	return result
 }
 
-func vtxosToTxs(spendable, spent []domain.Vtxo, roundTxids map[string]any) ([]TxHistoryRecord, error) {
+func (i *indexerService) vtxosToTxs(
+	ctx context.Context, spendable, spent []domain.Vtxo, roundTxids map[string]any,
+) ([]TxHistoryRecord, error) {
 	txs := make([]TxHistoryRecord, 0)
 
 	// Receivals
@@ -525,10 +527,17 @@ func vtxosToTxs(spendable, spent []domain.Vtxo, roundTxids map[string]any) ([]Tx
 		resultedAmount := reduceVtxosAmount(resultedVtxos)
 		spentAmount := reduceVtxosAmount(vtxosBySpentBy[sb])
 		if spentAmount <= resultedAmount {
-			continue // settlement or change, ignore
+			continue // settlement, ignore
 		}
-
 		vtxo := getVtxo(resultedVtxos, vtxosBySpentBy[sb])
+		if resultedAmount == 0 {
+			// send all: fetch the created vtxo to source creation and expiration timestamps
+			vtxos, err := i.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{{Txid: sb, VOut: 0}})
+			if err != nil {
+				return nil, err
+			}
+			vtxo = vtxos[0]
+		}
 
 		commitmentTxid := vtxo.RoundTxid
 		virtualTxid := ""
