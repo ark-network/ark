@@ -85,14 +85,7 @@ type Config struct {
 	// TODO remove with transactions version 3
 	AllowZeroFees bool
 
-	EsploraURL         string
-	ArkWalletDaemonUrl string
-	//NeutrinoPeer     string
-	//BitcoindRpcUser  string
-	//BitcoindRpcPass  string
-	//BitcoindRpcHost  string
-	//BitcoindZMQBlock string
-	//BitcoindZMQTx    string
+	EsploraURL string
 
 	UnlockerType     string
 	UnlockerFilePath string // file unlocker
@@ -129,7 +122,6 @@ var (
 	UnilateralExitDelay       = "UNILATERAL_EXIT_DELAY"
 	BoardingExitDelay         = "BOARDING_EXIT_DELAY"
 	EsploraURL                = "ESPLORA_URL"
-	ArkWalletDaemonUrl        = "WALLET_DAEMON_URL"
 	NoMacaroons               = "NO_MACAROONS"
 	NoTLS                     = "NO_TLS"
 	TLSExtraIP                = "TLS_EXTRA_IP"
@@ -159,7 +151,6 @@ var (
 	defaultTxBuilderType       = "covenantless"
 	defaultNetwork             = "bitcoin"
 	defaultEsploraURL          = "https://blockstream.info/api"
-	defaultArkWalletDaemonUrl  = "ark-wallet-daemon:6060"
 	defaultLogLevel            = 4
 	defaultVtxoTreeExpiry      = 604672  // 7 days
 	defaultUnilateralExitDelay = 86400   // 24 hours
@@ -196,7 +187,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(TxBuilderType, defaultTxBuilderType)
 	viper.SetDefault(UnilateralExitDelay, defaultUnilateralExitDelay)
 	viper.SetDefault(EsploraURL, defaultEsploraURL)
-	viper.SetDefault(ArkWalletDaemonUrl, defaultArkWalletDaemonUrl)
 	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
 	viper.SetDefault(BoardingExitDelay, defaultBoardingExitDelay)
 	viper.SetDefault(MarketHourStartTime, defaultMarketHourStartTime)
@@ -239,7 +229,6 @@ func LoadConfig() (*Config, error) {
 		UnilateralExitDelay:       determineLocktimeType(viper.GetInt64(UnilateralExitDelay)),
 		BoardingExitDelay:         determineLocktimeType(viper.GetInt64(BoardingExitDelay)),
 		EsploraURL:                viper.GetString(EsploraURL),
-		ArkWalletDaemonUrl:        viper.GetString(ArkWalletDaemonUrl),
 		NoMacaroons:               viper.GetBool(NoMacaroons),
 		TLSExtraIPs:               viper.GetStringSlice(TLSExtraIP),
 		TLSExtraDomains:           viper.GetStringSlice(TLSExtraDomain),
@@ -461,7 +450,12 @@ func (c *Config) repoManager() error {
 }
 
 func (c *Config) walletService() error {
-	walletSvc, err := walletclient.New(context.Background(), viper.GetString(ArkWalletDaemonUrl))
+	arkWallet := viper.GetString(WalletAddr)
+	if arkWallet == "" {
+		return fmt.Errorf("ark wallet address not set")
+	}
+
+	walletSvc, err := walletclient.New(context.Background(), arkWallet)
 	if err != nil {
 		return err
 	}

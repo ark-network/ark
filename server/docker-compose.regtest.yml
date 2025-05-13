@@ -1,0 +1,39 @@
+version: '3.9'
+
+services:
+  arkd-wallet:
+    build:
+      context: ..
+      dockerfile: pkg/ark-wallet/Dockerfile
+    image: arkd-walle:latest
+    container_name: arkd-wallet
+    ports:
+      - "6060:6060"
+    env_file:
+      - ${ENV_FILE}
+    volumes:
+      - arkd_wallet_data:/app/wallet-data
+
+  arkd:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: arkd:latest
+    container_name: arkd
+    depends_on:
+      - arkd-wallet
+    ports:
+      - "7070:7070"
+    env_file:
+      - ${ENV_FILE}
+    volumes:
+      - arkd_data:/app/data
+
+volumes:
+  arkd_wallet_data:
+  arkd_data:
+
+networks:
+  default:
+    name: nigiri
+    external: true

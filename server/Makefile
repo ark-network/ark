@@ -38,18 +38,23 @@ lint:
 ## run: run arkd and ark-wallet-daemon in dev mode with bitcoind on regtest using docker compose
 run: clean
 	@echo "Running arkd and ark-wallet-daemon with Bitcoin Core in dev mode on regtest ..."
-	docker compose --env-file envs/bitcoind.regtest.env -f docker-compose.yml up --build -d
+	export ENV_FILE=envs/bitcoind.regtest.env ; \
+	docker compose --env-file $$ENV_FILE -f docker-compose.regtest.yml up --build -d
 
 ## run-neutrino: run arkd and ark-wallet-daemon in dev mode with neutrino on regtest using docker compose
 run-neutrino: clean
 	@echo "Running arkd and ark-wallet-daemon with Neutrino in dev mode on regtest ..."
 	export ENV_FILE=envs/neutrino.regtest.env ; \
-	docker compose --env-file $$ENV_FILE -f docker-compose.yml up --build -d
+	docker compose --env-file $$ENV_FILE -f docker-compose.regtest.yml up --build -d
+
+stop-neutrino:
+	@echo "Stopping arkd and ark-wallet-daemon with Neutrino in dev mode on regtest ..."
+	ENV_FILE=envs/neutrino.regtest.env docker compose -f docker-compose.regtest.yml down -v
 
 ## run-neutrino-mutinynet: run arkd and ark-wallet-daemon in dev mode with neutrino on mutinynet using docker compose
 run-neutrino-mutinynet: clean
 	@echo "Running arkd and ark-wallet-daemon with Neutrino in dev mode on mutinynet ..."
-	docker compose --env-file envs/neutrino.mutinynet.env -f docker-compose.yml up --build -d
+	docker compose --env-file envs/neutrino.mutinynet.env -f docker-compose.regtest.yml up --build -d
 
 ## test: runs unit and component tests
 test:

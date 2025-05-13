@@ -1,6 +1,6 @@
 package walletclient
 
-import walletv1 "github.com/ark-network/ark/server/pkg/ark-wallet-daemon/api-spec/protobuf/gen/wallet/v1"
+import arkwalletv1 "github.com/ark-network/ark/api-spec/protobuf/gen/arkwallet/v1"
 
 type txInput struct {
 	txId   string
@@ -26,7 +26,7 @@ func (t txInput) GetValue() uint64 {
 }
 
 type walletStatus struct {
-	resp *walletv1.StatusResponse
+	resp *arkwalletv1.StatusResponse
 }
 
 func (ws *walletStatus) IsInitialized() bool { return ws.resp.GetInitialized() }

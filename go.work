@@ -4,6 +4,7 @@ use (
 	./api-spec
 	./client
 	./common
+	./pkg/ark-wallet
 	./pkg/client-sdk
 	./server
 	./server/pkg/kvdb
