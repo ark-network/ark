@@ -1387,7 +1387,7 @@ func TestSweep(t *testing.T) {
 
 	time.Sleep(3 * time.Second)
 
-	_, err = utils.RunCommand("nigiri", "rpc", "generatetoaddress", "100", "bcrt1qe8eelqalnch946nzhefd5ajhgl2afjw5aegc59")
+	_, err = utils.RunCommand("nigiri", "rpc", "--generate", "30")
 	require.NoError(t, err)
 
 	time.Sleep(20 * time.Second)
