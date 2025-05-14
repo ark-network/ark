@@ -1482,6 +1482,7 @@ func (a *covenantlessArkClient) makeBIP322Signature(
 	tapscripts map[string][]string,
 	outputs []client.Output,
 	musig2Data *tree.Musig2,
+	notesWitnesses map[int][]byte,
 ) (string, string, error) {
 	validAt := time.Now()
 	expireAt := validAt.Add(2 * time.Minute).Unix()
@@ -1572,7 +1573,7 @@ func (a *covenantlessArkClient) makeBIP322Signature(
 
 	proof = (*bip322.FullProof)(signedProofTx)
 
-	sig, err := proof.Signature()
+	sig, err := proof.Signature(finalizeWithNotes(notesWitnesses))
 	if err != nil {
 		return "", "", err
 	}
@@ -1661,7 +1662,7 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 	ctx context.Context, notes []string, outputs []client.Output, options SettleOptions,
 	selectedCoins []client.TapscriptsVtxo, selectedBoardingCoins []types.Utxo,
 ) (string, error) {
-	inputs, exitLeaves, tapscripts, err := toBIP322Inputs(selectedBoardingCoins, selectedCoins)
+	inputs, exitLeaves, tapscripts, notesWitnesses, err := toBIP322Inputs(selectedBoardingCoins, selectedCoins, notes)
 	if err != nil {
 		return "", err
 	}
@@ -1676,52 +1677,23 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 		SigningType:         signingType,
 	}
 
-	var bip322Signature string
-	var bip322Message string
-
-	if len(inputs) > 0 {
-		bip322Signature, bip322Message, err = a.makeBIP322Signature(
-			inputs, exitLeaves, tapscripts,
-			outputs, musig2Data,
-		)
-		if err != nil {
-			return "", err
-		}
+	bip322Signature, bip322Message, err := a.makeBIP322Signature(
+		inputs, exitLeaves, tapscripts,
+		outputs, musig2Data, notesWitnesses,
+	)
+	if err != nil {
+		return "", err
 	}
 
 	maxRetry := 3
 	retryCount := 0
 	var roundErr error
 	for retryCount < maxRetry {
-		var requestID string
-		var err error
-
-		if len(inputs) > 0 {
-			requestID, err = a.client.RegisterIntent(
-				ctx, bip322Signature, bip322Message,
-			)
-			if err != nil {
-				return "", err
-			}
-		}
-
-		if len(notes) > 0 {
-			if len(requestID) > 0 {
-				return "", fmt.Errorf("cannot register notes and inputs at the same time")
-			}
-
-			requestID, err = a.client.RegisterNotesForNextRound(
-				ctx, notes,
-			)
-			if err != nil {
-				return "", err
-			}
-
-			if err := a.client.RegisterOutputsForNextRound(
-				ctx, requestID, outputs, musig2Data,
-			); err != nil {
-				return "", err
-			}
+		requestID, err := a.client.RegisterIntent(
+			ctx, bip322Signature, bip322Message,
+		)
+		if err != nil {
+			return "", err
 		}
 
 		log.Infof("registered inputs and outputs with request id: %s", requestID)
@@ -3487,14 +3459,20 @@ func extractExitPath(tapscripts []string) ([]byte, *common.TaprootMerkleProof, u
 	return pkScript, leafProof, sequence, nil
 }
 
-func toBIP322Inputs(boardingUtxos []types.Utxo, vtxos []client.TapscriptsVtxo) ([]bip322.Input, []*common.TaprootMerkleProof, map[string][]string, error) {
+// convert inputs to BIP322 inputs and return all the data needed to sign and proof PSBT
+func toBIP322Inputs(
+	boardingUtxos []types.Utxo, vtxos []client.TapscriptsVtxo,
+	notes []string,
+) ([]bip322.Input, []*common.TaprootMerkleProof, map[string][]string, map[int][]byte, error) {
 	inputs := make([]bip322.Input, 0, len(boardingUtxos)+len(vtxos))
 	exitLeaves := make([]*common.TaprootMerkleProof, 0, len(boardingUtxos)+len(vtxos))
 	tapscripts := make(map[string][]string)
+	notesWitnesses := make(map[int][]byte)
+
 	for _, coin := range vtxos {
 		hash, err := chainhash.NewHashFromStr(coin.Txid)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		outpoint := wire.NewOutPoint(hash, coin.VOut)
 
@@ -3502,7 +3480,7 @@ func toBIP322Inputs(boardingUtxos []types.Utxo, vtxos []client.TapscriptsVtxo) (
 
 		pkScript, leafProof, vtxoSequence, err := extractExitPath(coin.Tapscripts)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		exitLeaves = append(exitLeaves, leafProof)
@@ -3520,7 +3498,7 @@ func toBIP322Inputs(boardingUtxos []types.Utxo, vtxos []client.TapscriptsVtxo) (
 	for _, coin := range boardingUtxos {
 		hash, err := chainhash.NewHashFromStr(coin.Txid)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 		outpoint := wire.NewOutPoint(hash, coin.VOut)
 
@@ -3528,7 +3506,7 @@ func toBIP322Inputs(boardingUtxos []types.Utxo, vtxos []client.TapscriptsVtxo) (
 
 		pkScript, leafProof, vtxoSequence, err := extractExitPath(coin.Tapscripts)
 		if err != nil {
-			return nil, nil, nil, err
+			return nil, nil, nil, nil, err
 		}
 
 		exitLeaves = append(exitLeaves, leafProof)
@@ -3543,7 +3521,72 @@ func toBIP322Inputs(boardingUtxos []types.Utxo, vtxos []client.TapscriptsVtxo) (
 		})
 	}
 
-	return inputs, exitLeaves, tapscripts, nil
+	nextInputIndex := len(inputs)
+	if nextInputIndex > 0 {
+		// if there is non-notes inputs, count the extra bip322 input
+		nextInputIndex++
+	}
+
+	for _, n := range notes {
+		parsedNote, err := note.NewFromString(n)
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		input, err := parsedNote.BIP322Input()
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		inputs = append(inputs, *input)
+
+		vtxoScript := parsedNote.VtxoScript()
+
+		_, taprootTree, err := vtxoScript.TapTree()
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		exitScript, err := vtxoScript.Closures[0].Script()
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+
+		exitLeaf := txscript.NewBaseTapLeaf(exitScript)
+		leafProof, err := taprootTree.GetTaprootMerkleProof(exitLeaf.TapHash())
+		if err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("failed to get taproot merkle proof: %s", err)
+		}
+
+		witness, err := vtxoScript.Closures[0].Witness(leafProof.ControlBlock, map[string][]byte{
+			"preimage": parsedNote.Preimage[:],
+		})
+		if err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("failed to get witness: %s", err)
+		}
+
+		var witnessBuf bytes.Buffer
+		if err := psbt.WriteTxWitness(&witnessBuf, witness); err != nil {
+			return nil, nil, nil, nil, fmt.Errorf("failed to write witness: %s", err)
+		}
+
+		notesWitnesses[nextInputIndex] = witnessBuf.Bytes()
+		nextInputIndex++
+		// if the note vtxo is the first input, it will be used twice
+		if nextInputIndex == 1 {
+			notesWitnesses[nextInputIndex] = witnessBuf.Bytes()
+			nextInputIndex++
+		}
+
+		exitLeaves = append(exitLeaves, leafProof)
+		encodedVtxoScript, err := vtxoScript.Encode()
+		if err != nil {
+			return nil, nil, nil, nil, err
+		}
+		tapscripts[input.OutPoint.String()] = encodedVtxoScript
+	}
+
+	return inputs, exitLeaves, tapscripts, notesWitnesses, nil
 }
 func getOffchainBalanceDetails(amountByExpiration map[int64]uint64) (int64, []VtxoDetails) {
 	nextExpiration := int64(0)
@@ -3605,5 +3648,30 @@ func toTypesVtxo(src client.Vtxo) types.Vtxo {
 		RoundTxid: src.RoundTxid,
 		ExpiresAt: src.ExpiresAt,
 		CreatedAt: src.CreatedAt,
+	}
+}
+
+// custom BIP322 finalizer function handling note vtxo inputs
+func finalizeWithNotes(notesWitnesses map[int][]byte) func(ptx *psbt.Packet) error {
+	return func(ptx *psbt.Packet) error {
+		for i, input := range ptx.Inputs {
+			witness, isNote := notesWitnesses[i]
+			if !isNote {
+				ok, err := psbt.MaybeFinalize(ptx, i)
+				if err != nil {
+					return fmt.Errorf("failed to finalize input %d: %s", i, err)
+				}
+				if !ok {
+					return fmt.Errorf("failed to finalize input %d", i)
+				}
+				continue
+			}
+
+			newInput := psbt.NewPsbtInput(nil, input.WitnessUtxo)
+			newInput.FinalScriptWitness = witness
+			ptx.Inputs[i] = *newInput
+		}
+
+		return nil
 	}
 }

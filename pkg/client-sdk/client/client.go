@@ -37,9 +37,6 @@ type TransportClient interface {
 	RegisterIntent(
 		ctx context.Context, signature, message string,
 	) (string, error)
-	RegisterNotesForNextRound(
-		ctx context.Context, notes []string,
-	) (string, error)
 	RegisterOutputsForNextRound(
 		ctx context.Context, requestID string, outputs []Output, musig2 *tree.Musig2,
 	) error

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common/bip322"
-	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -15,7 +14,6 @@ import (
 type Service interface {
 	Start() error
 	Stop()
-	SpendNotes(ctx context.Context, notes []note.Note) (string, error)
 	RegisterIntent(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) (string, error)
 	SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error
@@ -135,7 +133,6 @@ type TxRequestInfo struct {
 	}
 	Inputs         []domain.Vtxo
 	BoardingInputs []ports.BoardingInput
-	Notes          []note.Note
 	SigningType    string
 	Cosigners      []string
 	LastPing       time.Time

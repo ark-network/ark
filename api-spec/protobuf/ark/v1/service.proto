@@ -114,7 +114,6 @@ message GetBoardingAddressResponse {
 message RegisterIntentRequest {
   // BIP322 signature embeds the outpoints and the proof of funds
   Bip322Signature bip322_signature = 1;
-  repeated string notes = 2;
 }
 message RegisterIntentResponse {
   string request_id = 1;
@@ -122,7 +121,6 @@ message RegisterIntentResponse {
 
 message RegisterInputsForNextRoundRequest {
   repeated Input inputs = 1;
-  repeated string notes = 2;
 }
 message RegisterInputsForNextRoundResponse {
   string request_id = 1;

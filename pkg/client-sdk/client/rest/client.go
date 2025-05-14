@@ -165,7 +165,7 @@ func (a *restClient) RegisterInputsForNextRound(
 				Txid: i.Txid,
 				Vout: int64(i.VOut),
 			},
-			Tapscripts: &models.V1Tapscripts{
+			TaprootTree: &models.V1Tapscripts{
 				Scripts: i.Tapscripts,
 			},
 		})
@@ -200,21 +200,6 @@ func (a *restClient) RegisterIntent(
 		return "", err
 	}
 
-	return resp.Payload.RequestID, nil
-}
-
-func (a *restClient) RegisterNotesForNextRound(
-	ctx context.Context, notes []string,
-) (string, error) {
-	body := &models.V1RegisterIntentRequest{
-		Notes: notes,
-	}
-	resp, err := a.svc.ArkServiceRegisterIntent(
-		ark_service.NewArkServiceRegisterIntentParams().WithBody(body),
-	)
-	if err != nil {
-		return "", err
-	}
 	return resp.Payload.RequestID, nil
 }
 

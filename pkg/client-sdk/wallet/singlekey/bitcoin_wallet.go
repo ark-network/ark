@@ -201,7 +201,8 @@ func (s *bitcoinWallet) SignTransaction(
 			for _, leaf := range input.TaprootLeafScript {
 				closure, err := tree.DecodeClosure(leaf.Script)
 				if err != nil {
-					return "", err
+					// in case of invalid script, we skip signing the input
+					continue
 				}
 
 				sign := false
