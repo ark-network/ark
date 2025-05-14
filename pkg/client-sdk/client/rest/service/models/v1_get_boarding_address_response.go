@@ -21,18 +21,15 @@ type V1GetBoardingAddressResponse struct {
 	// address
 	Address string `json:"address,omitempty"`
 
-	// descriptor
-	Descriptor string `json:"descriptor,omitempty"`
-
-	// tapscripts
-	Tapscripts *V1Tapscripts `json:"tapscripts,omitempty"`
+	// taproot tree
+	TaprootTree *V1Tapscripts `json:"taprootTree,omitempty"`
 }
 
 // Validate validates this v1 get boarding address response
 func (m *V1GetBoardingAddressResponse) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateTapscripts(formats); err != nil {
+	if err := m.validateTaprootTree(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -42,17 +39,17 @@ func (m *V1GetBoardingAddressResponse) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1GetBoardingAddressResponse) validateTapscripts(formats strfmt.Registry) error {
-	if swag.IsZero(m.Tapscripts) { // not required
+func (m *V1GetBoardingAddressResponse) validateTaprootTree(formats strfmt.Registry) error {
+	if swag.IsZero(m.TaprootTree) { // not required
 		return nil
 	}
 
-	if m.Tapscripts != nil {
-		if err := m.Tapscripts.Validate(formats); err != nil {
+	if m.TaprootTree != nil {
+		if err := m.TaprootTree.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("tapscripts")
+				return ve.ValidateName("taprootTree")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("tapscripts")
+				return ce.ValidateName("taprootTree")
 			}
 			return err
 		}
@@ -65,7 +62,7 @@ func (m *V1GetBoardingAddressResponse) validateTapscripts(formats strfmt.Registr
 func (m *V1GetBoardingAddressResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateTapscripts(ctx, formats); err != nil {
+	if err := m.contextValidateTaprootTree(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -75,19 +72,19 @@ func (m *V1GetBoardingAddressResponse) ContextValidate(ctx context.Context, form
 	return nil
 }
 
-func (m *V1GetBoardingAddressResponse) contextValidateTapscripts(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1GetBoardingAddressResponse) contextValidateTaprootTree(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.Tapscripts != nil {
+	if m.TaprootTree != nil {
 
-		if swag.IsZero(m.Tapscripts) { // not required
+		if swag.IsZero(m.TaprootTree) { // not required
 			return nil
 		}
 
-		if err := m.Tapscripts.ContextValidate(ctx, formats); err != nil {
+		if err := m.TaprootTree.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("tapscripts")
+				return ve.ValidateName("taprootTree")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("tapscripts")
+				return ce.ValidateName("taprootTree")
 			}
 			return err
 		}

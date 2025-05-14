@@ -41,12 +41,18 @@ func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
 
 	inputs := make([]ports.Input, 0, len(ins))
 	for _, input := range ins {
+		if input.GetOutpoint() == nil {
+			return nil, fmt.Errorf("missing input outpoint")
+		}
+		if input.GetTaprootTree() == nil {
+			return nil, fmt.Errorf("missing input taproot tree")
+		}
 		inputs = append(inputs, ports.Input{
 			VtxoKey: domain.VtxoKey{
 				Txid: input.GetOutpoint().GetTxid(),
 				VOut: input.GetOutpoint().GetVout(),
 			},
-			Tapscripts: input.GetTapscripts().GetScripts(),
+			Tapscripts: input.GetTaprootTree().GetScripts(),
 		})
 	}
 

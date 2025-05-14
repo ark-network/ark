@@ -9,7 +9,6 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/bip322"
-	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -68,26 +67,15 @@ func (h *handler) GetInfo(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	desc := fmt.Sprintf(
-		descriptor.DefaultVtxoDescriptorTemplate,
-		hex.EncodeToString(tree.UnspendableKey().SerializeCompressed()),
-		"USER",
-		info.PubKey,
-		info.UnilateralExitDelay,
-		info.PubKey,
-	)
-
 	return &arkv1.GetInfoResponse{
-		Pubkey:                     info.PubKey,
-		VtxoTreeExpiry:             info.VtxoTreeExpiry,
-		UnilateralExitDelay:        info.UnilateralExitDelay,
-		BoardingExitDelay:          info.BoardingExitDelay,
-		RoundInterval:              info.RoundInterval,
-		Network:                    info.Network,
-		Dust:                       int64(info.Dust),
-		ForfeitAddress:             info.ForfeitAddress,
-		BoardingDescriptorTemplate: desc,
-		VtxoDescriptorTemplates:    []string{desc},
+		Pubkey:              info.PubKey,
+		VtxoTreeExpiry:      info.VtxoTreeExpiry,
+		UnilateralExitDelay: info.UnilateralExitDelay,
+		BoardingExitDelay:   info.BoardingExitDelay,
+		RoundInterval:       info.RoundInterval,
+		Network:             info.Network,
+		Dust:                int64(info.Dust),
+		ForfeitAddress:      info.ForfeitAddress,
 		MarketHour: &arkv1.MarketHour{
 			NextStartTime: info.NextMarketHour.StartTime.Unix(),
 			NextEndTime:   info.NextMarketHour.EndTime.Unix(),
@@ -127,10 +115,8 @@ func (h *handler) GetBoardingAddress(
 
 	return &arkv1.GetBoardingAddressResponse{
 		Address: addr,
-		TaprootTree: &arkv1.GetBoardingAddressResponse_Tapscripts{
-			Tapscripts: &arkv1.Tapscripts{
-				Scripts: tapscripts,
-			},
+		TaprootTree: &arkv1.Tapscripts{
+			Scripts: tapscripts,
 		},
 	}, nil
 }

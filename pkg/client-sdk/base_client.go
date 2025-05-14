@@ -9,6 +9,9 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
+	"github.com/ark-network/ark/pkg/client-sdk/indexer"
+	grpcindexer "github.com/ark-network/ark/pkg/client-sdk/indexer/grpc"
+	restindexer "github.com/ark-network/ark/pkg/client-sdk/indexer/rest"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
@@ -55,8 +58,13 @@ type arkClient struct {
 	store    types.Store
 	explorer explorer.Explorer
 	client   client.TransportClient
+	indexer  indexer.Indexer
 
 	txStreamCtxCancel context.CancelFunc
+}
+
+func (a *arkClient) GetVersion() string {
+	return Version
 }
 
 func (a *arkClient) GetConfigData(
@@ -224,6 +232,11 @@ func (a *arkClient) initWithWallet(
 		return fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
+	indexerSvc, err := getIndexer(args.ClientType, args.ServerUrl)
+	if err != nil {
+		return fmt.Errorf("failed to setup indexer: %s", err)
+	}
+
 	network := utils.NetworkFromString(info.Network)
 
 	buf, err := hex.DecodeString(info.PubKey)
@@ -251,28 +264,27 @@ func (a *arkClient) initWithWallet(
 	}
 
 	storeData := types.Config{
-		ServerUrl:                  args.ServerUrl,
-		ServerPubKey:               serverPubkey,
-		WalletType:                 args.Wallet.GetType(),
-		ClientType:                 args.ClientType,
-		Network:                    network,
-		VtxoTreeExpiry:             common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
-		RoundInterval:              info.RoundInterval,
-		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
-		Dust:                       info.Dust,
-		BoardingExitDelay:          common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
-		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
-		ForfeitAddress:             info.ForfeitAddress,
-		WithTransactionFeed:        args.WithTransactionFeed,
-		MarketHourStartTime:        info.MarketHourStartTime,
-		MarketHourEndTime:          info.MarketHourEndTime,
-		MarketHourPeriod:           info.MarketHourPeriod,
-		MarketHourRoundInterval:    info.MarketHourRoundInterval,
-		ExplorerURL:                explorerSvc.BaseUrl(),
-		UtxoMinAmount:              info.UtxoMinAmount,
-		UtxoMaxAmount:              info.UtxoMaxAmount,
-		VtxoMinAmount:              info.VtxoMinAmount,
-		VtxoMaxAmount:              info.VtxoMaxAmount,
+		ServerUrl:               args.ServerUrl,
+		ServerPubKey:            serverPubkey,
+		WalletType:              args.Wallet.GetType(),
+		ClientType:              args.ClientType,
+		Network:                 network,
+		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
+		RoundInterval:           info.RoundInterval,
+		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
+		Dust:                    info.Dust,
+		BoardingExitDelay:       common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
+		ForfeitAddress:          info.ForfeitAddress,
+		WithTransactionFeed:     args.WithTransactionFeed,
+		MarketHourStartTime:     info.MarketHourStartTime,
+		MarketHourEndTime:       info.MarketHourEndTime,
+		MarketHourPeriod:        info.MarketHourPeriod,
+		MarketHourRoundInterval: info.MarketHourRoundInterval,
+		ExplorerURL:             explorerSvc.BaseUrl(),
+		UtxoMinAmount:           info.UtxoMinAmount,
+		UtxoMaxAmount:           info.UtxoMaxAmount,
+		VtxoMinAmount:           info.VtxoMinAmount,
+		VtxoMaxAmount:           info.VtxoMaxAmount,
 	}
 	if err := a.store.ConfigStore().AddData(ctx, storeData); err != nil {
 		return err
@@ -288,6 +300,7 @@ func (a *arkClient) initWithWallet(
 	a.wallet = args.Wallet
 	a.explorer = explorerSvc
 	a.client = clientSvc
+	a.indexer = indexerSvc
 
 	return nil
 }
@@ -314,6 +327,11 @@ func (a *arkClient) init(
 	explorerSvc, err := getExplorer(args.ExplorerURL, info.Network)
 	if err != nil {
 		return fmt.Errorf("failed to setup explorer: %s", err)
+	}
+
+	indexerSvc, err := getIndexer(args.ClientType, args.ServerUrl)
+	if err != nil {
+		return fmt.Errorf("failed to setup indexer: %s", err)
 	}
 
 	network := utils.NetworkFromString(info.Network)
@@ -343,28 +361,27 @@ func (a *arkClient) init(
 	}
 
 	cfgData := types.Config{
-		ServerUrl:                  args.ServerUrl,
-		ServerPubKey:               serverPubkey,
-		WalletType:                 args.WalletType,
-		ClientType:                 args.ClientType,
-		Network:                    network,
-		VtxoTreeExpiry:             common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
-		RoundInterval:              info.RoundInterval,
-		UnilateralExitDelay:        common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
-		Dust:                       info.Dust,
-		BoardingExitDelay:          common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
-		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
-		ExplorerURL:                explorerSvc.BaseUrl(),
-		ForfeitAddress:             info.ForfeitAddress,
-		WithTransactionFeed:        args.WithTransactionFeed,
-		MarketHourStartTime:        info.MarketHourStartTime,
-		MarketHourEndTime:          info.MarketHourEndTime,
-		MarketHourPeriod:           info.MarketHourPeriod,
-		MarketHourRoundInterval:    info.MarketHourRoundInterval,
-		UtxoMinAmount:              info.UtxoMinAmount,
-		UtxoMaxAmount:              info.UtxoMaxAmount,
-		VtxoMinAmount:              info.VtxoMinAmount,
-		VtxoMaxAmount:              info.VtxoMaxAmount,
+		ServerUrl:               args.ServerUrl,
+		ServerPubKey:            serverPubkey,
+		WalletType:              args.WalletType,
+		ClientType:              args.ClientType,
+		Network:                 network,
+		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
+		RoundInterval:           info.RoundInterval,
+		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
+		Dust:                    info.Dust,
+		BoardingExitDelay:       common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
+		ExplorerURL:             explorerSvc.BaseUrl(),
+		ForfeitAddress:          info.ForfeitAddress,
+		WithTransactionFeed:     args.WithTransactionFeed,
+		MarketHourStartTime:     info.MarketHourStartTime,
+		MarketHourEndTime:       info.MarketHourEndTime,
+		MarketHourPeriod:        info.MarketHourPeriod,
+		MarketHourRoundInterval: info.MarketHourRoundInterval,
+		UtxoMinAmount:           info.UtxoMinAmount,
+		UtxoMaxAmount:           info.UtxoMaxAmount,
+		VtxoMinAmount:           info.VtxoMinAmount,
+		VtxoMaxAmount:           info.VtxoMaxAmount,
 	}
 	walletSvc, err := getWallet(a.store.ConfigStore(), &cfgData, supportedWallets)
 	if err != nil {
@@ -385,6 +402,7 @@ func (a *arkClient) init(
 	a.wallet = walletSvc
 	a.explorer = explorerSvc
 	a.client = clientSvc
+	a.indexer = indexerSvc
 
 	return nil
 }
@@ -433,6 +451,16 @@ func getExplorer(explorerURL, network string) (explorer.Explorer, error) {
 		}
 	}
 	return explorer.NewExplorer(explorerURL, utils.NetworkFromString(network)), nil
+}
+
+func getIndexer(clientType, serverUrl string) (indexer.Indexer, error) {
+	if clientType != GrpcClient && clientType != RestClient {
+		return nil, fmt.Errorf("invalid client type")
+	}
+	if clientType == GrpcClient {
+		return grpcindexer.NewClient(serverUrl)
+	}
+	return restindexer.NewClient(serverUrl)
 }
 
 func getWallet(

@@ -21,6 +21,7 @@ import (
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/indexer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
@@ -179,6 +180,11 @@ func LoadArkClient(sdkStore types.Store) (ArkClient, error) {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
+	indexerSvc, err := getIndexer(cfgData.ClientType, cfgData.ServerUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup indexer: %s", err)
+	}
+
 	walletSvc, err := getWallet(
 		sdkStore.ConfigStore(),
 		cfgData,
@@ -195,6 +201,7 @@ func LoadArkClient(sdkStore types.Store) (ArkClient, error) {
 			store:    sdkStore,
 			explorer: explorerSvc,
 			client:   clientSvc,
+			indexer:  indexerSvc,
 		},
 	}
 
@@ -244,6 +251,11 @@ func LoadArkClientWithWallet(
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
+	indexerSvc, err := getIndexer(cfgData.ClientType, cfgData.ServerUrl)
+	if err != nil {
+		return nil, fmt.Errorf("failed to setup indexer: %s", err)
+	}
+
 	covenantlessClient := covenantlessArkClient{
 		&arkClient{
 			Config:   cfgData,
@@ -251,6 +263,7 @@ func LoadArkClientWithWallet(
 			store:    sdkStore,
 			explorer: explorerSvc,
 			client:   clientSvc,
+			indexer:  indexerSvc,
 		},
 	}
 
@@ -801,7 +814,7 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 		return nil, err
 	}
 
-	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos, roundsToIgnore)
+	offchainTxs, err := vtxosToTxHistory(spendableVtxos, spentVtxos, roundsToIgnore, a.indexer)
 	if err != nil {
 		return nil, err
 	}
@@ -884,7 +897,7 @@ func (a *covenantlessArkClient) refreshDb(ctx context.Context) error {
 		return err
 	}
 
-	offchainTxs, err := vtxosToTxsCovenantless(spendableVtxos, spentVtxos, roundsToIgnore)
+	offchainTxs, err := vtxosToTxHistory(spendableVtxos, spentVtxos, roundsToIgnore, a.indexer)
 	if err != nil {
 		return err
 	}
@@ -3120,8 +3133,8 @@ func getVtxo(usedVtxos []client.Vtxo, spentByVtxos []client.Vtxo) client.Vtxo {
 	return client.Vtxo{}
 }
 
-func vtxosToTxsCovenantless(
-	spendable, spent []client.Vtxo, boardingRounds map[string]struct{},
+func vtxosToTxHistory(
+	spendable, spent []client.Vtxo, boardingRounds map[string]struct{}, indexerSvc indexer.Indexer,
 ) ([]types.Transaction, error) {
 	txs := make([]types.Transaction, 0)
 
@@ -3190,10 +3203,30 @@ func vtxosToTxsCovenantless(
 		resultedAmount := reduceVtxosAmount(resultedVtxos)
 		spentAmount := reduceVtxosAmount(vtxosBySpentBy[sb])
 		if spentAmount <= resultedAmount {
-			continue // settlement or change, ignore
+			continue // settlement, ignore
 		}
-
 		vtxo := getVtxo(resultedVtxos, vtxosBySpentBy[sb])
+		if resultedAmount == 0 {
+			// send all: fetch the created vtxo (not belong to us) to source
+			// creation and expiration timestamps
+			opts := &indexer.GetVtxosRequestOption{}
+			// nolint:all
+			opts.WithOutpoints([]indexer.Outpoint{{Txid: sb, VOut: 0}})
+			resp, err := indexerSvc.GetVtxos(context.Background(), *opts)
+			if err != nil {
+				return nil, err
+			}
+			vtxo = client.Vtxo{
+				Outpoint: client.Outpoint{
+					Txid: sb,
+					VOut: 0,
+				},
+				RoundTxid: resp.Vtxos[0].CommitmentTxid,
+				ExpiresAt: time.Unix(resp.Vtxos[0].ExpiresAt, 0),
+				CreatedAt: time.Unix(resp.Vtxos[0].CreatedAt, 0),
+				IsPending: !resp.Vtxos[0].IsLeaf,
+			}
+		}
 
 		txKey := types.TransactionKey{
 			RoundTxid: vtxo.RoundTxid,
