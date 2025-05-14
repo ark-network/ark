@@ -2,9 +2,6 @@
 .vscode/
 .idea
 
-*.wasm
-wasm_exec.js
-
 build
 log
 
