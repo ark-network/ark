@@ -40,4 +40,4 @@ jobs:
         run: make test-wasm
 
       - name: Tear down
-        run: make -C .. docker-stop
+        run: make -C ../.. docker-stop
