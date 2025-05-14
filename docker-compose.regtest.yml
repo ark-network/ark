@@ -3,7 +3,6 @@ services:
     build:
       context: .
       dockerfile: pkg/ark-wallet/Dockerfile
-    image: arkd-walle:latest
     container_name: arkd-wallet
     ports:
       - "6060:6060"
@@ -20,7 +19,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    image: arkd:latest
     container_name: arkd
     depends_on:
       - arkd-wallet
@@ -40,10 +38,6 @@ services:
     volumes:
       - type: tmpfs
         target: /app/data
-
-volumes:
-  arkd_wallet_data:
-  arkd_data:
 
 networks:
   default:
