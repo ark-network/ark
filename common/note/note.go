@@ -24,7 +24,7 @@ const (
 
 // Note contains the data of a note
 type Note struct {
-	Preimage []byte
+	Preimage [preimageSize]byte
 	Value    uint32
 }
 
@@ -35,9 +35,11 @@ func New(value uint32) (*Note, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate random preimage: %w", err)
 	}
+	var preimageArray [preimageSize]byte
+	copy(preimageArray[:], randomPreimage)
 
 	return &Note{
-		Preimage: randomPreimage,
+		Preimage: preimageArray,
 		Value:    value,
 	}, nil
 }
@@ -66,7 +68,7 @@ func NewFromString(s string) (*Note, error) {
 // Serialize converts Note's data to a byte slice
 func (n *Note) Serialize() []byte {
 	buf := make([]byte, preimageSize+4)
-	copy(buf[:preimageSize], n.Preimage)
+	copy(buf[:preimageSize], n.Preimage[:])
 	binary.BigEndian.PutUint32(buf[preimageSize:], n.Value)
 	return buf
 }
@@ -77,7 +79,7 @@ func (n *Note) Deserialize(data []byte) error {
 		return fmt.Errorf("invalid data length: expected %d bytes, got %d", preimageSize+4, len(data))
 	}
 
-	n.Preimage = data[:preimageSize]
+	copy(n.Preimage[:], data[:preimageSize])
 	n.Value = binary.BigEndian.Uint32(data[preimageSize:])
 	return nil
 }
@@ -87,8 +89,8 @@ func (n Note) String() string {
 	return noteHRP + base58.Encode(n.Serialize())
 }
 
-func (n Note) PreimageHash() [32]byte {
-	return sha256.Sum256(n.Preimage)
+func (n Note) PreimageHash() [preimageSize]byte {
+	return sha256.Sum256(n.Preimage[:])
 }
 
 func (n Note) VtxoScript() tree.TapscriptsVtxoScript {
@@ -129,7 +131,7 @@ func (n Note) BIP322Input() (*bip322.Input, error) {
 // implements tree.Closure interface,
 // can't be used in a classic vtxo script but only in the fake vtxo note script
 type NoteClosure struct {
-	PreimageHash [32]byte
+	PreimageHash [preimageSize]byte
 }
 
 // Script returns the tapscript for the note closure

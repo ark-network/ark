@@ -53,8 +53,8 @@ func TestNew(t *testing.T) {
 		for i := 0; i < 1_000_000; i++ {
 			data, err := note.New(100)
 			require.NoError(t, err)
-			require.False(t, preimageSet[hex.EncodeToString(data.Preimage)], "Generated duplicate preimage: %x", data.Preimage)
-			preimageSet[hex.EncodeToString(data.Preimage)] = true
+			require.False(t, preimageSet[hex.EncodeToString(data.Preimage[:])], "Generated duplicate preimage: %x", data.Preimage)
+			preimageSet[hex.EncodeToString(data.Preimage[:])] = true
 		}
 	})
 }
@@ -62,35 +62,30 @@ func TestNew(t *testing.T) {
 func TestNewFromString(t *testing.T) {
 	tests := []struct {
 		str              string
-		expectedPreimage []byte
+		expectedPreimage string
 		expectedValue    uint32
 	}{
 		{
-			str: "arknote8rFzGqZsG9RCLripA6ez8d2hQEzFKsqCeiSnXhQj56Ysw7ZQT",
-			expectedPreimage: []byte{
-				0x11, 0xd2, 0xa0, 0x32, 0x64, 0xd0, 0xef, 0xd3,
-				0x11, 0xd2, 0xa0, 0x32, 0x64, 0xd0, 0xef, 0xd3,
-				0x11, 0xd2, 0xa0, 0x32, 0x64, 0xd0, 0xef, 0xd3,
-				0x11, 0xd2, 0xa0, 0x32, 0x64, 0xd0, 0xef, 0xd3,
-			},
-			expectedValue: 900000,
+			str:              "arknote8rFzGqZsG9RCLripA6ez8d2hQEzFKsqCeiSnXhQj56Ysw7ZQT",
+			expectedPreimage: "11d2a03264d0efd311d2a03264d0efd311d2a03264d0efd311d2a03264d0efd3",
+			expectedValue:    900000,
 		},
 		{
-			str: "arknoteSkB92YpWm4Q2ijQHH34cqbKkCZWszsiQgHVjtNeFF2Cwp59D",
-			expectedPreimage: []byte{
-				0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07, 0x08,
-				0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10,
-				0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17, 0x18,
-				0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f, 0x20,
-			},
-			expectedValue: 1828932,
+			str:              "arknoteSkB92YpWm4Q2ijQHH34cqbKkCZWszsiQgHVjtNeFF2Cwp59D",
+			expectedPreimage: "0102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f20",
+			expectedValue:    1828932,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.str, func(t *testing.T) {
+			preimage, err := hex.DecodeString(tt.expectedPreimage)
+			require.NoError(t, err)
+			var preimageArray [32]byte
+			copy(preimageArray[:], preimage)
+
 			n := &note.Note{
-				Preimage: tt.expectedPreimage,
+				Preimage: preimageArray,
 				Value:    tt.expectedValue,
 			}
 
@@ -100,7 +95,7 @@ func TestNewFromString(t *testing.T) {
 			note, err := note.NewFromString(tt.str)
 			require.NoError(t, err)
 			require.NotNil(t, note)
-			require.Equal(t, tt.expectedPreimage, note.Preimage)
+			require.Equal(t, preimageArray, note.Preimage)
 			require.Equal(t, tt.expectedValue, note.Value)
 		})
 	}

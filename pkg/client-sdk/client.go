@@ -3526,7 +3526,7 @@ func toBIP322Inputs(
 		}
 
 		witness, err := vtxoScript.Closures[0].Witness(leafProof.ControlBlock, map[string][]byte{
-			"preimage": parsedNote.Preimage,
+			"preimage": parsedNote.Preimage[:],
 		})
 		if err != nil {
 			return nil, nil, nil, nil, fmt.Errorf("failed to get witness: %s", err)
