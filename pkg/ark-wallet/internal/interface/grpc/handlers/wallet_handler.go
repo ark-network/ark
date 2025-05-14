@@ -342,7 +342,9 @@ func (h *WalletServiceHandler) GetSyncedUpdate(
 	case <-stream.Context().Done():
 		return stream.Context().Err()
 	case <-ch:
-		return stream.Send(&arkwalletv1.GetSyncedUpdateResponse{})
+		return stream.Send(&arkwalletv1.GetSyncedUpdateResponse{
+			Synced: true,
+		})
 	}
 }
 

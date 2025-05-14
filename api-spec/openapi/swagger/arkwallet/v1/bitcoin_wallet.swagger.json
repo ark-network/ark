@@ -1138,7 +1138,12 @@
       }
     },
     "v1GetSyncedUpdateResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "synced": {
+          "type": "boolean"
+        }
+      }
     },
     "v1GetTransactionResponse": {
       "type": "object",

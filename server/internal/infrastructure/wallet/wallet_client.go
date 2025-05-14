@@ -144,13 +144,16 @@ func (w *walletDaemonClient) GetSyncedUpdate(ctx context.Context) <-chan struct{
 	go func() {
 		defer close(ch)
 		for {
-			_, err := stream.Recv()
+			resp, err := stream.Recv()
 			if err != nil {
 				log.Errorf("GetSyncedUpdate: failed to receive notification: %v", err)
 				return
 			}
 
-			return
+			if resp.GetSynced() {
+				ch <- struct{}{}
+				return
+			}
 		}
 	}()
 	return ch

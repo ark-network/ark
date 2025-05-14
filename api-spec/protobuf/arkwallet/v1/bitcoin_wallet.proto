@@ -194,7 +194,9 @@ service WalletService {
 
 // GetSyncedUpdate
 message GetSyncedUpdateRequest {}
-message GetSyncedUpdateResponse {}
+message GetSyncedUpdateResponse {
+  bool synced = 1;
+}
 
 // IsTransactionConfirmed
 message IsTransactionConfirmedRequest {
