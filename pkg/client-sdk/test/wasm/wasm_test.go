@@ -22,19 +22,7 @@ import (
 	"github.com/shirou/gopsutil/net"
 )
 
-const (
-	composePath = "../../../../docker-compose.regtest.yml"
-)
-
 func TestMain(m *testing.M) {
-	_, err := utils.RunCommand("docker", "compose", "-f", composePath, "up", "-d", "--build")
-	if err != nil {
-		fmt.Printf("error starting docker-compose: %s", err)
-		os.Exit(1)
-	}
-
-	time.Sleep(10 * time.Second)
-
 	if err := utils.GenerateBlock(); err != nil {
 		fmt.Printf("error generating block: %s", err)
 		os.Exit(1)
@@ -52,19 +40,13 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	_, err = runClarkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
+	_, err := runClarkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
 	}
 
 	code := m.Run()
-
-	_, err = utils.RunCommand("docker", "compose", "-f", composePath, "down", "-v")
-	if err != nil {
-		fmt.Printf("error stopping docker-compose: %s", err)
-		os.Exit(1)
-	}
 
 	if err := killProcessByPort(8000); err != nil {
 		fmt.Printf("failed to kill process running on 8000, err: %v", err)

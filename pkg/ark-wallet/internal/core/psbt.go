@@ -1,4 +1,4 @@
-package btcwallet
+package application
 
 import (
 	"encoding/hex"

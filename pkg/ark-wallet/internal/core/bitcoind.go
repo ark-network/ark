@@ -1,10 +1,10 @@
-package btcwallet
+package application
 
 import (
 	"encoding/hex"
+	"errors"
 	"strings"
 
-	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/chain"
@@ -24,8 +24,8 @@ func (b *bitcoindRPCClient) broadcast(txhex string) error {
 
 	_, err = b.chainClient.SendRawTransaction(&tx, true)
 	if err != nil {
-		if err == chain.ErrNonBIP68Final {
-			return ports.ErrNonFinalBIP68
+		if errors.Is(err, chain.ErrNonBIP68Final) {
+			return ErrNonFinalBIP68
 		}
 		return err
 	}

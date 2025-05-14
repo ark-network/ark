@@ -1,4 +1,4 @@
-package btcwallet
+package application
 
 import (
 	"encoding/json"
@@ -10,7 +10,6 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/wire"
 )
 
@@ -47,7 +46,7 @@ func (f *esploraClient) broadcast(txhex string) error {
 		}
 
 		if strings.Contains(strings.ToLower(string(content)), "non-bip68-final") {
-			return ports.ErrNonFinalBIP68
+			return ErrNonFinalBIP68
 		}
 
 		return fmt.Errorf("failed to broadcast transaction: %s (%s, %s)", txhex, resp.Status, content)
