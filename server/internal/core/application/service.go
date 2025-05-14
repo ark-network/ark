@@ -862,10 +862,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 	}
 
 	if bip322signature.ContainsOutputs() {
-		if err != nil {
-			return "", fmt.Errorf("unable to verify outputs amount, failed to get dust: %s", err)
-		}
-
 		hasOffChainReceiver := false
 		receivers := make([]domain.Receiver, 0)
 
