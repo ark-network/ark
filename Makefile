@@ -1,4 +1,4 @@
-.PHONY: build-server build-client build-all-server build-all-client build build-all proto proto-lint docker-run docker-stop
+.PHONY: build-server build-client build-sdk build-all-server build-all-client build-all-sdk build build-all proto proto-lint docker-run docker-stop
 
 # build-server: builds arkd binary
 build-server:
@@ -10,6 +10,11 @@ build-client:
 	@echo "Building ark binary..."
 	@bash ./client/scripts/build
 
+# build-sdk: builds ark sdk binary
+build-sdk:
+	@echo "Building sdk binary..."
+	@bash ./pkg/client-sdk/scripts/build
+
 # build-all-server: builds arkd binary for all archs
 build-all-server:
 	@echo "Building arkd binary for all archs..."
@@ -20,11 +25,16 @@ build-all-client:
 	@echo "Building ark binary for all archs..."
 	@bash ./client/scripts/build-all
 
-# build: builds arkd and ark cli binaries
-build: build-server build-client
+# build-all-sdk: builds ark sdk binary for all archs
+build-all-sdk:
+	@echo "Building ark binary for all archs..."
+	@bash ./client/scripts/build-all
 
-# build-all: builds arkd and ark cli binaries for all archs
-build-all: build-all-server build-all-client
+# build: builds arkd, ark cli and ark sdk binaries
+build: build-server build-client build-sdk
+
+# build-all: builds arkd, ark cli and ark sdk binaries for all archs
+build-all: build-all-server build-all-client build-all-sdk
 
 # proto: compiles protos
 proto: proto-lint

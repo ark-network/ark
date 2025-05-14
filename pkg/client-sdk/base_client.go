@@ -63,6 +63,10 @@ type arkClient struct {
 	txStreamCtxCancel context.CancelFunc
 }
 
+func (a *arkClient) GetVersion() string {
+	return Version
+}
+
 func (a *arkClient) GetConfigData(
 	_ context.Context,
 ) (*types.Config, error) {
