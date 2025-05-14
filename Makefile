@@ -29,7 +29,6 @@ build-all: build-all-server build-all-client
 # proto: compiles protos
 proto: proto-lint
 	@echo "Compiling stubs..."
-	@docker run --rm --volume "$(shell pwd):/workspace" --workdir /workspace buf generate buf.build/vulpemventures/ocean
 	@docker run --rm --volume "$(shell pwd):/workspace" --workdir /workspace buf generate
 
 # proto-lint: lints protos
