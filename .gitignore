@@ -2,10 +2,7 @@
 .vscode/
 .idea
 
-*.wasm
-wasm_exec.js
+build/
+log/
 
-build
-log
-
-data
+data/

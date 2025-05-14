@@ -728,7 +728,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 
 				vtxoScript, err := tree.ParseVtxoScript(tapscripts)
 				if err != nil {
-					return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+					return "", fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
 				}
 
 				// validate the vtxo script
@@ -816,7 +816,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 
 		vtxoScript, err := tree.ParseVtxoScript(tapscripts)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+			return "", fmt.Errorf("failed to parse vtxo taproot tree: %s", err)
 		}
 
 		// validate the vtxo script
@@ -835,7 +835,10 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 		}
 
 		if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey)) {
-			return "", fmt.Errorf("descriptor does not match vtxo pubkey")
+			return "", fmt.Errorf(
+				"invalid vtxo taproot key: got %x expected %x",
+				schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey),
+			)
 		}
 
 		vtxosInputs = append(vtxosInputs, vtxo)
@@ -859,10 +862,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 	}
 
 	if bip322signature.ContainsOutputs() {
-		if err != nil {
-			return "", fmt.Errorf("unable to verify outputs amount, failed to get dust: %s", err)
-		}
-
 		hasOffChainReceiver := false
 		receivers := make([]domain.Receiver, 0)
 
@@ -989,7 +988,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 
 				vtxoScript, err := tree.ParseVtxoScript(input.Tapscripts)
 				if err != nil {
-					return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+					return "", fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
 				}
 
 				// validate the vtxo script
@@ -1050,7 +1049,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 
 		vtxoScript, err := tree.ParseVtxoScript(input.Tapscripts)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+			return "", fmt.Errorf("failed to parse vtxo taproot tree: %s", err)
 		}
 
 		// validate the vtxo script
@@ -1069,7 +1068,10 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		}
 
 		if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey)) {
-			return "", fmt.Errorf("descriptor does not match vtxo pubkey")
+			return "", fmt.Errorf(
+				"invalid vtxo taproot key: got %x expected %x",
+				schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey),
+			)
 		}
 
 		vtxosInputs = append(vtxosInputs, vtxo)
@@ -1099,7 +1101,7 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 
 	boardingScript, err := tree.ParseVtxoScript(input.Tapscripts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse boarding descriptor: %s", err)
+		return nil, fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
 	}
 
 	tapKey, _, err := boardingScript.TapTree()
@@ -1113,7 +1115,10 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 	}
 
 	if !bytes.Equal(output.PkScript, expectedScriptPubkey) {
-		return nil, fmt.Errorf("descriptor does not match script in transaction output")
+		return nil, fmt.Errorf(
+			"invalid boarding utxo taproot key: got %x expected %x",
+			output.PkScript, expectedScriptPubkey,
+		)
 	}
 
 	if err := boardingScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {

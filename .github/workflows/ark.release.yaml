@@ -65,6 +65,47 @@ jobs:
         asset_name: arkd-darwin-arm64
         asset_content_type: application/octet-stream
 
+    # SDK binary uploads
+    - name: Upload SDK binary (Linux, AMD64)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./pkg/client-sdk/build/ark-linux-amd64
+        asset_name: ark-sdk-linux-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload client binary (Linux, ARM)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./pkg/client-sdk/build/ark-linux-arm64
+        asset_name: ark-sdk-linux-arm64
+        asset_content_type: application/octet-stream
+
+    - name: Upload client binary (Darwin, AMD64)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./pkg/client-sdk/build/ark-darwin-amd64
+        asset_name: ark-sdk-darwin-amd64
+        asset_content_type: application/octet-stream
+
+    - name: Upload client binary (Darwin, ARM)
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./pkg/client-sdk/build/ark-darwin-arm64
+        asset_name: ark-sdk-darwin-arm64
+        asset_content_type: application/octet-stream
+    
     # CLI binary uploads
     - name: Upload client binary (Linux, AMD64)
       uses: actions/upload-release-asset@v1
@@ -105,17 +146,6 @@ jobs:
         asset_path: ./client/build/ark-darwin-arm64
         asset_name: ark-darwin-arm64
         asset_content_type: application/octet-stream
-
-    # WASM SDK upload
-    - name: Upload WASM SDK
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: pkg/client-sdk/build/ark-sdk.wasm
-        asset_name: ark-sdk.wasm
-        asset_content_type: application/wasm
 
   docker-build-and-push:
     runs-on: ubuntu-latest

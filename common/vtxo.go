@@ -1,14 +1,8 @@
 package common
 
 import (
-	"errors"
-
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-)
-
-var (
-	ErrWrongDescriptor = errors.New("wrong descriptor, cannot parse vtxo script")
 )
 
 type TaprootMerkleProof struct {
@@ -23,15 +17,12 @@ type TaprootTree interface {
 	GetRoot() chainhash.Hash
 }
 
-/*
-A vtxo script is defined as a taproot contract with at least 1 forfeit closure (User && Server) and 1 exit closure (A after t).
-It may also contain others closures implementing specific use cases.
-
-VtxoScript abstracts the taproot complexity behind vtxo contracts.
-it is compiled, transferred and parsed using descriptor string.
-
-// TODO gather common and tree package to prevent circular dependency and move C generic
-*/
+// VtxoScript abstracts the taproot complexity behind vtxo contracts.
+//
+// A vtxo script is defined as a taproot contract with at least 1 collaborative closure (A + S) and 1 exit closure (A after t).
+// It may also contain others closures implementing specific use cases.
+//
+// TODO: gather common and tree package to prevent circular dependency and move C generic
 type VtxoScript[T TaprootTree, C interface{}] interface {
 	Validate(server *secp256k1.PublicKey, minLocktime RelativeLocktime) error
 	TapTree() (taprootKey *secp256k1.PublicKey, taprootScriptTree T, err error)
