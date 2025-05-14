@@ -38,3 +38,6 @@ jobs:
 
       - name: wasm test
         run: make test-wasm
+
+      - name: Tear down
+        run: make -C .. docker-stop

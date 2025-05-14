@@ -31,3 +31,6 @@ jobs:
 
       - name: integration testing
         run: make integrationtest
+      
+      - name: Tear down
+        run: make -C .. docker-stop
