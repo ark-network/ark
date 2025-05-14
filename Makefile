@@ -32,3 +32,11 @@ proto-lint:
 	@echo "Linting protos..."
 	@docker build -q -t buf -f buf.Dockerfile . &> /dev/null
 	@docker run --rm --volume "$(shell pwd):/workspace" --workdir /workspace buf lint
+
+docker-run:
+	@echo "Running arkd and arkd-wallet services..."
+	docker compose -f docker-compose.regtest.yml up --build -d
+
+docker-stop:
+	@echo "Stopping arkd and arkd-wallet services..."
+	docker compose -f docker-compose.regtest.yml down -v

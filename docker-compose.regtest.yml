@@ -1,0 +1,49 @@
+services:
+  arkd-wallet:
+    build:
+      context: .
+      dockerfile: pkg/ark-wallet/Dockerfile
+    image: arkd-walle:latest
+    container_name: arkd-wallet
+    ports:
+      - "6060:6060"
+    environment:
+      - ARK_WALLET_ESPLORA_URL=http://bitcoin:3000
+      - ARK_WALLET_NEUTRINO_PEER=bitcoin:18444
+      - ARK_WALLET_DATADIR=./data/regtest
+      - ARK_WALLET_NETWORK=regtest
+    volumes:
+      - type: tmpfs
+        target: /app/data
+
+  arkd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: arkd:latest
+    container_name: arkd
+    depends_on:
+      - arkd-wallet
+    ports:
+      - "7070:7070"
+    environment:
+      - ARK_LOG_LEVEL=5
+      - ARK_NO_MACAROONS=true
+      - ARK_VTXO_TREE_EXPIRY=604672
+      - ARK_UNILATERAL_EXIT_DELAY=1024
+      - ARK_BOARDING_EXIT_DELAY=604672
+      - ARK_NETWORK=regtest
+      - ARK_DATADIR=./data/regtest
+      - ARK_WALLET_ADDR=arkd-wallet:6060
+    volumes:
+      - type: tmpfs
+        target: /app/data
+
+volumes:
+  arkd_wallet_data:
+  arkd_data:
+
+networks:
+  default:
+    name: nigiri
+    external: true

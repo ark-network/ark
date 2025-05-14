@@ -43,14 +43,6 @@ const (
 )
 
 func TestMain(m *testing.M) {
-	_, err := utils.RunCommand("docker", "compose", "-f", composePath, "up", "-d", "--build")
-	if err != nil {
-		fmt.Printf("error starting docker-compose: %s", err)
-		os.Exit(1)
-	}
-
-	time.Sleep(10 * time.Second)
-
 	if err := utils.GenerateBlock(); err != nil {
 		fmt.Printf("error generating block: %s", err)
 		os.Exit(1)
@@ -63,19 +55,13 @@ func TestMain(m *testing.M) {
 
 	time.Sleep(3 * time.Second)
 
-	_, err = runArkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
+	_, err := runArkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
 	if err != nil {
 		fmt.Printf("error initializing ark config: %s", err)
 		os.Exit(1)
 	}
 
 	code := m.Run()
-
-	_, err = utils.RunCommand("docker", "compose", "-f", composePath, "down")
-	if err != nil {
-		fmt.Printf("error stopping docker-compose: %s", err)
-		os.Exit(1)
-	}
 	os.Exit(code)
 }
 
