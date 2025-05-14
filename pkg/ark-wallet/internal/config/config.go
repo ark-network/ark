@@ -2,13 +2,14 @@ package config
 
 import (
 	"fmt"
+	"os"
+	"path/filepath"
+	"strings"
+
 	"github.com/ark-network/ark/common"
 	application "github.com/ark-network/ark/pkg/ark-wallet/internal/core"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 var (
