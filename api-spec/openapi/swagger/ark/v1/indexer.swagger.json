@@ -371,6 +371,55 @@
         ]
       }
     },
+    "/v1/getVtxosByOutpoint/{outpoints}": {
+      "get": {
+        "operationId": "IndexerService_GetVtxosByOutpoint",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetVtxosByOutpointResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "outpoints",
+            "in": "path",
+            "required": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "csv",
+            "minItems": 1
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
     "/v1/history/{address}": {
       "get": {
         "operationId": "IndexerService_GetTransactionHistory",
@@ -723,6 +772,21 @@
           "items": {
             "type": "object",
             "$ref": "#/definitions/v1IndexerNode"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1GetVtxosByOutpointResponse": {
+      "type": "object",
+      "properties": {
+        "vtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerVtxo"
           }
         },
         "page": {

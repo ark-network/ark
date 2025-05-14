@@ -197,7 +197,7 @@ type ConnectorResp struct {
 	Page       PageResp
 }
 
-type SpendableVtxosResp struct {
+type GetVtxosResp struct {
 	Vtxos []domain.Vtxo
 	Page  PageResp
 }

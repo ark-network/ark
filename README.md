@@ -38,7 +38,7 @@ For a quick-start with Docker, head over to our [Quick Start guide](https://arkd
 - [`api-spec`](./api-spec/): Ark Protocol Buffer API specification
 - [`client`](./client/): `ark` Single-key wallet CLI for interacting with the server
 - [`common`](./common/): Shared code between the server and client
-- [`pkg/client-sdk`](./pkg/client-sdk/): Go SDK for interacting with servers running the Ark protocol. It offers WASM bindings to interact with the SDK from the browser and other environments.
+- [`pkg/client-sdk`](./pkg/client-sdk/): Go SDK for interacting with servers running the Ark protocol
 - [`server`](./server/): `arkd` Ark server - the always-on daemon
 
 ## Development
@@ -51,7 +51,6 @@ To compile Ark binaries from source, you can use the following Make commands fro
 
 - `make build-server`: Builds the `arkd` binary (Ark Service Provider)
 - `make build-client`: Builds the `ark` binary (Single-key wallet CLI)
-- `make build-wasm`: Builds the WebAssembly bindings
 - `make build`: Builds all components for the current architecture (server, client, and WebAssembly SDK)
 - `make build-all`: Cross-compile all components for all supported architectures
 

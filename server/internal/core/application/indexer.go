@@ -32,7 +32,8 @@ type IndexerService interface {
 	GetVtxoTreeLeaves(ctx context.Context, batchOutpoint Outpoint, page *Page) (*VtxoTreeLeavesResp, error)
 	GetForfeitTxs(ctx context.Context, txid string, page *Page) (*ForfeitTxsResp, error)
 	GetConnectors(ctx context.Context, txid string, page *Page) (*ConnectorResp, error)
-	GetVtxos(ctx context.Context, pubkeys []string, spendableOnly, spendOnly bool, page *Page) (*SpendableVtxosResp, error)
+	GetVtxos(ctx context.Context, pubkeys []string, spendableOnly, spendOnly bool, page *Page) (*GetVtxosResp, error)
+	GetVtxosByOutpoint(ctx context.Context, outpoints []Outpoint, page *Page) (*GetVtxosResp, error)
 	GetTransactionHistory(ctx context.Context, pubkey string, start, end int64, page *Page) (*TxHistoryResp, error)
 	GetVtxoChain(ctx context.Context, vtxoKey Outpoint, page *Page) (*VtxoChainResp, error)
 	GetVirtualTxs(ctx context.Context, txids []string, page *Page) (*VirtualTxsResp, error)
@@ -161,7 +162,7 @@ func (i *indexerService) GetConnectors(ctx context.Context, txid string, page *P
 
 func (i *indexerService) GetVtxos(
 	ctx context.Context, pubkeys []string, spendableOnly, spentOnly bool, page *Page,
-) (*SpendableVtxosResp, error) {
+) (*GetVtxosResp, error) {
 	if spendableOnly && spentOnly {
 		return nil, fmt.Errorf("spendable and spent only can't be true at the same time")
 	}
@@ -175,7 +176,30 @@ func (i *indexerService) GetVtxos(
 
 	pagedVtxos, pageResp := paginate(vtxos, page, maxPageSizeSpendableVtxos)
 
-	return &SpendableVtxosResp{
+	return &GetVtxosResp{
+		Vtxos: pagedVtxos,
+		Page:  pageResp,
+	}, nil
+}
+
+func (i *indexerService) GetVtxosByOutpoint(
+	ctx context.Context, outpoints []Outpoint, page *Page,
+) (*GetVtxosResp, error) {
+	keys := make([]domain.VtxoKey, 0, len(outpoints))
+	for _, outpoint := range outpoints {
+		keys = append(keys, domain.VtxoKey{
+			Txid: outpoint.Txid,
+			VOut: outpoint.Vout,
+		})
+	}
+	vtxos, err := i.repoManager.Vtxos().GetVtxos(ctx, keys)
+	if err != nil {
+		return nil, err
+	}
+
+	pagedVtxos, pageResp := paginate(vtxos, page, maxPageSizeSpendableVtxos)
+
+	return &GetVtxosResp{
 		Vtxos: pagedVtxos,
 		Page:  pageResp,
 	}, nil
@@ -201,7 +225,7 @@ func (i *indexerService) GetTransactionHistory(
 		}
 	}
 
-	txs, err := vtxosToTxs(spendable, spent, roundTxids)
+	txs, err := i.vtxosToTxs(ctx, spendable, spent, roundTxids)
 	if err != nil {
 		return nil, err
 	}
@@ -432,7 +456,9 @@ func flattenNodes(t [][]tree.Node) []Node {
 	return result
 }
 
-func vtxosToTxs(spendable, spent []domain.Vtxo, roundTxids map[string]any) ([]TxHistoryRecord, error) {
+func (i *indexerService) vtxosToTxs(
+	ctx context.Context, spendable, spent []domain.Vtxo, roundTxids map[string]any,
+) ([]TxHistoryRecord, error) {
 	txs := make([]TxHistoryRecord, 0)
 
 	// Receivals
@@ -501,10 +527,17 @@ func vtxosToTxs(spendable, spent []domain.Vtxo, roundTxids map[string]any) ([]Tx
 		resultedAmount := reduceVtxosAmount(resultedVtxos)
 		spentAmount := reduceVtxosAmount(vtxosBySpentBy[sb])
 		if spentAmount <= resultedAmount {
-			continue // settlement or change, ignore
+			continue // settlement, ignore
 		}
-
 		vtxo := getVtxo(resultedVtxos, vtxosBySpentBy[sb])
+		if resultedAmount == 0 {
+			// send all: fetch the created vtxo to source creation and expiration timestamps
+			vtxos, err := i.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{{Txid: sb, VOut: 0}})
+			if err != nil {
+				return nil, err
+			}
+			vtxo = vtxos[0]
+		}
 
 		commitmentTxid := vtxo.RoundTxid
 		virtualTxid := ""

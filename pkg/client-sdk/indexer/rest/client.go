@@ -250,26 +250,78 @@ func (a *restClient) GetConnectors(
 }
 
 func (a *restClient) GetVtxos(
-	ctx context.Context, addresses []string, opts ...indexer.GetVtxosRequestOption,
+	ctx context.Context, opts ...indexer.GetVtxosRequestOption,
 ) (*indexer.VtxosResponse, error) {
-	params := indexer_service.NewIndexerServiceGetVtxosParams().
-		WithAddresses(addresses)
+	if len(opts) <= 0 {
+		return nil, fmt.Errorf("missing opts")
+	}
+	opt := opts[0]
 
-	if len(opts) > 0 {
-		if page := opts[0].GetPage(); page != nil {
+	if len(opt.GetOutpoints()) > 0 {
+		params := indexer_service.NewIndexerServiceGetVtxosByOutpointParams().
+			WithOutpoints(opt.GetOutpoints())
+		if page := opt.GetPage(); page != nil {
 			params.WithPageSize(&page.Size).WithPageIndex(&page.Index)
 		}
-		spentOnly := opts[0].GetSpentOnly()
-		spendableOnly := opts[0].GetSpendableOnly()
-		if spentOnly && spentOnly == spendableOnly {
-			return nil, status.Errorf(codes.InvalidArgument, "spendableOnly and spentOnly cannot be both true")
+		resp, err := a.svc.IndexerServiceGetVtxosByOutpoint(params)
+		if err != nil {
+			return nil, err
 		}
-		if spendableOnly {
-			params.WithSpendableOnly(&spentOnly)
+
+		vtxos := make([]indexer.Vtxo, 0, len(resp.Payload.Vtxos))
+		for _, vtxo := range resp.Payload.Vtxos {
+			createdAt, err := strconv.ParseInt(vtxo.CreatedAt, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+
+			expiresAt, err := strconv.ParseInt(vtxo.ExpiresAt, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+
+			amount, err := strconv.ParseUint(vtxo.Amount, 10, 64)
+			if err != nil {
+				return nil, err
+			}
+
+			vtxos = append(vtxos, indexer.Vtxo{
+				Outpoint: indexer.Outpoint{
+					Txid: vtxo.Outpoint.Txid,
+					VOut: uint32(vtxo.Outpoint.Vout),
+				},
+				CreatedAt:      createdAt,
+				ExpiresAt:      expiresAt,
+				Amount:         amount,
+				Script:         vtxo.Script,
+				IsLeaf:         vtxo.IsLeaf,
+				IsSwept:        vtxo.IsSwept,
+				IsSpent:        vtxo.IsSpent,
+				SpentBy:        vtxo.SpentBy,
+				CommitmentTxid: vtxo.CommitmentTxid,
+			})
 		}
-		if spentOnly {
-			params.WithSpentOnly(&spentOnly)
-		}
+		return &indexer.VtxosResponse{
+			Vtxos: vtxos,
+			Page:  parsePage(resp.Payload.Page),
+		}, nil
+	}
+
+	params := indexer_service.NewIndexerServiceGetVtxosParams().
+		WithAddresses(opt.GetAddresses())
+	if page := opt.GetPage(); page != nil {
+		params.WithPageSize(&page.Size).WithPageIndex(&page.Index)
+	}
+	spentOnly := opt.GetSpentOnly()
+	spendableOnly := opt.GetSpendableOnly()
+	if spentOnly && spentOnly == spendableOnly {
+		return nil, status.Errorf(codes.InvalidArgument, "spendableOnly and spentOnly cannot be both true")
+	}
+	if spendableOnly {
+		params.WithSpendableOnly(&spentOnly)
+	}
+	if spentOnly {
+		params.WithSpentOnly(&spentOnly)
 	}
 
 	resp, err := a.svc.IndexerServiceGetVtxos(params)
@@ -299,14 +351,15 @@ func (a *restClient) GetVtxos(
 				Txid: vtxo.Outpoint.Txid,
 				VOut: uint32(vtxo.Outpoint.Vout),
 			},
-			CreatedAt: createdAt,
-			ExpiresAt: expiresAt,
-			Amount:    amount,
-			Script:    vtxo.Script,
-			IsLeaf:    vtxo.IsLeaf,
-			IsSwept:   vtxo.IsSwept,
-			IsSpent:   vtxo.IsSpent,
-			SpentBy:   vtxo.SpentBy,
+			CreatedAt:      createdAt,
+			ExpiresAt:      expiresAt,
+			Amount:         amount,
+			Script:         vtxo.Script,
+			IsLeaf:         vtxo.IsLeaf,
+			IsSwept:        vtxo.IsSwept,
+			IsSpent:        vtxo.IsSpent,
+			SpentBy:        vtxo.SpentBy,
+			CommitmentTxid: vtxo.CommitmentTxid,
 		})
 	}
 

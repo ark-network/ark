@@ -266,22 +266,21 @@ func config(ctx *cli.Context) error {
 	}
 
 	cfg := map[string]interface{}{
-		"server_url":                   cfgData.ServerUrl,
-		"server_pubkey":                hex.EncodeToString(cfgData.ServerPubKey.SerializeCompressed()),
-		"wallet_type":                  cfgData.WalletType,
-		"client_type":                  cfgData.ClientType,
-		"network":                      cfgData.Network.Name,
-		"vtxo_tree_expiry":             cfgData.VtxoTreeExpiry,
-		"unilateral_exit_delay":        cfgData.UnilateralExitDelay,
-		"dust":                         cfgData.Dust,
-		"boarding_exit_delay":          cfgData.BoardingExitDelay,
-		"boarding_descriptor_template": cfgData.BoardingDescriptorTemplate,
-		"explorer_url":                 cfgData.ExplorerURL,
-		"forfeit_address":              cfgData.ForfeitAddress,
-		"utxo_min_amount":              cfgData.UtxoMinAmount,
-		"utxo_max_amount":              cfgData.UtxoMaxAmount,
-		"vtxo_min_amount":              cfgData.VtxoMinAmount,
-		"vtxo_max_amount":              cfgData.VtxoMaxAmount,
+		"server_url":            cfgData.ServerUrl,
+		"server_pubkey":         hex.EncodeToString(cfgData.ServerPubKey.SerializeCompressed()),
+		"wallet_type":           cfgData.WalletType,
+		"client_type":           cfgData.ClientType,
+		"network":               cfgData.Network.Name,
+		"vtxo_tree_expiry":      cfgData.VtxoTreeExpiry,
+		"unilateral_exit_delay": cfgData.UnilateralExitDelay,
+		"dust":                  cfgData.Dust,
+		"boarding_exit_delay":   cfgData.BoardingExitDelay,
+		"explorer_url":          cfgData.ExplorerURL,
+		"forfeit_address":       cfgData.ForfeitAddress,
+		"utxo_min_amount":       cfgData.UtxoMinAmount,
+		"utxo_max_amount":       cfgData.UtxoMaxAmount,
+		"vtxo_min_amount":       cfgData.VtxoMinAmount,
+		"vtxo_max_amount":       cfgData.VtxoMaxAmount,
 	}
 
 	return printJSON(cfg)

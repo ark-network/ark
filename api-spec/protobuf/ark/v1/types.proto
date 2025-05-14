@@ -30,10 +30,7 @@ message Outpoint {
 
 message Input {
   Outpoint outpoint = 1;
-  oneof taproot_tree {
-    string descriptor = 2;
-    Tapscripts tapscripts = 3;
-  }
+  Tapscripts taproot_tree = 2;
 }
 
 message Output {

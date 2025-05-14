@@ -18,9 +18,6 @@ import (
 // swagger:model v1GetInfoResponse
 type V1GetInfoResponse struct {
 
-	// boarding descriptor template
-	BoardingDescriptorTemplate string `json:"boardingDescriptorTemplate,omitempty"`
-
 	// boarding exit delay
 	BoardingExitDelay string `json:"boardingExitDelay,omitempty"`
 
@@ -53,9 +50,6 @@ type V1GetInfoResponse struct {
 
 	// version
 	Version string `json:"version,omitempty"`
-
-	// vtxo descriptor templates
-	VtxoDescriptorTemplates []string `json:"vtxoDescriptorTemplates"`
 
 	// -1 means no limit (default)
 	VtxoMaxAmount string `json:"vtxoMaxAmount,omitempty"`

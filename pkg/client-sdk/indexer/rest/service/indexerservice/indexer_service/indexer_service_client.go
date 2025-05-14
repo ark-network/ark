@@ -76,6 +76,8 @@ type ClientService interface {
 
 	IndexerServiceGetVtxos(params *IndexerServiceGetVtxosParams, opts ...ClientOption) (*IndexerServiceGetVtxosOK, error)
 
+	IndexerServiceGetVtxosByOutpoint(params *IndexerServiceGetVtxosByOutpointParams, opts ...ClientOption) (*IndexerServiceGetVtxosByOutpointOK, error)
+
 	SetTransport(transport runtime.ClientTransport)
 }
 
@@ -483,6 +485,43 @@ func (a *Client) IndexerServiceGetVtxos(params *IndexerServiceGetVtxosParams, op
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*IndexerServiceGetVtxosDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+IndexerServiceGetVtxosByOutpoint indexer service get vtxos by outpoint API
+*/
+func (a *Client) IndexerServiceGetVtxosByOutpoint(params *IndexerServiceGetVtxosByOutpointParams, opts ...ClientOption) (*IndexerServiceGetVtxosByOutpointOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewIndexerServiceGetVtxosByOutpointParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "IndexerService_GetVtxosByOutpoint",
+		Method:             "GET",
+		PathPattern:        "/v1/getVtxosByOutpoint/{outpoints}",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &IndexerServiceGetVtxosByOutpointReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*IndexerServiceGetVtxosByOutpointOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*IndexerServiceGetVtxosByOutpointDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

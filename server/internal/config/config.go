@@ -3,6 +3,7 @@ package config
 import (
 	"context"
 	"fmt"
+	walletclient "github.com/ark-network/ark/server/internal/infrastructure/wallet"
 	"os"
 	"path/filepath"
 	"strings"
@@ -17,7 +18,6 @@ import (
 	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
 	envunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/env"
 	fileunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/file"
-	btcwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/btc-embedded"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -85,13 +85,7 @@ type Config struct {
 	// TODO remove with transactions version 3
 	AllowZeroFees bool
 
-	EsploraURL       string
-	NeutrinoPeer     string
-	BitcoindRpcUser  string
-	BitcoindRpcPass  string
-	BitcoindRpcHost  string
-	BitcoindZMQBlock string
-	BitcoindZMQTx    string
+	EsploraURL string
 
 	UnlockerType     string
 	UnlockerFilePath string // file unlocker
@@ -114,28 +108,20 @@ type Config struct {
 }
 
 var (
-	Datadir             = "DATADIR"
-	WalletAddr          = "WALLET_ADDR"
-	RoundInterval       = "ROUND_INTERVAL"
-	Port                = "PORT"
-	EventDbType         = "EVENT_DB_TYPE"
-	DbType              = "DB_TYPE"
-	SchedulerType       = "SCHEDULER_TYPE"
-	TxBuilderType       = "TX_BUILDER_TYPE"
-	LogLevel            = "LOG_LEVEL"
-	Network             = "NETWORK"
-	VtxoTreeExpiry      = "VTXO_TREE_EXPIRY"
-	UnilateralExitDelay = "UNILATERAL_EXIT_DELAY"
-	BoardingExitDelay   = "BOARDING_EXIT_DELAY"
-	EsploraURL          = "ESPLORA_URL"
-	NeutrinoPeer        = "NEUTRINO_PEER"
-	// #nosec G101
-	BitcoindRpcUser = "BITCOIND_RPC_USER"
-	// #nosec G101
-	BitcoindRpcPass           = "BITCOIND_RPC_PASS"
-	BitcoindRpcHost           = "BITCOIND_RPC_HOST"
-	BitcoindZMQBlock          = "BITCOIND_ZMQ_BLOCK"
-	BitcoindZMQTx             = "BITCOIND_ZMQ_TX"
+	Datadir                   = "DATADIR"
+	WalletAddr                = "WALLET_ADDR"
+	RoundInterval             = "ROUND_INTERVAL"
+	Port                      = "PORT"
+	EventDbType               = "EVENT_DB_TYPE"
+	DbType                    = "DB_TYPE"
+	SchedulerType             = "SCHEDULER_TYPE"
+	TxBuilderType             = "TX_BUILDER_TYPE"
+	LogLevel                  = "LOG_LEVEL"
+	Network                   = "NETWORK"
+	VtxoTreeExpiry            = "VTXO_TREE_EXPIRY"
+	UnilateralExitDelay       = "UNILATERAL_EXIT_DELAY"
+	BoardingExitDelay         = "BOARDING_EXIT_DELAY"
+	EsploraURL                = "ESPLORA_URL"
 	NoMacaroons               = "NO_MACAROONS"
 	NoTLS                     = "NO_TLS"
 	TLSExtraIP                = "TLS_EXTRA_IP"
@@ -243,12 +229,6 @@ func LoadConfig() (*Config, error) {
 		UnilateralExitDelay:       determineLocktimeType(viper.GetInt64(UnilateralExitDelay)),
 		BoardingExitDelay:         determineLocktimeType(viper.GetInt64(BoardingExitDelay)),
 		EsploraURL:                viper.GetString(EsploraURL),
-		NeutrinoPeer:              viper.GetString(NeutrinoPeer),
-		BitcoindRpcUser:           viper.GetString(BitcoindRpcUser),
-		BitcoindRpcPass:           viper.GetString(BitcoindRpcPass),
-		BitcoindRpcHost:           viper.GetString(BitcoindRpcHost),
-		BitcoindZMQBlock:          viper.GetString(BitcoindZMQBlock),
-		BitcoindZMQTx:             viper.GetString(BitcoindZMQTx),
 		NoMacaroons:               viper.GetBool(NoMacaroons),
 		TLSExtraIPs:               viper.GetStringSlice(TLSExtraIP),
 		TLSExtraDomains:           viper.GetStringSlice(TLSExtraDomain),
@@ -470,41 +450,17 @@ func (c *Config) repoManager() error {
 }
 
 func (c *Config) walletService() error {
-	// Check if both Neutrino peer and Bitcoind RPC credentials are provided
-	if c.NeutrinoPeer != "" && (c.BitcoindRpcUser != "" || c.BitcoindRpcPass != "") {
-		return fmt.Errorf("cannot use both Neutrino peer and Bitcoind RPC credentials")
+	arkWallet := viper.GetString(WalletAddr)
+	if arkWallet == "" {
+		return fmt.Errorf("ark wallet address not set")
 	}
 
-	var svc ports.WalletService
-	var err error
-
-	switch {
-	case c.BitcoindZMQBlock != "" && c.BitcoindZMQTx != "" && c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
-		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
-			Datadir: c.DbDir,
-			Network: c.Network,
-		}, btcwallet.WithBitcoindZMQ(c.BitcoindZMQBlock, c.BitcoindZMQTx, c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
-	case c.BitcoindRpcUser != "" && c.BitcoindRpcPass != "":
-		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
-			Datadir: c.DbDir,
-			Network: c.Network,
-		}, btcwallet.WithPollingBitcoind(c.BitcoindRpcHost, c.BitcoindRpcUser, c.BitcoindRpcPass))
-	default:
-		// Default to Neutrino for Bitcoin mainnet or when NeutrinoPeer is explicitly set
-		if len(c.EsploraURL) == 0 {
-			return fmt.Errorf("missing esplora url, covenant-less ark requires ARK_ESPLORA_URL to be set")
-		}
-		svc, err = btcwallet.NewService(btcwallet.WalletConfig{
-			Datadir: c.DbDir,
-			Network: c.Network,
-		}, btcwallet.WithNeutrino(c.NeutrinoPeer, c.EsploraURL))
-	}
-
+	walletSvc, err := walletclient.New(context.Background(), arkWallet)
 	if err != nil {
 		return err
 	}
 
-	c.wallet = svc
+	c.wallet = walletSvc
 	return nil
 }
 

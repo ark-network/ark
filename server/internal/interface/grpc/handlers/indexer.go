@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"strconv"
 	"strings"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
@@ -246,6 +247,48 @@ func (e indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosReq
 	}, nil
 }
 
+func (e indexerService) GetVtxosByOutpoint(
+	ctx context.Context, request *arkv1.GetVtxosByOutpointRequest,
+) (*arkv1.GetVtxosByOutpointResponse, error) {
+	outpoints, err := parseOutpoints(request.GetOutpoints())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	page, err := parsePage(request.GetPage())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	resp, err := e.indexerSvc.GetVtxosByOutpoint(ctx, outpoints, page)
+	if err != nil {
+		return nil, status.Errorf(codes.Internal, "failed to get vtxos by outpoints: %v", err)
+	}
+
+	vtxos := make([]*arkv1.IndexerVtxo, len(resp.Vtxos))
+	for i, vtxo := range resp.Vtxos {
+		vtxos[i] = &arkv1.IndexerVtxo{
+			Outpoint: &arkv1.IndexerOutpoint{
+				Txid: vtxo.Txid,
+				Vout: vtxo.VOut,
+			},
+			CreatedAt:      vtxo.CreatedAt,
+			ExpiresAt:      vtxo.ExpireAt,
+			Amount:         vtxo.Amount,
+			Script:         vtxo.PubKey,
+			IsLeaf:         vtxo.RedeemTx == "",
+			IsSwept:        vtxo.Swept,
+			IsSpent:        vtxo.Spent,
+			SpentBy:        vtxo.SpentBy,
+			CommitmentTxid: vtxo.RoundTxid,
+		}
+	}
+
+	return &arkv1.GetVtxosByOutpointResponse{
+		Vtxos: vtxos,
+		Page:  protoPage(resp.Page),
+	}, nil
+}
+
 func (e indexerService) GetTransactionHistory(
 	ctx context.Context, request *arkv1.GetTransactionHistoryRequest,
 ) (*arkv1.GetTransactionHistoryResponse, error) {
@@ -396,6 +439,32 @@ func parseTxid(txid string) (string, error) {
 		return "", fmt.Errorf("invalid txid length")
 	}
 	return txid, nil
+}
+
+func parseOutpoints(outpoints []string) ([]application.Outpoint, error) {
+	if len(outpoints) == 0 {
+		return nil, fmt.Errorf("missing outpoints")
+	}
+	outs := make([]application.Outpoint, 0, len(outpoints))
+	for _, outpoint := range outpoints {
+		parts := strings.Split(outpoint, ":")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid outpoint format")
+		}
+		txid, err := parseTxid(parts[0])
+		if err != nil {
+			return nil, err
+		}
+		vout, err := strconv.Atoi(parts[1])
+		if err != nil || vout < 0 {
+			return nil, fmt.Errorf("invalid vout %s", parts[1])
+		}
+		outs = append(outs, application.Outpoint{
+			Txid: txid,
+			Vout: uint32(vout),
+		})
+	}
+	return outs, nil
 }
 
 func parseOutpoint(outpoint *arkv1.IndexerOutpoint) (*application.Outpoint, error) {
