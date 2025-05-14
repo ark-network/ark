@@ -144,17 +144,19 @@ func (h *handler) RegisterIntent(
 		return nil, status.Error(codes.InvalidArgument, "missing inputs")
 	}
 
-	signature, err := bip322.DecodeSignature(bip322Signature.Signature)
+	signature, err := bip322.DecodeSignature(bip322Signature.GetSignature())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 signature")
 	}
 
-	if len(bip322Signature.Message) <= 0 {
+	intentMessage := bip322Signature.GetMessage()
+
+	if len(intentMessage) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing message")
 	}
 
 	var message tree.IntentMessage
-	if err := message.Decode(bip322Signature.Message); err != nil {
+	if err := message.Decode(intentMessage); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 message")
 	}
 
