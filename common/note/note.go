@@ -177,7 +177,7 @@ func (n *NoteClosure) Decode(script []byte) (bool, error) {
 
 // WitnessSize returns the size of the witness data excluding the control block and script
 func (n *NoteClosure) WitnessSize(_ ...int) int {
-	return 32 // preimage is always 32 bytes
+	return preimageSize
 }
 
 // Witness returns the witness stack for spending the fake vtxo note
