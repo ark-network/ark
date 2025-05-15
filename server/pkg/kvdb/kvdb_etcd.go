@@ -11,7 +11,7 @@ import (
 // defined, allowing testing our database code with etcd backend.
 const EtcdBackend = true
 
-// GetEtcdTestBackend creates an embedded etcd backend for testing
+// StartEtcdTestBackend creates an embedded etcd backend for testing
 // storig the database at the passed path.
 func StartEtcdTestBackend(path string, clientPort, peerPort uint16,
 	logFile string) (*etcd.Config, func(), error) {
