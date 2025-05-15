@@ -1404,8 +1404,98 @@ func (s *covenantlessService) DeleteTxRequests(
 	if len(requestIds) == 0 {
 		return s.txRequests.deleteAll()
 	}
-
 	return s.txRequests.delete(requestIds)
+}
+
+// DeleteTxRequestsByProof deletes transaction requests matching the BIP322 proof.
+func (s *covenantlessService) DeleteTxRequestsByProof(
+	ctx context.Context, sig bip322.Signature, message tree.IntentMessage,
+) error {
+	outpoints := sig.GetOutpoints()
+	if len(outpoints) != len(message.InputTapTrees) {
+		return fmt.Errorf("number of outpoints and taptrees do not match")
+	}
+
+	boardingTxs := make(map[string]wire.MsgTx)
+	prevouts := make(map[wire.OutPoint]*wire.TxOut)
+	for _, outpoint := range outpoints {
+		vtxoKey := domain.VtxoKey{
+			Txid: outpoint.Hash.String(),
+			VOut: outpoint.Index,
+		}
+
+		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{vtxoKey})
+		if err != nil || len(vtxosResult) == 0 {
+			if _, ok := boardingTxs[vtxoKey.Txid]; !ok {
+				txhex, err := s.wallet.GetTransaction(ctx, outpoint.Hash.String())
+				if err != nil {
+					return fmt.Errorf("failed to get tx %s: %s", vtxoKey.Txid, err)
+				}
+
+				var tx wire.MsgTx
+				if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txhex))); err != nil {
+					return fmt.Errorf("failed to deserialize tx %s: %s", vtxoKey.Txid, err)
+				}
+
+				boardingTxs[vtxoKey.Txid] = tx
+			}
+
+			tx := boardingTxs[vtxoKey.Txid]
+			prevout := tx.TxOut[vtxoKey.VOut]
+			prevouts[outpoint] = prevout
+			continue
+		}
+
+		vtxo := vtxosResult[0]
+		pubkeyBytes, err := hex.DecodeString(vtxo.PubKey)
+		if err != nil {
+			return fmt.Errorf("failed to decode script pubkey: %s", err)
+		}
+
+		pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+		if err != nil {
+			return fmt.Errorf("failed to parse pubkey: %s", err)
+		}
+
+		pkScript, err := common.P2TRScript(pubkey)
+		if err != nil {
+			return fmt.Errorf("failed to create p2tr script: %s", err)
+		}
+
+		prevouts[outpoint] = &wire.TxOut{
+			Value:    int64(vtxo.Amount),
+			PkScript: pkScript,
+		}
+	}
+
+	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
+	encodedMessage, err := message.Encode()
+	if err != nil {
+		return fmt.Errorf("failed to encode message: %s", err)
+	}
+
+	if err := sig.Verify(encodedMessage, prevoutFetcher); err != nil {
+		return fmt.Errorf("failed to verify signature: %s", err)
+	}
+
+	allRequests, err := s.txRequests.viewAll(nil)
+	if err != nil {
+		return err
+	}
+	var idsToDelete []string
+	for _, req := range allRequests {
+		for _, in := range req.Inputs {
+			for _, op := range outpoints {
+				if in.Txid == op.Hash.String() && in.VOut == op.Index {
+					idsToDelete = append(idsToDelete, req.Id)
+				}
+			}
+		}
+	}
+	if len(idsToDelete) == 0 {
+		return fmt.Errorf("no matching tx requests found for BIP322 proof")
+	}
+	return s.txRequests.delete(idsToDelete)
 }
 
 func calcNextMarketHour(marketHourStartTime, marketHourEndTime time.Time, period, marketHourDelta time.Duration, now time.Time) (time.Time, time.Time, error) {

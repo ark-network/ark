@@ -160,11 +160,35 @@ func (h *handler) DeleteIntent(
 	ctx context.Context, req *arkv1.DeleteIntentRequest,
 ) (*arkv1.DeleteIntentResponse, error) {
 	requestID := req.GetRequestId()
-	if requestID == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing request id")
+	bip322Signature := req.GetBip322Signature()
+
+	if requestID != "" {
+		if err := h.svc.DeleteTxRequests(ctx, requestID); err != nil {
+			return nil, err
+		}
+		return &arkv1.DeleteIntentResponse{}, nil
 	}
 
-	if err := h.svc.DeleteTxRequests(ctx, requestID); err != nil {
+	if bip322Signature == nil {
+		return nil, status.Error(codes.InvalidArgument, "missing request id or bip322 signature")
+	}
+
+	signature, err := bip322.DecodeSignature(bip322Signature.GetSignature())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 signature")
+	}
+
+	intentMessage := bip322Signature.GetMessage()
+	if len(intentMessage) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing BIP0322 message")
+	}
+
+	var message tree.IntentMessage
+	if err := message.Decode(intentMessage); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 message")
+	}
+
+	if err := h.svc.DeleteTxRequestsByProof(ctx, *signature, message); err != nil {
 		return nil, err
 	}
 

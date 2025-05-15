@@ -465,6 +465,9 @@
       "properties": {
         "requestId": {
           "type": "string"
+        },
+        "bip322Signature": {
+          "$ref": "#/definitions/v1Bip322Signature"
         }
       }
     },
