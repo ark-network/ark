@@ -203,6 +203,20 @@ func (a *restClient) RegisterIntent(
 	return resp.Payload.RequestID, nil
 }
 
+func (a *restClient) DeleteIntent(_ context.Context, requestID, signature, message string) error {
+	body := &models.V1DeleteIntentRequest{
+		Bip322Signature: &models.V1Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
+		RequestID: requestID,
+	}
+	_, err := a.svc.ArkServiceDeleteIntent(
+		ark_service.NewArkServiceDeleteIntentParams().WithBody(body),
+	)
+	return err
+}
+
 func (a *restClient) RegisterOutputsForNextRound(
 	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {
