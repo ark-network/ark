@@ -156,6 +156,21 @@ func (h *handler) RegisterIntent(
 	}, nil
 }
 
+func (h *handler) DeleteIntent(
+	ctx context.Context, req *arkv1.DeleteIntentRequest,
+) (*arkv1.DeleteIntentResponse, error) {
+	requestID := req.GetRequestId()
+	if requestID == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing request id")
+	}
+
+	if err := h.svc.DeleteTxRequests(ctx, requestID); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.DeleteIntentResponse{}, nil
+}
+
 func (h *handler) RegisterInputsForNextRound(
 	ctx context.Context, req *arkv1.RegisterInputsForNextRoundRequest,
 ) (*arkv1.RegisterInputsForNextRoundResponse, error) {

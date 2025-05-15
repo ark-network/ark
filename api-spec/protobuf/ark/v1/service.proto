@@ -26,6 +26,12 @@ service ArkService {
       body: "*"
     };
   };
+  rpc DeleteIntent(DeleteIntentRequest) returns (DeleteIntentResponse) {
+    option (google.api.http) = {
+      post: "/v1/round/deleteIntent"
+      body: "*"
+    };
+  }
   rpc RegisterInputsForNextRound(RegisterInputsForNextRoundRequest) returns (RegisterInputsForNextRoundResponse) {
     option (google.api.http) = {
       post: "/v1/round/registerInputs"
@@ -118,6 +124,11 @@ message RegisterIntentRequest {
 message RegisterIntentResponse {
   string request_id = 1;
 }
+
+message DeleteIntentRequest {
+  string request_id = 1;
+}
+message DeleteIntentResponse {}
 
 message RegisterInputsForNextRoundRequest {
   repeated Input inputs = 1;
