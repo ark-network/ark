@@ -476,7 +476,7 @@ func (r *outpointMap) includesAny(outpoints []domain.VtxoKey) (bool, string) {
 	return false, ""
 }
 
-// onchainOutputs iterates over all the nodes' outputs in the vtxo tree and checks their onchain state
+// findSweepableOutputs iterates over all the nodes' outputs in the vtxo tree and checks their onchain state
 // returns the sweepable outputs as ports.SweepInput mapped by their expiration time
 func findSweepableOutputs(
 	ctx context.Context,
