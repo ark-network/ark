@@ -133,6 +133,38 @@
         ]
       }
     },
+    "/v1/round/deleteIntent": {
+      "post": {
+        "operationId": "ArkService_DeleteIntent",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteIntentResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1DeleteIntentRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/round/ping/{requestId}": {
       "get": {
         "operationId": "ArkService_Ping",
@@ -427,6 +459,20 @@
           "type": "string"
         }
       }
+    },
+    "v1DeleteIntentRequest": {
+      "type": "object",
+      "properties": {
+        "requestId": {
+          "type": "string"
+        },
+        "bip322Signature": {
+          "$ref": "#/definitions/v1Bip322Signature"
+        }
+      }
+    },
+    "v1DeleteIntentResponse": {
+      "type": "object"
     },
     "v1GetBoardingAddressRequest": {
       "type": "object",

@@ -131,6 +131,18 @@ func (a *grpcClient) RegisterIntent(
 	return resp.GetRequestId(), nil
 }
 
+func (a *grpcClient) DeleteIntent(ctx context.Context, requestID, signature, message string) error {
+	req := &arkv1.DeleteIntentRequest{
+		RequestId: requestID,
+		Bip322Signature: &arkv1.Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
+	}
+	_, err := a.svc.DeleteIntent(ctx, req)
+	return err
+}
+
 func (a *grpcClient) RegisterOutputsForNextRound(
 	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {

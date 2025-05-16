@@ -54,6 +54,8 @@ type ClientOption func(*runtime.ClientOperation)
 
 // ClientService is the interface for Client methods
 type ClientService interface {
+	ArkServiceDeleteIntent(params *ArkServiceDeleteIntentParams, opts ...ClientOption) (*ArkServiceDeleteIntentOK, error)
+
 	ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error)
 
 	ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams, opts ...ClientOption) (*ArkServiceGetEventStreamOK, error)
@@ -79,6 +81,43 @@ type ClientService interface {
 	ArkServiceSubmitTreeSignatures(params *ArkServiceSubmitTreeSignaturesParams, opts ...ClientOption) (*ArkServiceSubmitTreeSignaturesOK, error)
 
 	SetTransport(transport runtime.ClientTransport)
+}
+
+/*
+ArkServiceDeleteIntent ark service delete intent API
+*/
+func (a *Client) ArkServiceDeleteIntent(params *ArkServiceDeleteIntentParams, opts ...ClientOption) (*ArkServiceDeleteIntentOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceDeleteIntentParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_DeleteIntent",
+		Method:             "POST",
+		PathPattern:        "/v1/round/deleteIntent",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceDeleteIntentReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceDeleteIntentOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceDeleteIntentDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
 /*
