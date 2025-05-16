@@ -1482,19 +1482,29 @@ func (s *covenantlessService) DeleteTxRequestsByProof(
 	if err != nil {
 		return err
 	}
-	var idsToDelete []string
+
+	idsToDeleteMap := make(map[string]struct{})
 	for _, req := range allRequests {
 		for _, in := range req.Inputs {
 			for _, op := range outpoints {
 				if in.Txid == op.Hash.String() && in.VOut == op.Index {
-					idsToDelete = append(idsToDelete, req.Id)
+					if _, ok := idsToDeleteMap[req.Id]; !ok {
+						idsToDeleteMap[req.Id] = struct{}{}
+					}
 				}
 			}
 		}
 	}
-	if len(idsToDelete) == 0 {
+
+	if len(idsToDeleteMap) == 0 {
 		return fmt.Errorf("no matching tx requests found for BIP322 proof")
 	}
+
+	idsToDelete := make([]string, 0, len(idsToDeleteMap))
+	for id := range idsToDeleteMap {
+		idsToDelete = append(idsToDelete, id)
+	}
+
 	return s.txRequests.delete(idsToDelete)
 }
 
