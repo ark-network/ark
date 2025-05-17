@@ -77,9 +77,7 @@ message UnlockRequest {
 }
 message UnlockResponse {}
 
-message LockRequest {
-  string password = 1;
-}
+message LockRequest {}
 message LockResponse {}
 
 message GetStatusRequest {}

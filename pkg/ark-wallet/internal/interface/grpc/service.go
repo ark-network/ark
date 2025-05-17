@@ -4,30 +4,22 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
+	"net/http"
+	"strings"
+
+	arkwalletv1 "github.com/ark-network/ark/api-spec/protobuf/gen/arkwallet/v1"
 	"github.com/ark-network/ark/pkg/ark-wallet/internal/config"
 	"github.com/ark-network/ark/pkg/ark-wallet/internal/interface/grpc/handlers"
+	"github.com/ark-network/ark/pkg/ark-wallet/internal/interface/grpc/interceptors"
+	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
-	"google.golang.org/protobuf/encoding/protojson"
-
-	"go.opentelemetry.io/otel/trace"
-	"google.golang.org/grpc/codes"
-	grpchealth "google.golang.org/grpc/health/grpc_health_v1"
-	"google.golang.org/grpc/status"
-	"log/slog"
-	"net/http"
-	"os"
-	"runtime/debug"
-	"strings"
-
-	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
-	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
-	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/recovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-
-	arkwalletv1 "github.com/ark-network/ark/api-spec/protobuf/gen/arkwallet/v1"
+	grpchealth "google.golang.org/grpc/health/grpc_health_v1"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -47,30 +39,10 @@ func NewService(cfg *config.Config) (*service, error) {
 }
 
 func (s *service) Start() error {
-	logger := slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{}))
-	rpcLogger := logger.With("service", "gRPC/server", "component", component)
-	logTraceID := func(ctx context.Context) logging.Fields {
-		if span := trace.SpanContextFromContext(ctx); span.IsSampled() {
-			return logging.Fields{"traceID", span.TraceID().String()}
-		}
-		return nil
-	}
-
-	grpcPanicRecoveryHandler := func(p any) (err error) {
-		rpcLogger.Error("recovered from panic", "panic", p, "stack", debug.Stack())
-		return status.Errorf(codes.Internal, "%s", p)
-	}
-
 	grpcSrv := grpc.NewServer(
 		grpc.Creds(insecure.NewCredentials()),
-		grpc.UnaryInterceptor(grpc_middleware.ChainUnaryServer(
-			logging.UnaryServerInterceptor(interceptorLogger(rpcLogger), logging.WithFieldsFromContext(logTraceID)),
-			recovery.UnaryServerInterceptor(),
-		)),
-		grpc.ChainStreamInterceptor(
-			logging.StreamServerInterceptor(interceptorLogger(rpcLogger), logging.WithFieldsFromContext(logTraceID)),
-			recovery.StreamServerInterceptor(recovery.WithRecoveryHandler(grpcPanicRecoveryHandler)),
-		),
+		interceptors.UnaryInterceptor(),
+		interceptors.StreamInterceptor(),
 	)
 
 	walletHandler := handlers.NewWalletServiceHandler(s.cfg.WalletSvc)

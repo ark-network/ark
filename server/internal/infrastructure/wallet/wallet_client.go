@@ -3,6 +3,9 @@ package walletclient
 import (
 	"context"
 	"fmt"
+	"strings"
+
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	log "github.com/sirupsen/logrus"
 
@@ -11,7 +14,9 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/status"
 )
 
 type walletDaemonClient struct {
@@ -20,13 +25,19 @@ type walletDaemonClient struct {
 }
 
 // New creates a ports.WalletService backed by a gRPC client.
-func New(ctx context.Context, addr string) (ports.WalletService, error) {
+func New(addr string) (ports.WalletService, *common.Network, error) {
 	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial btc-wallet grpc server: %w", err)
+		return nil, nil, fmt.Errorf("failed to dial btc-wallet grpc server: %w", err)
 	}
 	client := arkwalletv1.NewWalletServiceClient(conn)
-	return &walletDaemonClient{client: client, conn: conn}, nil
+
+	svc := &walletDaemonClient{client: client, conn: conn}
+	network, err := svc.GetNetwork(context.Background())
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to connect to wallet: %s", err)
+	}
+	return svc, network, nil
 }
 
 func (w *walletDaemonClient) GenSeed(ctx context.Context) (string, error) {
@@ -52,8 +63,8 @@ func (w *walletDaemonClient) Unlock(ctx context.Context, password string) error 
 	return err
 }
 
-func (w *walletDaemonClient) Lock(ctx context.Context, password string) error {
-	_, err := w.client.Lock(ctx, &arkwalletv1.LockRequest{Password: password})
+func (w *walletDaemonClient) Lock(ctx context.Context) error {
+	_, err := w.client.Lock(ctx, &arkwalletv1.LockRequest{})
 	return err
 }
 
@@ -103,7 +114,13 @@ func (w *walletDaemonClient) GetNotificationChannel(ctx context.Context) <-chan 
 		for {
 			resp, err := stream.Recv()
 			if err != nil {
-				log.Errorf("GetNotificationChannel: failed to receive notification: %v", err)
+				if strings.Contains(err.Error(), "EOF") {
+					log.Fatal("connection closed by wallet")
+				}
+				if status.Code(err) == codes.Canceled {
+					return
+				}
+				log.WithError(err).Warnf("failed to receive notification")
 				return
 			}
 			m := make(map[string][]ports.VtxoWithValue)
@@ -134,29 +151,34 @@ func (w *walletDaemonClient) IsTransactionConfirmed(ctx context.Context, txid st
 	return resp.Confirmed, resp.Blocknumber, resp.Blocktime, nil
 }
 
-func (w *walletDaemonClient) GetSyncedUpdate(ctx context.Context) <-chan struct{} {
+func (w *walletDaemonClient) GetReadyUpdate(ctx context.Context) (<-chan struct{}, error) {
 	ch := make(chan struct{})
-	stream, err := w.client.GetSyncedUpdate(ctx, &arkwalletv1.GetSyncedUpdateRequest{})
+	stream, err := w.client.GetReadyUpdate(ctx, &arkwalletv1.GetReadyUpdateRequest{})
 	if err != nil {
-		close(ch)
-		return ch
+		return nil, err
 	}
 	go func() {
 		defer close(ch)
 		for {
 			resp, err := stream.Recv()
 			if err != nil {
-				log.Errorf("GetSyncedUpdate: failed to receive notification: %v", err)
+				if strings.Contains(err.Error(), "EOF") {
+					log.Fatal("connection closed by wallet")
+				}
+				if status.Code(err) == codes.Canceled {
+					return
+				}
+				log.WithError(err).Warnf("failed to receive wallet ready update")
 				return
 			}
 
-			if resp.GetSynced() {
+			if resp.GetReady() {
 				ch <- struct{}{}
 				return
 			}
 		}
 	}()
-	return ch
+	return ch, nil
 }
 
 func (w *walletDaemonClient) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error) {
@@ -169,6 +191,31 @@ func (w *walletDaemonClient) GetPubkey(ctx context.Context) (*secp256k1.PublicKe
 		return nil, fmt.Errorf("failed to parse pubkey: %w", err)
 	}
 	return pubkey, nil
+}
+
+func (w *walletDaemonClient) GetNetwork(ctx context.Context) (*common.Network, error) {
+	resp, err := w.client.GetNetwork(ctx, &arkwalletv1.GetNetworkRequest{})
+	if err != nil {
+		return nil, err
+	}
+	var network common.Network
+	switch resp.GetNetwork() {
+	case common.BitcoinTestNet.Name:
+		network = common.BitcoinTestNet
+	case common.BitcoinTestNet4.Name:
+		network = common.BitcoinTestNet4
+	case common.BitcoinSigNet.Name:
+		network = common.BitcoinSigNet
+	case common.BitcoinMutinyNet.Name:
+		network = common.BitcoinMutinyNet
+	case common.BitcoinRegTest.Name:
+		network = common.BitcoinRegTest
+	case common.Bitcoin.Name:
+		fallthrough
+	default:
+		network = common.Bitcoin
+	}
+	return &network, nil
 }
 
 func (w *walletDaemonClient) GetForfeitAddress(ctx context.Context) (string, error) {

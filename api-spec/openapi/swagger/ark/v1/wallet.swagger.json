@@ -332,12 +332,7 @@
       }
     },
     "v1LockRequest": {
-      "type": "object",
-      "properties": {
-        "password": {
-          "type": "string"
-        }
-      }
+      "type": "object"
     },
     "v1LockResponse": {
       "type": "object"

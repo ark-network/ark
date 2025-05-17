@@ -194,6 +194,9 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 	grpcServer := grpc.NewServer(grpcConfig...)
 
 	var appSvc application.Service
+	onInit := s.onInit
+	onUnlock := s.onUnlock
+	onReady := s.onReady
 	if withAppSvc {
 		svc, err := s.appConfig.AppService()
 		if err != nil {
@@ -209,6 +212,9 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
 		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
 		arkv1.RegisterIndexerServiceServer(grpcServer, indexerHandler)
+		onInit = nil
+		onUnlock = nil
+		onReady = nil
 	}
 
 	adminHandler := handlers.NewAdminHandler(s.appConfig.AdminService(), appSvc, s.appConfig.NoteUriPrefix)
@@ -218,7 +224,7 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 	arkv1.RegisterWalletServiceServer(grpcServer, walletHandler)
 
 	walletInitHandler := handlers.NewWalletInitializerHandler(
-		s.appConfig.WalletService(), s.onInit, s.onUnlock, s.onReady,
+		s.appConfig.WalletService(), onInit, onUnlock, onReady,
 	)
 	arkv1.RegisterWalletInitializerServiceServer(grpcServer, walletInitHandler)
 

@@ -424,6 +424,28 @@
         ]
       }
     },
+    "/v1/wallet/network": {
+      "get": {
+        "operationId": "WalletService_GetNetwork",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetNetworkResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "WalletService"
+        ]
+      }
+    },
     "/v1/wallet/notifications": {
       "get": {
         "operationId": "WalletService_NotificationStream",
@@ -463,6 +485,37 @@
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/v1GetPubkeyResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "WalletService"
+        ]
+      }
+    },
+    "/v1/wallet/ready-update": {
+      "get": {
+        "operationId": "WalletService_GetReadyUpdate",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1GetReadyUpdateResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/googlerpcStatus"
+                }
+              },
+              "title": "Stream result of v1GetReadyUpdateResponse"
             }
           },
           "default": {
@@ -667,37 +720,6 @@
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/v1StatusResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googlerpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "WalletService"
-        ]
-      }
-    },
-    "/v1/wallet/synced-update": {
-      "get": {
-        "operationId": "WalletService_GetSyncedUpdate",
-        "responses": {
-          "200": {
-            "description": "A successful response.(streaming responses)",
-            "schema": {
-              "type": "object",
-              "properties": {
-                "result": {
-                  "$ref": "#/definitions/v1GetSyncedUpdateResponse"
-                },
-                "error": {
-                  "$ref": "#/definitions/googlerpcStatus"
-                }
-              },
-              "title": "Stream result of v1GetSyncedUpdateResponse"
             }
           },
           "default": {
@@ -1128,6 +1150,14 @@
         }
       }
     },
+    "v1GetNetworkResponse": {
+      "type": "object",
+      "properties": {
+        "network": {
+          "type": "string"
+        }
+      }
+    },
     "v1GetPubkeyResponse": {
       "type": "object",
       "properties": {
@@ -1137,10 +1167,10 @@
         }
       }
     },
-    "v1GetSyncedUpdateResponse": {
+    "v1GetReadyUpdateResponse": {
       "type": "object",
       "properties": {
-        "synced": {
+        "ready": {
           "type": "boolean"
         }
       }
@@ -1197,12 +1227,7 @@
       "type": "object"
     },
     "v1LockRequest": {
-      "type": "object",
-      "properties": {
-        "password": {
-          "type": "string"
-        }
-      }
+      "type": "object"
     },
     "v1LockResponse": {
       "type": "object"

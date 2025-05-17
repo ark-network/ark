@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 
+	"github.com/ark-network/ark/common"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
@@ -15,14 +16,15 @@ var (
 
 type WalletService interface {
 	BlockchainScanner
-	GetSyncedUpdate(ctx context.Context) <-chan struct{}
+	GetReadyUpdate(ctx context.Context) (<-chan struct{}, error)
 	GenSeed(ctx context.Context) (string, error)
 	Create(ctx context.Context, seed, password string) error
 	Restore(ctx context.Context, seed, password string) error
 	Unlock(ctx context.Context, password string) error
-	Lock(ctx context.Context, password string) error
+	Lock(ctx context.Context) error
 	Status(ctx context.Context) (WalletStatus, error)
 	GetPubkey(ctx context.Context) (*secp256k1.PublicKey, error)
+	GetNetwork(ctx context.Context) (*common.Network, error)
 	GetForfeitAddress(ctx context.Context) (string, error)
 	DeriveConnectorAddress(ctx context.Context) (string, error)
 	DeriveAddresses(ctx context.Context, num int) ([]string, error)

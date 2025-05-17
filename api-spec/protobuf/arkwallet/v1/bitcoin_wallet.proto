@@ -45,6 +45,11 @@ service WalletService {
       get: "/v1/wallet/pubkey"
     };
   }
+  rpc GetNetwork(GetNetworkRequest) returns (GetNetworkResponse) {
+    option (google.api.http) = {
+      get: "/v1/wallet/network"
+    };
+  }
   rpc GetForfeitAddress(GetForfeitAddressRequest) returns (GetForfeitAddressResponse) {
     option (google.api.http) = {
       get: "/v1/wallet/forfeit-address"
@@ -92,9 +97,9 @@ service WalletService {
     };
   }
 
-  rpc GetSyncedUpdate(GetSyncedUpdateRequest) returns (stream GetSyncedUpdateResponse) {
+  rpc GetReadyUpdate(GetReadyUpdateRequest) returns (stream GetReadyUpdateResponse) {
     option (google.api.http) = {
-      get: "/v1/wallet/synced-update"
+      get: "/v1/wallet/ready-update"
     };
   }
   rpc IsTransactionConfirmed(IsTransactionConfirmedRequest) returns (IsTransactionConfirmedResponse) {
@@ -192,10 +197,10 @@ service WalletService {
   }
 }
 
-// GetSyncedUpdate
-message GetSyncedUpdateRequest {}
-message GetSyncedUpdateResponse {
-  bool synced = 1;
+// GetReadyUpdate
+message GetReadyUpdateRequest {}
+message GetReadyUpdateResponse {
+  bool ready = 1;
 }
 
 // IsTransactionConfirmed
@@ -250,9 +255,7 @@ message UnlockRequest {
 }
 message UnlockResponse {}
 
-message LockRequest {
-  string password = 1;
-}
+message LockRequest {}
 message LockResponse {}
 
 message StatusRequest {}
@@ -265,6 +268,11 @@ message StatusResponse {
 message GetPubkeyRequest {}
 message GetPubkeyResponse {
   bytes pubkey = 1;
+}
+
+message GetNetworkRequest {}
+message GetNetworkResponse {
+  string network = 1;
 }
 
 message GetForfeitAddressRequest {}
