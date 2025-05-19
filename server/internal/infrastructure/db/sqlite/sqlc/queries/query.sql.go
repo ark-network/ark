@@ -11,17 +11,6 @@ import (
 	"strings"
 )
 
-const containsNote = `-- name: ContainsNote :one
-SELECT EXISTS(SELECT 1 FROM note WHERE id = ?)
-`
-
-func (q *Queries) ContainsNote(ctx context.Context, id int64) (int64, error) {
-	row := q.db.QueryRowContext(ctx, containsNote, id)
-	var column_1 int64
-	err := row.Scan(&column_1)
-	return column_1, err
-}
-
 const getExistingRounds = `-- name: GetExistingRounds :many
 SELECT txid FROM round WHERE txid IN (/*SLICE:txids*/?)
 `
@@ -394,15 +383,6 @@ func (q *Queries) InsertMarketHour(ctx context.Context, arg InsertMarketHourPara
 	return i, err
 }
 
-const insertNote = `-- name: InsertNote :exec
-INSERT INTO note (id) VALUES (?)
-`
-
-func (q *Queries) InsertNote(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, insertNote, id)
-	return err
-}
-
 const markVtxoAsRedeemed = `-- name: MarkVtxoAsRedeemed :exec
 UPDATE vtxo SET redeemed = true WHERE txid = ? AND vout = ?
 `
@@ -657,6 +637,54 @@ func (q *Queries) SelectNotRedeemedVtxosWithPubkey(ctx context.Context, pubkey s
 	return items, nil
 }
 
+const selectOffchainTxWithTxId = `-- name: SelectOffchainTxWithTxId :many
+SELECT offchain_tx.txid, offchain_tx.starting_timestamp, offchain_tx.ending_timestamp, offchain_tx.expiry_timestamp, offchain_tx.fail_reason, offchain_tx.stage_code,
+       offchain_tx_virtual_tx_vw.txid, offchain_tx_virtual_tx_vw.tx, offchain_tx_virtual_tx_vw.offchain_txid, offchain_tx_virtual_tx_vw.type, offchain_tx_virtual_tx_vw.position
+FROM offchain_tx
+         LEFT OUTER JOIN offchain_tx_virtual_tx_vw ON offchain_tx.txid=offchain_tx_virtual_tx_vw.offchain_txid
+WHERE offchain_tx.txid = ?
+`
+
+type SelectOffchainTxWithTxIdRow struct {
+	OffchainTx            OffchainTx
+	OffchainTxVirtualTxVw OffchainTxVirtualTxVw
+}
+
+func (q *Queries) SelectOffchainTxWithTxId(ctx context.Context, txid string) ([]SelectOffchainTxWithTxIdRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectOffchainTxWithTxId, txid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectOffchainTxWithTxIdRow
+	for rows.Next() {
+		var i SelectOffchainTxWithTxIdRow
+		if err := rows.Scan(
+			&i.OffchainTx.Txid,
+			&i.OffchainTx.StartingTimestamp,
+			&i.OffchainTx.EndingTimestamp,
+			&i.OffchainTx.ExpiryTimestamp,
+			&i.OffchainTx.FailReason,
+			&i.OffchainTx.StageCode,
+			&i.OffchainTxVirtualTxVw.Txid,
+			&i.OffchainTxVirtualTxVw.Tx,
+			&i.OffchainTxVirtualTxVw.OffchainTxid,
+			&i.OffchainTxVirtualTxVw.Type,
+			&i.OffchainTxVirtualTxVw.Position,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const selectRoundIds = `-- name: SelectRoundIds :many
 SELECT id FROM round
 `
@@ -717,7 +745,7 @@ func (q *Queries) SelectRoundIdsInRange(ctx context.Context, arg SelectRoundIdsI
 }
 
 const selectRoundWithRoundId = `-- name: SelectRoundWithRoundId :many
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept,
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.connector_address, round.version, round.swept, round.vtxo_tree_expiration,
        round_request_vw.id, round_request_vw.round_id,
        round_tx_vw.txid, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
        request_receiver_vw.request_id, request_receiver_vw.pubkey, request_receiver_vw.onchain_address, request_receiver_vw.amount,
@@ -755,11 +783,10 @@ func (q *Queries) SelectRoundWithRoundId(ctx context.Context, id string) ([]Sele
 			&i.Round.Failed,
 			&i.Round.StageCode,
 			&i.Round.Txid,
-			&i.Round.UnsignedTx,
 			&i.Round.ConnectorAddress,
-			&i.Round.DustAmount,
 			&i.Round.Version,
 			&i.Round.Swept,
+			&i.Round.VtxoTreeExpiration,
 			&i.RoundRequestVw.ID,
 			&i.RoundRequestVw.RoundID,
 			&i.RoundTxVw.Txid,
@@ -802,7 +829,7 @@ func (q *Queries) SelectRoundWithRoundId(ctx context.Context, id string) ([]Sele
 }
 
 const selectRoundWithRoundTxId = `-- name: SelectRoundWithRoundTxId :many
-SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.unsigned_tx, round.connector_address, round.dust_amount, round.version, round.swept,
+SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.txid, round.connector_address, round.version, round.swept, round.vtxo_tree_expiration,
        round_request_vw.id, round_request_vw.round_id,
        round_tx_vw.txid, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
        request_receiver_vw.request_id, request_receiver_vw.pubkey, request_receiver_vw.onchain_address, request_receiver_vw.amount,
@@ -840,11 +867,10 @@ func (q *Queries) SelectRoundWithRoundTxId(ctx context.Context, txid string) ([]
 			&i.Round.Failed,
 			&i.Round.StageCode,
 			&i.Round.Txid,
-			&i.Round.UnsignedTx,
 			&i.Round.ConnectorAddress,
-			&i.Round.DustAmount,
 			&i.Round.Version,
 			&i.Round.Swept,
+			&i.Round.VtxoTreeExpiration,
 			&i.RoundRequestVw.ID,
 			&i.RoundRequestVw.RoundID,
 			&i.RoundTxVw.Txid,
@@ -1206,6 +1232,40 @@ func (q *Queries) UpdateVtxoRequestId(ctx context.Context, arg UpdateVtxoRequest
 	return err
 }
 
+const upsertOffchainTx = `-- name: UpsertOffchainTx :exec
+INSERT INTO offchain_tx (
+    txid, starting_timestamp, ending_timestamp, expiry_timestamp, fail_reason, stage_code
+) VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT(txid) DO UPDATE SET
+    txid = EXCLUDED.txid,
+    starting_timestamp = EXCLUDED.starting_timestamp,
+    ending_timestamp = EXCLUDED.ending_timestamp,
+    expiry_timestamp = EXCLUDED.expiry_timestamp,
+    fail_reason = EXCLUDED.fail_reason,
+    stage_code = EXCLUDED.stage_code
+`
+
+type UpsertOffchainTxParams struct {
+	Txid              string
+	StartingTimestamp int64
+	EndingTimestamp   int64
+	ExpiryTimestamp   int64
+	FailReason        sql.NullString
+	StageCode         int64
+}
+
+func (q *Queries) UpsertOffchainTx(ctx context.Context, arg UpsertOffchainTxParams) error {
+	_, err := q.db.ExecContext(ctx, upsertOffchainTx,
+		arg.Txid,
+		arg.StartingTimestamp,
+		arg.EndingTimestamp,
+		arg.ExpiryTimestamp,
+		arg.FailReason,
+		arg.StageCode,
+	)
+	return err
+}
+
 const upsertReceiver = `-- name: UpsertReceiver :exec
 INSERT INTO receiver (request_id, pubkey, onchain_address, amount) VALUES (?, ?, ?, ?)
 ON CONFLICT(request_id, pubkey, onchain_address) DO UPDATE SET
@@ -1239,12 +1299,11 @@ INSERT INTO round (
     ended, failed,
     stage_code,
     txid,
-    unsigned_tx,
     connector_address,
-    dust_amount,
     version,
-    swept
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    swept,
+    vtxo_tree_expiration
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     starting_timestamp = EXCLUDED.starting_timestamp,
     ending_timestamp = EXCLUDED.ending_timestamp,
@@ -1252,26 +1311,24 @@ ON CONFLICT(id) DO UPDATE SET
     failed = EXCLUDED.failed,
     stage_code = EXCLUDED.stage_code,
     txid = EXCLUDED.txid,
-    unsigned_tx = EXCLUDED.unsigned_tx,
     connector_address = EXCLUDED.connector_address,
-    dust_amount = EXCLUDED.dust_amount,
     version = EXCLUDED.version,
-    swept = EXCLUDED.swept
+    swept = EXCLUDED.swept,
+    vtxo_tree_expiration = EXCLUDED.vtxo_tree_expiration
 `
 
 type UpsertRoundParams struct {
-	ID                string
-	StartingTimestamp int64
-	EndingTimestamp   int64
-	Ended             bool
-	Failed            bool
-	StageCode         int64
-	Txid              string
-	UnsignedTx        string
-	ConnectorAddress  string
-	DustAmount        int64
-	Version           int64
-	Swept             bool
+	ID                 string
+	StartingTimestamp  int64
+	EndingTimestamp    int64
+	Ended              bool
+	Failed             bool
+	StageCode          int64
+	Txid               string
+	ConnectorAddress   string
+	Version            int64
+	Swept              bool
+	VtxoTreeExpiration int64
 }
 
 func (q *Queries) UpsertRound(ctx context.Context, arg UpsertRoundParams) error {
@@ -1283,11 +1340,10 @@ func (q *Queries) UpsertRound(ctx context.Context, arg UpsertRoundParams) error 
 		arg.Failed,
 		arg.StageCode,
 		arg.Txid,
-		arg.UnsignedTx,
 		arg.ConnectorAddress,
-		arg.DustAmount,
 		arg.Version,
 		arg.Swept,
+		arg.VtxoTreeExpiration,
 	)
 	return err
 }
@@ -1344,6 +1400,37 @@ type UpsertTxRequestParams struct {
 
 func (q *Queries) UpsertTxRequest(ctx context.Context, arg UpsertTxRequestParams) error {
 	_, err := q.db.ExecContext(ctx, upsertTxRequest, arg.ID, arg.RoundID)
+	return err
+}
+
+const upsertVirtualTransaction = `-- name: UpsertVirtualTransaction :exec
+INSERT INTO virtual_tx (
+    txid, tx, offchain_txid, type, position
+) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(txid) DO UPDATE SET
+    txid = EXCLUDED.txid,
+    tx = EXCLUDED.tx,
+    offchain_txid = EXCLUDED.offchain_txid,
+    type = EXCLUDED.type,
+    position = EXCLUDED.position
+`
+
+type UpsertVirtualTransactionParams struct {
+	Txid         string
+	Tx           string
+	OffchainTxid string
+	Type         string
+	Position     int64
+}
+
+func (q *Queries) UpsertVirtualTransaction(ctx context.Context, arg UpsertVirtualTransactionParams) error {
+	_, err := q.db.ExecContext(ctx, upsertVirtualTransaction,
+		arg.Txid,
+		arg.Tx,
+		arg.OffchainTxid,
+		arg.Type,
+		arg.Position,
+	)
 	return err
 }
 

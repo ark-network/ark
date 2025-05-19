@@ -20,16 +20,17 @@ import (
 )
 
 const (
-	dummyPtx = "cHNidP8BADwBAAAAAaqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
-	f1       = "cHNidP8BADwBAAAAAauqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
-	f2       = "cHNidP8BADwBAAAAAayqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
-	f3       = "cHNidP8BADwBAAAAAa2qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
-	f4       = "cHNidP8BADwBAAAAAa6qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
-	emptyTx  = "0200000000000000000000"
-	pubkey   = "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967"
-	pubkey2  = "33ffb3dee353b1a9ebe4ced64b946238d0a4ac364f275d771da6ad2445d07ae0"
-	txida    = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
-	txidb    = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	dummyPtx    = "cHNidP8BADwBAAAAAaqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
+	f1          = "cHNidP8BADwBAAAAAauqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
+	f2          = "cHNidP8BADwBAAAAAayqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
+	f3          = "cHNidP8BADwBAAAAAa2qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
+	f4          = "cHNidP8BADwBAAAAAa6qqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqqAAAAAAD/////AegDAAAAAAAAAAAAAAAAAAA="
+	emptyTx     = "0200000000000000000000"
+	pubkey      = "25a43cecfa0e1b1a4f72d64ad15f4cfa7a84d0723e8511c969aa543638ea9967"
+	pubkey2     = "33ffb3dee353b1a9ebe4ced64b946238d0a4ac364f275d771da6ad2445d07ae0"
+	txida       = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+	txidb       = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"
+	virtualTxid = txida
 )
 
 var (
@@ -122,6 +123,9 @@ var (
 			Tx:   f4,
 		}
 	}
+	now             = time.Now()
+	endTimestamp    = now.Add(3 * time.Second).Unix()
+	expiryTimestamp = now.Add(1 * time.Hour).Unix()
 )
 
 func TestMain(m *testing.M) {
@@ -157,34 +161,39 @@ func TestService(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			svc, err := db.NewService(tt.config)
+			svc, err := db.NewService(tt.config, nil)
 			require.NoError(t, err)
 			defer svc.Close()
 
-			testRoundEventRepository(t, svc)
+			testEventRepository(t, svc)
 			testRoundRepository(t, svc)
 			testVtxoRepository(t, svc)
+			testOffchainTxRepository(t, svc)
 			testMarketHourRepository(t, svc)
 		})
 	}
 }
 
-func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
+func testEventRepository(t *testing.T, svc ports.RepoManager) {
 	t.Run("test_event_repository", func(t *testing.T) {
 		fixtures := []struct {
-			roundId string
-			events  []domain.RoundEvent
-			handler func(*domain.Round)
+			topic   string
+			id      string
+			events  []domain.Event
+			handler func(events []domain.Event)
 		}{
 			{
-				roundId: "42dd81f7-cadd-482c-bf69-8e9209aae9f3",
-				events: []domain.RoundEvent{
+				topic: domain.RoundTopic,
+				id:    "42dd81f7-cadd-482c-bf69-8e9209aae9f3",
+				events: []domain.Event{
 					domain.RoundStarted{
 						Id:        "42dd81f7-cadd-482c-bf69-8e9209aae9f3",
 						Timestamp: 1701190270,
 					},
 				},
-				handler: func(round *domain.Round) {
+				handler: func(events []domain.Event) {
+					round := domain.NewRoundFromEvents(events)
+
 					require.NotNil(t, round)
 					require.Len(t, round.Events(), 1)
 					require.True(t, round.IsStarted())
@@ -193,8 +202,9 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 				},
 			},
 			{
-				roundId: "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
-				events: []domain.RoundEvent{
+				topic: domain.RoundTopic,
+				id:    "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
+				events: []domain.Event{
 					domain.RoundStarted{
 						Id:        "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
 						Timestamp: 1701190270,
@@ -206,7 +216,8 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 						RoundTx:    emptyTx,
 					},
 				},
-				handler: func(round *domain.Round) {
+				handler: func(events []domain.Event) {
+					round := domain.NewRoundFromEvents(events)
 					require.NotNil(t, round)
 					require.Len(t, round.Events(), 2)
 					require.Len(t, round.VtxoTree, 3)
@@ -215,8 +226,9 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 				},
 			},
 			{
-				roundId: "7578231e-428d-45ae-aaa4-e62c77ad5cec",
-				events: []domain.RoundEvent{
+				topic: domain.RoundTopic,
+				id:    "7578231e-428d-45ae-aaa4-e62c77ad5cec",
+				events: []domain.Event{
 					domain.RoundStarted{
 						Id:        "7578231e-428d-45ae-aaa4-e62c77ad5cec",
 						Timestamp: 1701190270,
@@ -234,7 +246,9 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 						Timestamp:  1701190300,
 					},
 				},
-				handler: func(round *domain.Round) {
+				handler: func(events []domain.Event) {
+					round := domain.NewRoundFromEvents(events)
+
 					require.NotNil(t, round)
 					require.Len(t, round.Events(), 3)
 					require.False(t, round.IsStarted())
@@ -243,21 +257,64 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 					require.NotEmpty(t, round.Txid)
 				},
 			},
+			{
+				topic: domain.OffchainTxTopic,
+				id:    "virtualTxid",
+				events: []domain.Event{
+					domain.OffchainTxAccepted{
+						Id:              "virtualTxid",
+						CommitmentTxids: []string{randomString(32)},
+						FinalVirtualTx:  "fully signed virtual tx",
+						SignedCheckpointTxs: map[string]string{
+							"0": "list of server-signed txs",
+							"1": "indexed by txid",
+						},
+					},
+				},
+				handler: func(events []domain.Event) {
+					offchainTx := domain.NewOffchainTxFromEvents(events)
+					require.NotNil(t, offchainTx)
+					require.Len(t, offchainTx.Events(), 1)
+				},
+			},
+			{
+				topic: domain.OffchainTxTopic,
+				id:    "virtualTxid 2",
+				events: []domain.Event{
+					domain.OffchainTxAccepted{
+						Id:              "virtualTxid 2",
+						CommitmentTxids: []string{randomString(32)},
+						FinalVirtualTx:  "fully signed virtual tx",
+						SignedCheckpointTxs: map[string]string{
+							"0": "list of server-signed txs",
+							"1": "indexed by txid",
+						},
+					},
+					domain.OffchainTxFinalized{
+						Id: "virtualTxid 2",
+						FinalCheckpointTxs: map[string]string{
+							"0": "list of fully-signed txs",
+							"1": "indexed by txid",
+						},
+					},
+				},
+				handler: func(events []domain.Event) {
+					offchainTx := domain.NewOffchainTxFromEvents(events)
+					require.NotNil(t, offchainTx)
+					require.Len(t, offchainTx.Events(), 2)
+				},
+			},
 		}
 		ctx := context.Background()
 
 		for _, f := range fixtures {
-			svc.RegisterEventsHandler(f.handler)
+			svc.Events().ClearRegisteredHandlers()
+			svc.Events().RegisterEventsHandler(f.topic, f.handler)
 
-			round, err := svc.Events().Save(ctx, f.roundId, f.events...)
+			err := svc.Events().Save(ctx, f.topic, f.id, f.events)
 			require.NoError(t, err)
-			require.NotNil(t, round)
 
-			round, err = svc.Events().Load(ctx, f.roundId)
-			require.NoError(t, err)
-			require.NotNil(t, round)
-			require.Equal(t, f.roundId, round.Id)
-			require.Len(t, round.Events(), len(f.events))
+			time.Sleep(100 * time.Millisecond)
 		}
 	})
 }
@@ -273,7 +330,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.Error(t, err)
 		require.Nil(t, round)
 
-		events := []domain.RoundEvent{
+		events := []domain.Event{
 			domain.RoundStarted{
 				Id:        roundId,
 				Timestamp: now.Unix(),
@@ -288,7 +345,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.NotNil(t, roundById)
 		require.Condition(t, roundsMatch(*round, *roundById))
 
-		newEvents := []domain.RoundEvent{
+		newEvents := []domain.Event{
 			domain.TxRequestsRegistered{
 				Id: roundId,
 				TxRequests: []domain.TxRequest{
@@ -362,12 +419,13 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.Condition(t, roundsMatch(*updatedRound, *roundById))
 
 		txid := randomString(32)
-		newEvents = []domain.RoundEvent{
+		newEvents = []domain.Event{
 			domain.RoundFinalized{
-				Id:         roundId,
-				Txid:       txid,
-				ForfeitTxs: []domain.ForfeitTx{f1Tx(), f2Tx(), f3Tx(), f4Tx()},
-				Timestamp:  now.Add(60 * time.Second).Unix(),
+				Id:                roundId,
+				Txid:              txid,
+				ForfeitTxs:        []domain.ForfeitTx{f1Tx(), f2Tx(), f3Tx(), f4Tx()},
+				FinalCommitmentTx: emptyTx,
+				Timestamp:         now.Add(60 * time.Second).Unix(),
 			},
 		}
 		events = append(events, newEvents...)
@@ -496,7 +554,6 @@ func testMarketHourRepository(t *testing.T, svc ports.RepoManager) {
 	t.Run("test_market_hour_repository", func(t *testing.T) {
 		ctx := context.Background()
 		repo := svc.MarketHourRepo()
-		defer repo.Close()
 
 		marketHour, err := repo.Get(ctx)
 		require.NoError(t, err)
@@ -529,6 +586,60 @@ func testMarketHourRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.NotNil(t, got)
 		assertMarketHourEqual(t, expected, *got)
+	})
+}
+
+func testOffchainTxRepository(t *testing.T, svc ports.RepoManager) {
+	t.Run("test_offchain_tx_repository", func(t *testing.T) {
+		ctx := context.Background()
+		repo := svc.OffchainTxs()
+
+		offchainTx, err := repo.GetOffchainTx(ctx, virtualTxid)
+		require.Error(t, err)
+		require.Nil(t, offchainTx)
+
+		events := []domain.Event{
+			domain.OffchainTxRequested{
+				Id:                    virtualTxid,
+				VirtualTx:             "",
+				UnsignedCheckpointTxs: nil,
+				Timestamp:             now.Unix(),
+			},
+			domain.OffchainTxAccepted{
+				Id:                  virtualTxid,
+				CommitmentTxids:     nil,
+				FinalVirtualTx:      "",
+				SignedCheckpointTxs: nil,
+			},
+		}
+		offchainTx = domain.NewOffchainTxFromEvents(events)
+		err = repo.AddOrUpdateOffchainTx(ctx, offchainTx)
+		require.NoError(t, err)
+
+		gotOffchainTx, err := repo.GetOffchainTx(ctx, virtualTxid)
+		require.NoError(t, err)
+		require.NotNil(t, offchainTx)
+		require.True(t, gotOffchainTx.IsAccepted())
+		require.Condition(t, offchainTxMatch(*offchainTx, *gotOffchainTx))
+
+		newEvents := []domain.Event{
+			domain.OffchainTxFinalized{
+				Id:                 virtualTxid,
+				FinalCheckpointTxs: nil,
+				Timestamp:          endTimestamp,
+				ExpiryTimestamp:    expiryTimestamp,
+			},
+		}
+		events = append(events, newEvents...)
+		offchainTx = domain.NewOffchainTxFromEvents(events)
+		err = repo.AddOrUpdateOffchainTx(ctx, offchainTx)
+		require.NoError(t, err)
+
+		gotOffchainTx, err = repo.GetOffchainTx(ctx, virtualTxid)
+		require.NoError(t, err)
+		require.NotNil(t, offchainTx)
+		require.True(t, gotOffchainTx.IsFinalized())
+		require.Condition(t, offchainTxMatch(*offchainTx, *gotOffchainTx))
 	})
 }
 
@@ -584,7 +695,7 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 		if expected.Txid != got.Txid {
 			return false
 		}
-		if expected.UnsignedTx != got.UnsignedTx {
+		if expected.CommitmentTx != got.CommitmentTx {
 			return false
 		}
 
@@ -610,7 +721,48 @@ func roundsMatch(expected, got domain.Round) assert.Comparison {
 				return false
 			}
 		}
-		return expected.Version == got.Version
+		return true
+	}
+}
+
+func offchainTxMatch(expected, got domain.OffchainTx) assert.Comparison {
+	return func() bool {
+		if expected.Stage != got.Stage {
+			return false
+		}
+		if expected.StartingTimestamp != got.StartingTimestamp {
+			return false
+		}
+		if expected.EndingTimestamp != got.EndingTimestamp {
+			return false
+		}
+		if expected.VirtualTxid != got.VirtualTxid {
+			return false
+		}
+		if expected.VirtualTx != got.VirtualTx {
+			return false
+		}
+		for k, v := range expected.CheckpointTxs {
+			gotValue, ok := got.CheckpointTxs[k]
+			if !ok {
+				return false
+			}
+			if v != gotValue {
+				return false
+			}
+		}
+		if len(expected.CommitmentTxids) > 0 {
+			if !reflect.DeepEqual(expected.CommitmentTxids, got.CommitmentTxids) {
+				return false
+			}
+		}
+		if expected.ExpiryTimestamp != got.ExpiryTimestamp {
+			return false
+		}
+		if expected.FailReason != got.FailReason {
+			return false
+		}
+		return true
 	}
 }
 
