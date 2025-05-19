@@ -2321,7 +2321,6 @@ func (s *covenantlessService) saveEvents(
 		return nil
 	}
 	return s.repoManager.Events().Save(ctx, domain.RoundTopic, id, events)
-	// return s.repoManager.Rounds().AddOrUpdateRound(ctx, *round)
 }
 
 func (s *covenantlessService) chainParams() *chaincfg.Params {
