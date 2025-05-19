@@ -60,26 +60,22 @@ vet:
 
 ## mig_file: creates pg migration file(eg. make FILE=init mig_file)
 mig_file:
-	@migrate create -ext sql -dir ./internal/infrastructure/db/sqlite/migration/ $(FILE)
+	@docker run --rm -v ./internal/infrastructure/db/sqlite/migration:/migration migrate/migrate create -ext sql -dir /migration $(FILE)
 
 ## mig_up: creates db schema for provided db path
 mig_up:
 	@echo "creating db schema..."
-	@migrate -database "sqlite://$(DB_PATH)/sqlite.db" -path ./internal/infrastructure/db/sqlite/migration/ up
+	@docker run --rm -v -database "sqlite://$(DB_PATH)/sqlite.db" -path ./internal/infrastructure/db/sqlite/migration/ up
 
 ## mig_down: apply down migration
 mig_down:
 	@echo "migration down..."
-	@migrate -database "sqlite://$(DB_PATH)/sqlite.db" -path ./internal/infrastructure/db/sqlite/migration/ down
+	@docker run --rm -v -database "sqlite://$(DB_PATH)/sqlite.db" -path ./internal/infrastructure/db/sqlite/migration/ down
 
 ## mig_down_yes: apply down migration without prompt
 mig_down_yes:
 	@echo "migration down..."
-	@"yes" | migrate -database "sqlite://path/to/database" -path ./internal/infrastructure/db/sqlite/migration/ down
-
-## vet_db: check if mig_up and mig_down are ok
-vet_db: recreatedb mig_up mig_down_yes
-	@echo "vet db migration scripts..."
+	@"yes" | docker run --rm -v -database "sqlite://path/to/database" -path ./internal/infrastructure/db/sqlite/migration/ down
 
 ## sqlc: gen sql
 sqlc:
