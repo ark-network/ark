@@ -69,21 +69,34 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 		if err := querierWithTx.UpsertRound(
 			ctx,
 			queries.UpsertRoundParams{
-				ID:                round.Id,
-				StartingTimestamp: round.StartingTimestamp,
-				EndingTimestamp:   round.EndingTimestamp,
-				Ended:             round.Stage.Ended,
-				Failed:            round.Stage.Failed,
-				StageCode:         int64(round.Stage.Code),
-				Txid:              round.Txid,
-				UnsignedTx:        round.UnsignedTx,
-				ConnectorAddress:  round.ConnectorAddress,
-				DustAmount:        int64(round.DustAmount),
-				Version:           int64(round.Version),
-				Swept:             round.Swept,
+				ID:                 round.Id,
+				StartingTimestamp:  round.StartingTimestamp,
+				EndingTimestamp:    round.EndingTimestamp,
+				VtxoTreeExpiration: round.VtxoTreeExpiration,
+				Ended:              round.Stage.Ended,
+				Failed:             round.Stage.Failed,
+				StageCode:          int64(round.Stage.Code),
+				Txid:               round.Txid,
+				ConnectorAddress:   round.ConnectorAddress,
+				Version:            int64(round.Version),
+				Swept:              round.Swept,
 			},
 		); err != nil {
 			return fmt.Errorf("failed to upsert round: %w", err)
+		}
+
+		if len(round.CommitmentTx) > 0 {
+			if err := querierWithTx.UpsertTransaction(
+				ctx,
+				queries.UpsertTransactionParams{
+					Tx:      round.CommitmentTx,
+					Txid:    round.Txid,
+					RoundID: round.Id,
+					Type:    "commitment",
+				},
+			); err != nil {
+				return fmt.Errorf("failed to upsert commitment transaction: %w", err)
+			}
 		}
 
 		if len(round.ForfeitTxs) > 0 || len(round.Connectors) > 0 || len(round.VtxoTree) > 0 {
@@ -434,15 +447,14 @@ func rowsToRounds(rows []combinedRow) ([]*domain.Round, error) {
 				Stage: domain.Stage{
 					Ended:  v.round.Ended,
 					Failed: v.round.Failed,
-					Code:   domain.RoundStage(v.round.StageCode),
+					Code:   int(v.round.StageCode),
 				},
-				Txid:             v.round.Txid,
-				UnsignedTx:       v.round.UnsignedTx,
-				ConnectorAddress: v.round.ConnectorAddress,
-				DustAmount:       uint64(v.round.DustAmount),
-				Version:          uint(v.round.Version),
-				Swept:            v.round.Swept,
-				TxRequests:       make(map[string]domain.TxRequest),
+				Txid:               v.round.Txid,
+				ConnectorAddress:   v.round.ConnectorAddress,
+				Version:            uint(v.round.Version),
+				Swept:              v.round.Swept,
+				TxRequests:         make(map[string]domain.TxRequest),
+				VtxoTreeExpiration: v.round.VtxoTreeExpiration,
 			}
 		}
 
@@ -513,6 +525,8 @@ func rowsToRounds(rows []combinedRow) ([]*domain.Round, error) {
 		if v.tx.Tx.Valid && v.tx.Type.Valid && v.tx.Position.Valid {
 			position := v.tx.Position
 			switch v.tx.Type.String {
+			case "commitment":
+				round.CommitmentTx = v.tx.Tx.String
 			case "forfeit":
 				round.ForfeitTxs = extendArray(round.ForfeitTxs, int(position.Int64))
 				round.ForfeitTxs[position.Int64] = domain.ForfeitTx{

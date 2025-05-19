@@ -511,7 +511,7 @@ func (b *txBuilder) VerifyForfeitTxs(
 
 func (b *txBuilder) BuildRoundTx(
 	serverPubkey *secp256k1.PublicKey,
-	requests []domain.TxRequest,
+	requests domain.TxRequests,
 	boardingInputs []ports.BoardingInput,
 	connectorAddresses []string,
 	musig2Data []*tree.Musig2,
@@ -541,7 +541,7 @@ func (b *txBuilder) BuildRoundTx(
 
 	sweepTapscriptRoot := txscript.NewBaseTapLeaf(sweepScript).TapHash()
 
-	if !isOnchainOnly(requests) {
+	if !requests.HaveOnlyOnchainOutput() {
 		sharedOutputScript, sharedOutputAmount, err = tree.CraftSharedOutput(
 			receivers, feeAmount, sweepTapscriptRoot[:],
 		)
@@ -550,7 +550,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 	}
 
-	nbOfConnectors := countSpentVtxos(requests)
+	nbOfConnectors := requests.CountSpentVtxos()
 
 	dustAmount, err := b.wallet.GetDustAmount(context.Background())
 	if err != nil {
@@ -597,7 +597,7 @@ func (b *txBuilder) BuildRoundTx(
 
 		cosigners := []string{hex.EncodeToString(taprootKey.SerializeCompressed())}
 
-		for i := uint64(0); i < nbOfConnectors; i++ {
+		for i := 0; i < nbOfConnectors; i++ {
 			connectorsTreeLeaves = append(connectorsTreeLeaves, tree.Leaf{
 				Amount: uint64(dustAmount),
 				Script: hex.EncodeToString(connectorPkScript),
@@ -634,7 +634,7 @@ func (b *txBuilder) BuildRoundTx(
 
 	vtxoTree := make(tree.TxTree, 0)
 
-	if !isOnchainOnly(requests) {
+	if !requests.HaveOnlyOnchainOutput() {
 		initialOutpoint := &wire.OutPoint{
 			Hash:  ptx.UnsignedTx.TxHash(),
 			Index: 0,

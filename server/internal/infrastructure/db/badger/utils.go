@@ -51,7 +51,7 @@ func createDB(dbDir string, logger badger.Logger) (*badgerhold.Store, error) {
 	return db, nil
 }
 
-func serializeEvents(events []domain.RoundEvent) (*eventsDTO, error) {
+func serializeEvents(events []domain.Event) (*eventsDTO, error) {
 	rawEvents := make([][]byte, 0, len(events))
 	for _, event := range events {
 		buf, err := serializeEvent(event)
@@ -63,8 +63,8 @@ func serializeEvents(events []domain.RoundEvent) (*eventsDTO, error) {
 	return &eventsDTO{rawEvents}, nil
 }
 
-func deserializeEvents(rawEvents [][]byte) ([]domain.RoundEvent, error) {
-	events := make([]domain.RoundEvent, 0)
+func deserializeEvents(rawEvents [][]byte) ([]domain.Event, error) {
+	events := make([]domain.Event, 0)
 	for _, buf := range rawEvents {
 		event, err := deserializeEvent(buf)
 		if err != nil {
@@ -75,14 +75,14 @@ func deserializeEvents(rawEvents [][]byte) ([]domain.RoundEvent, error) {
 	return events, nil
 }
 
-func serializeEvent(event domain.RoundEvent) ([]byte, error) {
+func serializeEvent(event domain.Event) ([]byte, error) {
 	switch eventType := event.(type) {
 	default:
 		return json.Marshal(eventType)
 	}
 }
 
-func deserializeEvent(buf []byte) (domain.RoundEvent, error) {
+func deserializeEvent(buf []byte) (domain.Event, error) {
 	{
 		var event = domain.RoundFailed{}
 		if err := json.Unmarshal(buf, &event); err == nil && len(event.Err) > 0 {

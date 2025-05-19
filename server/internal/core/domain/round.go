@@ -9,18 +9,18 @@ import (
 )
 
 const (
-	UndefinedStage RoundStage = iota
-	RegistrationStage
-	FinalizationStage
+	RoundUndefinedStage RoundStage = iota
+	RoundRegistrationStage
+	RoundFinalizationStage
 )
 
 type RoundStage int
 
 func (s RoundStage) String() string {
 	switch s {
-	case RegistrationStage:
+	case RoundRegistrationStage:
 		return "REGISTRATION_STAGE"
-	case FinalizationStage:
+	case RoundFinalizationStage:
 		return "FINALIZATION_STAGE"
 	default:
 		return "UNDEFINED_STAGE"
@@ -28,7 +28,7 @@ func (s RoundStage) String() string {
 }
 
 type Stage struct {
-	Code   RoundStage
+	Code   int
 	Ended  bool
 	Failed bool
 }
@@ -39,83 +39,48 @@ type ForfeitTx struct {
 }
 
 type Round struct {
-	Id                string
-	StartingTimestamp int64
-	EndingTimestamp   int64
-	Stage             Stage
-	TxRequests        map[string]TxRequest
-	Txid              string
-	UnsignedTx        string
-	ForfeitTxs        []ForfeitTx
-	VtxoTree          tree.TxTree
-	Connectors        tree.TxTree
-	ConnectorAddress  string
-	DustAmount        uint64
-	Version           uint
-	Swept             bool // true if all the vtxos are vtxo.Swept or vtxo.Redeemed
-	changes           []RoundEvent
+	Id                 string
+	StartingTimestamp  int64
+	EndingTimestamp    int64
+	Stage              Stage
+	TxRequests         map[string]TxRequest
+	Txid               string
+	CommitmentTx       string
+	ForfeitTxs         []ForfeitTx
+	VtxoTree           tree.TxTree
+	Connectors         tree.TxTree
+	ConnectorAddress   string
+	Version            uint
+	Swept              bool // true if all the vtxos are vtxo.Swept or vtxo.Redeemed
+	VtxoTreeExpiration int64
+	changes            []Event
 }
 
-func NewRound(dustAmount uint64) *Round {
+func NewRound() *Round {
 	return &Round{
 		Id:         uuid.New().String(),
-		DustAmount: dustAmount,
 		TxRequests: make(map[string]TxRequest),
-		changes:    make([]RoundEvent, 0),
+		changes:    make([]Event, 0),
 	}
 }
 
-func NewRoundFromEvents(events []RoundEvent) *Round {
+func NewRoundFromEvents(events []Event) *Round {
 	r := &Round{}
 
 	for _, event := range events {
-		r.On(event, true)
+		r.on(event, true)
 	}
 
-	r.changes = append([]RoundEvent{}, events...)
+	r.changes = append([]Event{}, events...)
 
 	return r
 }
 
-func (r *Round) Events() []RoundEvent {
+func (r *Round) Events() []Event {
 	return r.changes
 }
 
-func (r *Round) On(event RoundEvent, replayed bool) {
-	switch e := event.(type) {
-	case RoundStarted:
-		r.Stage.Code = RegistrationStage
-		r.Id = e.Id
-		r.StartingTimestamp = e.Timestamp
-	case RoundFinalizationStarted:
-		r.Stage.Code = FinalizationStage
-		r.VtxoTree = e.VtxoTree
-		r.Connectors = e.Connectors
-		r.ConnectorAddress = e.ConnectorAddress
-		r.UnsignedTx = e.RoundTx
-	case RoundFinalized:
-		r.Stage.Ended = true
-		r.Txid = e.Txid
-		r.ForfeitTxs = append([]ForfeitTx{}, e.ForfeitTxs...)
-		r.EndingTimestamp = e.Timestamp
-	case RoundFailed:
-		r.Stage.Failed = true
-		r.EndingTimestamp = e.Timestamp
-	case TxRequestsRegistered:
-		if r.TxRequests == nil {
-			r.TxRequests = make(map[string]TxRequest)
-		}
-		for _, p := range e.TxRequests {
-			r.TxRequests[p.Id] = p
-		}
-	}
-
-	if replayed {
-		r.Version++
-	}
-}
-
-func (r *Round) StartRegistration() ([]RoundEvent, error) {
+func (r *Round) StartRegistration() ([]Event, error) {
 	empty := Stage{}
 	if r.Stage != empty {
 		return nil, fmt.Errorf("not in a valid stage to start tx requests registration")
@@ -127,11 +92,11 @@ func (r *Round) StartRegistration() ([]RoundEvent, error) {
 	}
 	r.raise(event)
 
-	return []RoundEvent{event}, nil
+	return []Event{event}, nil
 }
 
-func (r *Round) RegisterTxRequests(txRequests []TxRequest) ([]RoundEvent, error) {
-	if r.Stage.Code != RegistrationStage || r.IsFailed() {
+func (r *Round) RegisterTxRequests(txRequests []TxRequest) ([]Event, error) {
+	if r.Stage.Code != int(RoundRegistrationStage) || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to register tx requests")
 	}
 	if len(txRequests) <= 0 {
@@ -149,7 +114,7 @@ func (r *Round) RegisterTxRequests(txRequests []TxRequest) ([]RoundEvent, error)
 	}
 	r.raise(event)
 
-	return []RoundEvent{event}, nil
+	return []Event{event}, nil
 }
 
 func (r *Round) StartFinalization(
@@ -158,11 +123,15 @@ func (r *Round) StartFinalization(
 	vtxoTree tree.TxTree,
 	roundTx string,
 	connectorsIndex map[string]Outpoint,
-) ([]RoundEvent, error) {
+	vtxoTreeExpiration int64,
+) ([]Event, error) {
 	if len(roundTx) <= 0 {
 		return nil, fmt.Errorf("missing unsigned round tx")
 	}
-	if r.Stage.Code != RegistrationStage || r.IsFailed() {
+	if vtxoTreeExpiration <= 0 {
+		return nil, fmt.Errorf("missing vtxo tree expiration")
+	}
+	if r.Stage.Code != int(RoundRegistrationStage) || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to start finalization")
 	}
 	if len(r.TxRequests) <= 0 {
@@ -170,30 +139,33 @@ func (r *Round) StartFinalization(
 	}
 
 	event := RoundFinalizationStarted{
-		Id:               r.Id,
-		VtxoTree:         vtxoTree,
-		Connectors:       connectors,
-		ConnectorAddress: connectorAddress,
-		RoundTx:          roundTx,
-		ConnectorsIndex:  connectorsIndex,
+		Id:                 r.Id,
+		VtxoTree:           vtxoTree,
+		Connectors:         connectors,
+		ConnectorAddress:   connectorAddress,
+		RoundTx:            roundTx,
+		ConnectorsIndex:    connectorsIndex,
+		VtxoTreeExpiration: vtxoTreeExpiration,
 	}
 	r.raise(event)
 
-	return []RoundEvent{event}, nil
+	return []Event{event}, nil
 }
 
-func (r *Round) EndFinalization(forfeitTxs []ForfeitTx, txid string) ([]RoundEvent, error) {
+func (r *Round) EndFinalization(forfeitTxs []ForfeitTx, txid, finalCommitmentTx string) ([]Event, error) {
 	if len(forfeitTxs) <= 0 {
 		for _, request := range r.TxRequests {
-			if len(request.Inputs) > 0 {
-				return nil, fmt.Errorf("missing list of signed forfeit txs")
+			for _, in := range request.Inputs {
+				if !in.IsNote() && !in.Swept {
+					return nil, fmt.Errorf("missing list of signed forfeit txs")
+				}
 			}
 		}
 	}
 	if len(txid) <= 0 {
 		return nil, fmt.Errorf("missing round txid")
 	}
-	if r.Stage.Code != FinalizationStage || r.IsFailed() {
+	if r.Stage.Code != int(RoundFinalizationStage) || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to end finalization")
 	}
 	if r.Stage.Ended {
@@ -204,17 +176,18 @@ func (r *Round) EndFinalization(forfeitTxs []ForfeitTx, txid string) ([]RoundEve
 	}
 
 	event := RoundFinalized{
-		Id:         r.Id,
-		Txid:       txid,
-		ForfeitTxs: forfeitTxs,
-		Timestamp:  time.Now().Unix(),
+		Id:                r.Id,
+		Txid:              txid,
+		ForfeitTxs:        forfeitTxs,
+		FinalCommitmentTx: finalCommitmentTx,
+		Timestamp:         time.Now().Unix(),
 	}
 	r.raise(event)
 
-	return []RoundEvent{event}, nil
+	return []Event{event}, nil
 }
 
-func (r *Round) Fail(err error) []RoundEvent {
+func (r *Round) Fail(err error) []Event {
 	if r.Stage.Failed {
 		return nil
 	}
@@ -225,7 +198,7 @@ func (r *Round) Fail(err error) []RoundEvent {
 	}
 	r.raise(event)
 
-	return []RoundEvent{event}
+	return []Event{event}
 }
 
 func (r *Round) IsStarted() bool {
@@ -234,37 +207,66 @@ func (r *Round) IsStarted() bool {
 }
 
 func (r *Round) IsEnded() bool {
-	return !r.IsFailed() && r.Stage.Code == FinalizationStage && r.Stage.Ended
+	return !r.IsFailed() && r.Stage.Code == int(RoundFinalizationStage) && r.Stage.Ended
 }
 
 func (r *Round) IsFailed() bool {
 	return r.Stage.Failed
 }
 
-func (r *Round) TotalInputAmount() uint64 {
-	totInputs := 0
-	for _, request := range r.TxRequests {
-		totInputs += len(request.Inputs)
-	}
-	return uint64(totInputs * int(r.DustAmount))
-}
-
-func (r *Round) TotalOutputAmount() uint64 {
-	tot := uint64(0)
-	for _, request := range r.TxRequests {
-		tot += request.TotalOutputAmount()
-	}
-	return tot
-}
-
 func (r *Round) Sweep() {
 	r.Swept = true
 }
 
-func (r *Round) raise(event RoundEvent) {
+func (r *Round) ExpiryTimestamp() int64 {
+	if r.IsEnded() {
+		return time.Unix(r.EndingTimestamp, 0).Add(time.Second * time.Duration(r.VtxoTreeExpiration)).Unix()
+	}
+	return -1
+}
+
+func (r *Round) on(event Event, replayed bool) {
+	switch e := event.(type) {
+	case RoundStarted:
+		r.Stage.Code = int(RoundRegistrationStage)
+		r.Id = e.Id
+		r.StartingTimestamp = e.Timestamp
+	case RoundFinalizationStarted:
+		r.Stage.Code = int(RoundFinalizationStage)
+		r.VtxoTree = e.VtxoTree
+		r.Connectors = e.Connectors
+		r.ConnectorAddress = e.ConnectorAddress
+		r.CommitmentTx = e.RoundTx
+		r.VtxoTreeExpiration = e.VtxoTreeExpiration
+	case RoundFinalized:
+		r.Stage.Ended = true
+		r.Txid = e.Txid
+		r.ForfeitTxs = append([]ForfeitTx{}, e.ForfeitTxs...)
+		r.EndingTimestamp = e.Timestamp
+		r.CommitmentTx = e.FinalCommitmentTx
+	case RoundFailed:
+		r.Stage.Failed = true
+		r.EndingTimestamp = e.Timestamp
+	case TxRequestsRegistered:
+		if r.TxRequests == nil {
+			r.TxRequests = make(map[string]TxRequest)
+		}
+		for _, p := range e.TxRequests {
+			r.TxRequests[p.Id] = p
+		}
+	default:
+		return
+	}
+
+	if replayed {
+		r.Version++
+	}
+}
+
+func (r *Round) raise(event Event) {
 	if r.changes == nil {
-		r.changes = make([]RoundEvent, 0)
+		r.changes = make([]Event, 0)
 	}
 	r.changes = append(r.changes, event)
-	r.On(event, false)
+	r.on(event, false)
 }

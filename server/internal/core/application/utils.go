@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -25,7 +27,6 @@ type timedTxRequest struct {
 	timestamp      time.Time
 	pingTimestamp  time.Time
 	musig2Data     *tree.Musig2
-	custodialVtxos []domain.Vtxo
 }
 
 type txRequestsQueue struct {
@@ -55,7 +56,6 @@ func (m *txRequestsQueue) len() int64 {
 func (m *txRequestsQueue) push(
 	request domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
-	custodialVtxos []domain.Vtxo,
 	musig2Data *tree.Musig2,
 ) error {
 	m.lock.Lock()
@@ -85,22 +85,12 @@ func (m *txRequestsQueue) push(
 		}
 	}
 
-	for _, vtxo := range custodialVtxos {
-		for _, request := range m.requests {
-			for _, pVtxo := range request.custodialVtxos {
-				if vtxo.Txid == pVtxo.Txid && vtxo.VOut == pVtxo.VOut {
-					return fmt.Errorf("duplicated vtxo recovery, %s:%d already used by tx request %s", vtxo.Txid, vtxo.VOut, request.Id)
-				}
-			}
-		}
-	}
-
 	now := time.Now()
-	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, now, now, musig2Data, custodialVtxos}
+	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, now, now, musig2Data}
 	return nil
 }
 
-func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []*tree.Musig2, []domain.Vtxo) {
+func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []*tree.Musig2) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -138,15 +128,13 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 	requests := make([]domain.TxRequest, 0, num)
 	boardingInputs := make([]ports.BoardingInput, 0)
 	musig2Data := make([]*tree.Musig2, 0)
-	custodialVtxos := make([]domain.Vtxo, 0)
 	for _, p := range requestsByTime[:num] {
 		boardingInputs = append(boardingInputs, p.boardingInputs...)
 		requests = append(requests, p.TxRequest)
 		musig2Data = append(musig2Data, p.musig2Data)
-		custodialVtxos = append(custodialVtxos, p.custodialVtxos...)
 		delete(m.requests, p.Id)
 	}
-	return requests, boardingInputs, musig2Data, custodialVtxos
+	return requests, boardingInputs, musig2Data
 }
 
 func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musig2) error {
@@ -166,10 +154,6 @@ func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musi
 
 	for _, boardingInput := range r.boardingInputs {
 		sumOfInputs += boardingInput.Amount
-	}
-
-	for _, vtxo := range r.custodialVtxos {
-		sumOfInputs += vtxo.Amount
 	}
 
 	// sum outputs = receivers VTXOs
@@ -281,7 +265,12 @@ func newForfeitTxsMap(txBuilder ports.TxBuilder) *forfeitTxsMap {
 func (m *forfeitTxsMap) init(connectors tree.TxTree, requests []domain.TxRequest) error {
 	vtxosToSign := make([]domain.Vtxo, 0)
 	for _, request := range requests {
-		vtxosToSign = append(vtxosToSign, request.Inputs...)
+		for _, vtxo := range request.Inputs {
+			if vtxo.Swept || vtxo.IsNote() {
+				continue
+			}
+			vtxosToSign = append(vtxosToSign, vtxo)
+		}
 	}
 
 	m.lock.Lock()
@@ -529,4 +518,28 @@ func getSpentVtxos(requests map[string]domain.TxRequest) []domain.VtxoKey {
 		}
 	}
 	return vtxos
+}
+
+func decodeTx(tx string) (string, []ports.TxIn, []ports.TxOut, error) {
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("failed to parse partial tx: %s", err)
+	}
+
+	txid := ptx.UnsignedTx.TxHash().String()
+	ins := make([]ports.TxIn, 0, len(ptx.UnsignedTx.TxIn))
+	for _, input := range ptx.UnsignedTx.TxIn {
+		ins = append(ins, ports.TxIn{
+			Txid: input.PreviousOutPoint.Hash.String(),
+			VOut: input.PreviousOutPoint.Index,
+		})
+	}
+	outs := make([]ports.TxOut, 0, len(ptx.UnsignedTx.TxOut))
+	for _, output := range ptx.UnsignedTx.TxOut {
+		outs = append(outs, ports.TxOut{
+			Amount:   uint64(output.Value),
+			PkScript: output.PkScript,
+		})
+	}
+	return txid, ins, outs, nil
 }
