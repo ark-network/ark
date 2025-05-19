@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log/slog"
 	"net/http"
 	"strings"
 
@@ -12,7 +11,6 @@ import (
 	"github.com/ark-network/ark/pkg/ark-wallet/internal/config"
 	"github.com/ark-network/ark/pkg/ark-wallet/internal/interface/grpc/handlers"
 	"github.com/ark-network/ark/pkg/ark-wallet/internal/interface/grpc/interceptors"
-	"github.com/grpc-ecosystem/go-grpc-middleware/v2/interceptors/logging"
 	"github.com/grpc-ecosystem/grpc-gateway/v2/runtime"
 	"golang.org/x/net/http2"
 	"golang.org/x/net/http2/h2c"
@@ -20,10 +18,6 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 	grpchealth "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/protobuf/encoding/protojson"
-)
-
-const (
-	component = "ark-wallet-grpc"
 )
 
 type service struct {
@@ -138,12 +132,6 @@ func isOptionRequest(req *http.Request) bool {
 func isHttpRequest(req *http.Request) bool {
 	return req.Method == http.MethodGet ||
 		strings.Contains(req.Header.Get("Content-Type"), "application/json")
-}
-
-func interceptorLogger(l *slog.Logger) logging.Logger {
-	return logging.LoggerFunc(func(ctx context.Context, lvl logging.Level, msg string, fields ...any) {
-		l.Log(ctx, slog.Level(lvl), msg, fields...)
-	})
 }
 
 func address(port uint32) string {
