@@ -112,7 +112,7 @@ func ValidateVtxoTree(
 		sumRootValue += output.Value
 	}
 
-	if sumRootValue >= roundTxAmount {
+	if sumRootValue != roundTxAmount {
 		return ErrInvalidAmount
 	}
 
@@ -220,7 +220,7 @@ func validateNodeTransaction(node Node, tree TxTree, tapTreeRoot []byte) error {
 			sumChildAmount += output.Value
 		}
 
-		if sumChildAmount >= parentOutput.Value {
+		if sumChildAmount != parentOutput.Value {
 			return ErrInvalidAmount
 		}
 	}
