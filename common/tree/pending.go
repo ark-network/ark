@@ -14,6 +14,9 @@ const (
 	cltvSequence = wire.MaxTxInSequenceNum - 1
 )
 
+// BuildRedeemTx builds a redeem tx for the given vtxos and outputs.
+// The redeem tx is spending VTXOs using collaborative taproot path.
+// An anchor output is added to the transaction
 func BuildRedeemTx(
 	vtxos []common.VtxoInput,
 	outputs []*wire.TxOut,
@@ -95,7 +98,7 @@ func BuildRedeemTx(
 	}
 
 	redeemPtx, err := psbt.New(
-		ins, outputs, 2, uint32(txLocktime), sequences,
+		ins, append(outputs, AnchorOutput()), 3, uint32(txLocktime), sequences,
 	)
 	if err != nil {
 		return "", err

@@ -14,11 +14,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-const (
-	minRelayFee = 1000
-	exitDelay   = 512
-)
-
 var (
 	vtxoTreeExpiry   = common.RelativeLocktime{Type: common.LocktimeTypeBlock, Value: 144}
 	rootInput, _     = wire.NewOutPointFromString("49f8664acc899be91902f8ade781b7eeb9cbe22bdd9efbc36e56195de21bcd12:0")
@@ -41,14 +36,14 @@ func TestBuildAndSignVtxoTree(t *testing.T) {
 	for _, v := range testVectors {
 		t.Run(v.name, func(t *testing.T) {
 			sharedOutScript, sharedOutAmount, err := tree.CraftSharedOutput(
-				v.receivers, minRelayFee, sweepRoot[:],
+				v.receivers, sweepRoot[:],
 			)
 			require.NoError(t, err)
 			require.NotNil(t, sharedOutScript)
 			require.NotZero(t, sharedOutAmount)
 
 			vtxoTree, err := tree.BuildVtxoTree(
-				rootInput, v.receivers, minRelayFee, sweepRoot[:], vtxoTreeExpiry,
+				rootInput, v.receivers, sweepRoot[:], vtxoTreeExpiry,
 			)
 			require.NoError(t, err)
 			require.NotNil(t, vtxoTree)

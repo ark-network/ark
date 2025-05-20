@@ -70,48 +70,53 @@ func TestWallet(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, key)
 
-			offchainAddr, onchainAddr, err := walletSvc.NewAddress(ctx, false)
+			onchainAddr, offchainAddr, boardingAddr, err := walletSvc.NewAddress(ctx, false)
 			require.NoError(t, err)
 			require.NotEmpty(t, offchainAddr)
 			require.NotEmpty(t, onchainAddr)
+			require.NotEmpty(t, boardingAddr)
 
-			offchainAddrs, onchainAddrs, redemptionAddrs, err := walletSvc.GetAddresses(ctx)
+			onchainAddrs, offchainAddrs, boardingAddrs, redemptionAddrs, err := walletSvc.GetAddresses(ctx)
 			require.NoError(t, err)
 			require.Len(t, offchainAddrs, 1)
 			require.Len(t, onchainAddrs, 1)
 			require.Len(t, redemptionAddrs, 1)
+			require.Len(t, boardingAddrs, 1)
 
-			offchainAddr, onchainAddr, err = walletSvc.NewAddress(ctx, true)
+			onchainAddr, offchainAddr, boardingAddr, err = walletSvc.NewAddress(ctx, true)
 			require.NoError(t, err)
 			require.NotEmpty(t, offchainAddr)
 			require.NotEmpty(t, onchainAddr)
+			require.NotEmpty(t, boardingAddr)
 
 			expectedNumOfAddresses := 2
 			if strings.Contains(tt.name, wallet.SingleKeyWallet) {
 				expectedNumOfAddresses = 1
 			}
 
-			offchainAddrs, onchainAddrs, redemptionAddrs, err = walletSvc.GetAddresses(ctx)
+			onchainAddrs, offchainAddrs, boardingAddrs, redemptionAddrs, err = walletSvc.GetAddresses(ctx)
 			require.NoError(t, err)
 			require.Len(t, offchainAddrs, expectedNumOfAddresses)
 			require.Len(t, onchainAddrs, expectedNumOfAddresses)
 			require.Len(t, redemptionAddrs, expectedNumOfAddresses)
+			require.Len(t, boardingAddrs, expectedNumOfAddresses)
 
 			num := 3
-			offchainAddrs, onchainAddrs, err = walletSvc.NewAddresses(ctx, false, num)
+			offchainAddrs, boardingAddrs, err = walletSvc.NewAddresses(ctx, false, num)
 			require.NoError(t, err)
 			require.Len(t, offchainAddrs, num)
-			require.Len(t, onchainAddrs, num)
+			require.Len(t, boardingAddrs, num)
 
 			expectedNumOfAddresses += num
 			if strings.Contains(tt.name, wallet.SingleKeyWallet) {
 				expectedNumOfAddresses = 1
 			}
-			offchainAddrs, onchainAddrs, redemptionAddrs, err = walletSvc.GetAddresses(ctx)
+			onchainAddrs, offchainAddrs, boardingAddrs, redemptionAddrs, err = walletSvc.GetAddresses(ctx)
 			require.NoError(t, err)
 			require.Len(t, offchainAddrs, expectedNumOfAddresses)
 			require.Len(t, onchainAddrs, expectedNumOfAddresses)
 			require.Len(t, redemptionAddrs, expectedNumOfAddresses)
+			require.Len(t, boardingAddrs, expectedNumOfAddresses)
 
 			// Check no password is required to unlock if wallet is already unlocked.
 			alreadyUnlocked, err := walletSvc.Unlock(ctx, password)

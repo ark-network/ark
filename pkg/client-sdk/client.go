@@ -21,6 +21,7 @@ import (
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/indexer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
@@ -34,9 +35,15 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/lightningnetwork/lnd/input"
+	"github.com/lightningnetwork/lnd/lntypes"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
+)
+
+var (
+	ErrWaitingForConfirmation = fmt.Errorf("waiting for confirmation(s), please retry later")
 )
 
 // SettleOptions is only available for covenantless clients
@@ -329,7 +336,7 @@ func (a *covenantlessArkClient) Balance(
 		return nil, fmt.Errorf("wallet not initialized")
 	}
 
-	offchainAddrs, boardingAddrs, redeemAddrs, err := a.wallet.GetAddresses(ctx)
+	onchainAddrs, offchainAddrs, boardingAddrs, redeemAddrs, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +360,7 @@ func (a *covenantlessArkClient) Balance(
 		}, nil
 	}
 
-	const nbWorkers = 3
+	const nbWorkers = 4
 	wg := &sync.WaitGroup{}
 	wg.Add(nbWorkers * len(offchainAddrs))
 
@@ -395,6 +402,20 @@ func (a *covenantlessArkClient) Balance(
 				err:                     err,
 			}
 		}
+
+		go func() {
+			defer wg.Done()
+			totalOnchainBalance := uint64(0)
+			for _, addr := range onchainAddrs {
+				balance, err := a.explorer.GetBalance(addr)
+				if err != nil {
+					chRes <- balanceRes{err: err}
+					return
+				}
+				totalOnchainBalance += balance
+			}
+			chRes <- balanceRes{onchainSpendableBalance: totalOnchainBalance}
+		}()
 
 		go getDelayedBalance(boardingAddr.Address)
 		go getDelayedBalance(redeemAddr.Address)
@@ -462,7 +483,7 @@ func (a *covenantlessArkClient) OnboardAgainAllExpiredBoardings(
 		return "", fmt.Errorf("operation not allowed by the server")
 	}
 
-	_, boardingAddr, err := a.wallet.NewAddress(ctx, false)
+	_, _, boardingAddr, err := a.wallet.NewAddress(ctx, false)
 	if err != nil {
 		return "", err
 	}
@@ -508,7 +529,7 @@ func (a *covenantlessArkClient) SendOffChain(
 		}
 	}
 
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	_, offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -637,7 +658,7 @@ func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string,
 		amount += uint64(v.Value)
 	}
 
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	_, offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return "", err
 	}
@@ -677,39 +698,212 @@ func (a *covenantlessArkClient) StartUnilateralExit(ctx context.Context) error {
 		return err
 	}
 
+	isWaitingForConfirmation := false
+
 	for _, branch := range redeemBranches {
 		branchTxs, err := branch.RedeemPath()
+		if err != nil {
+			if err, ok := err.(redemption.ErrPendingConfirmation); ok {
+				// the branch tx is in the mempool, we must wait for confirmation
+				// print only, do not make the function to fail
+				// continue to try other branches
+				log.Infof(err.Error())
+				isWaitingForConfirmation = true
+				continue
+			}
+
+			return err
+		}
+
+		if len(branchTxs) <= 0 {
+			continue
+		}
+
+		// due to current P2A relay policy, we can't broadcast the branch tx until its parent tx is confirmed
+		// so we'll broadcast only the first tx of every branch
+		firstTx := branchTxs[0]
+
+		if _, ok := transactionsMap[firstTx]; !ok {
+			transactions = append(transactions, firstTx)
+			transactionsMap[firstTx] = struct{}{}
+		}
+	}
+
+	if len(transactions) == 0 {
+		if isWaitingForConfirmation {
+			return ErrWaitingForConfirmation
+		}
+
+		return nil
+	}
+
+	for _, txHex := range transactions {
+		var ancestor wire.MsgTx
+		if err := ancestor.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
+			return err
+		}
+
+		bumpTx, err := a.bumpAnchorTx(ctx, &ancestor)
 		if err != nil {
 			return err
 		}
 
-		for _, txHex := range branchTxs {
-			if _, ok := transactionsMap[txHex]; !ok {
-				transactions = append(transactions, txHex)
-				transactionsMap[txHex] = struct{}{}
-			}
+		// broadcast the package (ancestor + bump)
+		packageResponse, err := a.explorer.Broadcast(txHex, bumpTx)
+		if err != nil {
+			return err
 		}
+
+		log.Infof("package broadcasted: %s", packageResponse)
 	}
 
-	for i, txHex := range transactions {
-		for {
-			txid, err := a.explorer.Broadcast(txHex)
-			if err != nil {
-				if strings.Contains(strings.ToLower(err.Error()), "bad-txns-inputs-missingorspent") {
-					time.Sleep(1 * time.Second)
-				} else {
-					return err
-				}
-			}
+	return nil
+}
 
-			if len(txid) > 0 {
-				log.Infof("(%d/%d) broadcasted tx %s", i+1, len(transactions), txid)
+// bumpAnchorTx is crafting and signing a transaction bumping the fees for a given tx with P2A output
+// it is using the onchain P2TR account to select UTXOs
+func (a *covenantlessArkClient) bumpAnchorTx(ctx context.Context, ancestor *wire.MsgTx) (string, error) {
+	anchor, err := findAnchorOutpoint(ancestor)
+	if err != nil {
+		return "", err
+	}
+
+	// estimate for the size of the bump transaction
+	weightEstimator := input.TxWeightEstimator{}
+
+	// WeightEstimator doesn't support P2A size, using P2WSH will lead to a small overestimation
+	// TODO use the exact P2A size
+	weightEstimator.AddNestedP2WSHInput(lntypes.VByte(3).ToWU())
+
+	// We assume only one UTXO will be selected to have a correct estimation
+	weightEstimator.AddTaprootKeySpendInput(txscript.SigHashDefault)
+	weightEstimator.AddP2TROutput()
+
+	bumpVSize := weightEstimator.Weight().ToVB()
+
+	packageSize := bumpVSize + computeVSize(ancestor)
+	feeRate, err := a.explorer.GetFeeRate()
+	if err != nil {
+		return "", err
+	}
+
+	fees := uint64(math.Ceil(float64(packageSize) * feeRate))
+
+	addresses, _, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return "", err
+	}
+
+	selectedCoins := make([]explorer.Utxo, 0)
+	selectedAmount := uint64(0)
+	amountToSelect := int64(fees) - tree.ANCHOR_VALUE
+	for _, addr := range addresses {
+		utxos, err := a.explorer.GetUtxos(addr)
+		if err != nil {
+			return "", err
+		}
+
+		for _, utxo := range utxos {
+			selectedCoins = append(selectedCoins, utxo)
+			selectedAmount += utxo.Amount
+			amountToSelect -= int64(selectedAmount)
+			if amountToSelect <= 0 {
 				break
 			}
 		}
 	}
 
-	return nil
+	if amountToSelect > 0 {
+		return "", fmt.Errorf("not enough funds to select %d", amountToSelect)
+	}
+
+	changeAmount := selectedAmount - fees
+
+	newAddr, _, _, err := a.wallet.NewAddress(ctx, true)
+	if err != nil {
+		return "", err
+	}
+
+	addr, err := btcutil.DecodeAddress(newAddr, nil)
+	if err != nil {
+		return "", err
+	}
+
+	pkScript, err := txscript.PayToAddrScript(addr)
+	if err != nil {
+		return "", err
+	}
+
+	inputs := []*wire.OutPoint{anchor}
+	sequences := []uint32{
+		wire.MaxTxInSequenceNum,
+	}
+
+	for _, utxo := range selectedCoins {
+		txid, err := chainhash.NewHashFromStr(utxo.Txid)
+		if err != nil {
+			return "", err
+		}
+		inputs = append(inputs, &wire.OutPoint{
+			Hash:  *txid,
+			Index: utxo.Vout,
+		})
+		sequences = append(sequences, wire.MaxTxInSequenceNum)
+	}
+
+	ptx, err := psbt.New(
+		inputs,
+		[]*wire.TxOut{
+			{
+				Value:    int64(changeAmount),
+				PkScript: pkScript,
+			},
+		},
+		3,
+		0,
+		sequences,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	ptx.Inputs[0].WitnessUtxo = &wire.TxOut{
+		Value:    tree.ANCHOR_VALUE,
+		PkScript: tree.ANCHOR_PKSCRIPT,
+	}
+
+	b64, err := ptx.B64Encode()
+	if err != nil {
+		return "", err
+	}
+
+	tx, err := a.wallet.SignTransaction(ctx, a.explorer, b64)
+	if err != nil {
+		return "", err
+	}
+
+	signedPtx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+	if err != nil {
+		return "", err
+	}
+
+	for inIndex := range signedPtx.Inputs[1:] {
+		if _, err := psbt.MaybeFinalize(signedPtx, inIndex+1); err != nil {
+			return "", err
+		}
+	}
+
+	signedBump, err := tree.ExtractWithAnchors(signedPtx)
+	if err != nil {
+		return "", err
+	}
+
+	var serializedTx bytes.Buffer
+	if err := signedBump.Serialize(&serializedTx); err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(serializedTx.Bytes()), nil
 }
 
 func (a *covenantlessArkClient) CompleteUnilateralExit(
@@ -719,7 +913,14 @@ func (a *covenantlessArkClient) CompleteUnilateralExit(
 		return "", err
 	}
 
-	if _, err := btcutil.DecodeAddress(to, nil); err != nil {
+	if len(to) == 0 {
+		newAddr, _, _, err := a.wallet.NewAddress(ctx, false)
+		if err != nil {
+			return "", err
+		}
+
+		to = newAddr
+	} else if _, err := btcutil.DecodeAddress(to, nil); err != nil {
 		return "", fmt.Errorf("invalid receiver address '%s': must be onchain", to)
 	}
 
@@ -764,7 +965,7 @@ func (a *covenantlessArkClient) CollaborativeExit(
 	}
 
 	if changeAmount > 0 {
-		offchainAddr, _, err := a.wallet.NewAddress(ctx, true)
+		_, offchainAddr, _, err := a.wallet.NewAddress(ctx, true)
 		if err != nil {
 			return "", err
 		}
@@ -852,7 +1053,7 @@ func (a *covenantlessArkClient) listenForArkTxs(ctx context.Context) {
 				continue
 			}
 
-			offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+			_, offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
 			if err != nil {
 				log.WithError(err).Error("failed to get offchain addresses")
 				continue
@@ -1012,7 +1213,7 @@ func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+			_, _, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 			if err != nil {
 				log.WithError(err).Error("failed to get all boarding addresses")
 				continue
@@ -1207,12 +1408,12 @@ func (a *covenantlessArkClient) sendExpiredBoardingUtxos(
 		return "", err
 	}
 
-	size := updater.Upsbt.UnsignedTx.SerializeSize()
+	vbytes := computeVSize(updater.Upsbt.UnsignedTx)
 	feeRate, err := a.explorer.GetFeeRate()
 	if err != nil {
 		return "", err
 	}
-	feeAmount := uint64(math.Ceil(float64(size)*feeRate) + 50)
+	feeAmount := uint64(math.Ceil(float64(vbytes)*feeRate) + 50)
 
 	if targetAmount-feeAmount <= a.Dust {
 		return "", fmt.Errorf("not enough funds to cover network fees")
@@ -1289,13 +1490,13 @@ func (a *covenantlessArkClient) completeUnilateralExit(
 		return "", err
 	}
 
-	size := updater.Upsbt.UnsignedTx.SerializeSize()
+	vbytes := computeVSize(updater.Upsbt.UnsignedTx)
 	feeRate, err := a.explorer.GetFeeRate()
 	if err != nil {
 		return "", err
 	}
 
-	feeAmount := uint64(math.Ceil(float64(size)*feeRate) + 50)
+	feeAmount := uint64(math.Ceil(float64(vbytes)*feeRate) + 50)
 
 	if targetAmount-feeAmount <= a.Dust {
 		return "", fmt.Errorf("not enough funds to cover network fees")
@@ -1330,7 +1531,7 @@ func (a *covenantlessArkClient) selectFunds(
 	selectRecoverableVtxos bool,
 	amount uint64,
 ) ([]types.Utxo, []client.TapscriptsVtxo, uint64, error) {
-	offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	_, offchainAddrs, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, nil, 0, err
 	}
@@ -1444,7 +1645,7 @@ func (a *covenantlessArkClient) sendOffchain(
 		return "", err
 	}
 
-	offchainAddr, _, err := a.wallet.NewAddress(ctx, false)
+	_, offchainAddr, _, err := a.wallet.NewAddress(ctx, false)
 	if err != nil {
 		return "", err
 	}
@@ -1591,7 +1792,7 @@ func (a *covenantlessArkClient) addInputs(
 	utxos []types.Utxo,
 ) error {
 	// TODO works only with single-key wallet
-	offchain, _, err := a.wallet.NewAddress(ctx, false)
+	_, offchain, _, err := a.wallet.NewAddress(ctx, false)
 	if err != nil {
 		return err
 	}
@@ -2445,7 +2646,7 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 func (a *covenantlessArkClient) getMatureUtxos(
 	ctx context.Context,
 ) ([]types.Utxo, error) {
-	_, _, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
+	_, _, _, redemptionAddrs, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -2536,7 +2737,7 @@ func (a *covenantlessArkClient) getOffchainBalance(
 }
 
 func (a *covenantlessArkClient) getAllBoardingUtxos(ctx context.Context) ([]types.Utxo, map[string]struct{}, error) {
-	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	_, _, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -2639,7 +2840,7 @@ func (a *covenantlessArkClient) getClaimableBoardingUtxos(
 }
 
 func (a *covenantlessArkClient) getExpiredBoardingUtxos(ctx context.Context, opts *CoinSelectOptions) ([]types.Utxo, error) {
-	_, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
+	_, _, boardingAddrs, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -3359,15 +3560,6 @@ func buildRedeemTx(
 		})
 	}
 
-	fees, err := common.ComputeRedeemTxFee(feeRate.FeePerKVByte(), ins, len(receivers))
-	if err != nil {
-		return "", err
-	}
-
-	if fees >= int64(receivers[len(receivers)-1].Amount()) {
-		return "", fmt.Errorf("redeem tx fee is higher than the amount of the change receiver")
-	}
-
 	outs := make([]*wire.TxOut, 0, len(receivers))
 
 	for i, receiver := range receivers {
@@ -3385,16 +3577,8 @@ func buildRedeemTx(
 			return "", err
 		}
 
-		value := receiver.Amount()
-		if !withZeroFees {
-			// Deduct the min relay fee from the very last receiver which is supposed
-			// to be the change in case it's not a send-all.
-			if i == len(receivers)-1 {
-				value -= uint64(fees)
-			}
-		}
 		outs = append(outs, &wire.TxOut{
-			Value:    int64(value),
+			Value:    int64(receiver.Amount()),
 			PkScript: newVtxoScript,
 		})
 	}
@@ -3606,4 +3790,30 @@ func toTypesVtxo(src client.Vtxo) types.Vtxo {
 		ExpiresAt: src.ExpiresAt,
 		CreatedAt: src.CreatedAt,
 	}
+}
+
+func computeVSize(tx *wire.MsgTx) lntypes.VByte {
+	baseSize := tx.SerializeSizeStripped()
+	totalSize := tx.SerializeSize() // including witness
+	weight := totalSize + baseSize*3
+	return lntypes.WeightUnit(uint64(weight)).ToVB()
+}
+
+func findAnchorOutpoint(tx *wire.MsgTx) (*wire.OutPoint, error) {
+	anchorIndex := -1
+	for outIndex, out := range tx.TxOut {
+		if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
+			anchorIndex = outIndex
+			break
+		}
+	}
+
+	if anchorIndex == -1 {
+		return nil, fmt.Errorf("anchor not found")
+	}
+
+	return &wire.OutPoint{
+		Hash:  tx.TxHash(),
+		Index: uint32(anchorIndex),
+	}, nil
 }

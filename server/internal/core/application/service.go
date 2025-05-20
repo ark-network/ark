@@ -26,7 +26,6 @@ import (
 	"github.com/btcsuite/btcd/wire"
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -63,10 +62,6 @@ type covenantlessService struct {
 	serverSigningKey    *secp256k1.PrivateKey
 	serverSigningPubKey *secp256k1.PublicKey
 
-	// allowZeroFees is a temporary flag letting to submit redeem txs with zero miner fees
-	// this should be removed after we migrate to transactions version 3
-	allowZeroFees bool
-
 	numOfBoardingInputs    int
 	numOfBoardingInputsMtx sync.RWMutex
 
@@ -89,7 +84,6 @@ func NewService(
 	noteUriPrefix string,
 	marketHourStartTime, marketHourEndTime time.Time,
 	marketHourPeriod, marketHourRoundInterval time.Duration,
-	allowZeroFees bool,
 	roundMaxParticipantsCount int64,
 	utxoMaxAmount int64,
 	utxoMinAmount int64,
@@ -152,7 +146,6 @@ func NewService(
 		boardingExitDelay:         boardingExitDelay,
 		serverSigningKey:          serverSigningKey,
 		serverSigningPubKey:       serverSigningKey.PubKey(),
-		allowZeroFees:             allowZeroFees,
 		forfeitsBoardingSigsChan:  make(chan struct{}, 1),
 		roundMaxParticipantsCount: roundMaxParticipantsCount,
 		utxoMaxAmount:             utxoMaxAmount,
@@ -452,11 +445,16 @@ func (s *covenantlessService) SubmitRedeemTx(
 		})
 	}
 
-	outputs := ptx.UnsignedTx.TxOut
-
-	sumOfOutputs := int64(0)
-	for _, out := range outputs {
-		sumOfOutputs += out.Value
+	outputs := make([]*wire.TxOut, 0) // outputs excluding the anchor
+	foundAnchor := false
+	for _, out := range ptx.UnsignedTx.TxOut {
+		if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
+			if foundAnchor {
+				return "", "", fmt.Errorf("invalid tx, multiple anchor outputs")
+			}
+			foundAnchor = true
+			continue
+		}
 
 		if s.vtxoMaxAmount >= 0 {
 			if out.Value > s.vtxoMaxAmount {
@@ -468,24 +466,12 @@ func (s *covenantlessService) SubmitRedeemTx(
 				return "", "", fmt.Errorf("output amount is lower than min utxo amount:%d", s.vtxoMinAmount)
 			}
 		}
+
+		outputs = append(outputs, out)
 	}
 
-	fees := sumOfInputs - sumOfOutputs
-	if fees < 0 {
-		return "", "", fmt.Errorf("invalid fees, inputs are less than outputs")
-	}
-
-	if !s.allowZeroFees {
-		minFeeRate := s.wallet.MinRelayFeeRate(ctx)
-
-		minFees, err := common.ComputeRedeemTxFee(chainfee.SatPerKVByte(minFeeRate), ins, len(outputs))
-		if err != nil {
-			return "", "", fmt.Errorf("failed to compute min fees: %s", err)
-		}
-
-		if fees < minFees {
-			return "", "", fmt.Errorf("min relay fee not met, %d < %d", fees, minFees)
-		}
+	if !foundAnchor {
+		return "", "", fmt.Errorf("invalid tx, missing anchor output")
 	}
 
 	// recompute redeem tx
@@ -859,10 +845,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 	}
 
 	if bip322signature.ContainsOutputs() {
-		if err != nil {
-			return "", fmt.Errorf("unable to verify outputs amount, failed to get dust: %s", err)
-		}
-
 		hasOffChainReceiver := false
 		receivers := make([]domain.Receiver, 0)
 

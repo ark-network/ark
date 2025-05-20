@@ -24,11 +24,11 @@ const (
 
 type Explorer interface {
 	GetTxHex(txid string) (string, error)
-	Broadcast(txHex string) (string, error)
+	Broadcast(txHex ...string) (string, error)
 	GetTxs(addr string) ([]tx, error)
 	IsRBFTx(txid, txHex string) (bool, string, int64, error)
 	GetTxOutspends(tx string) ([]spentStatus, error)
-	GetUtxos(addr string) ([]utxo, error)
+	GetUtxos(addr string) ([]Utxo, error)
 	GetBalance(addr string) (uint64, error)
 	GetRedeemedVtxosBalance(
 		addr string, unilateralExitDelay common.RelativeLocktime,
@@ -107,27 +107,64 @@ func (e *explorerSvc) GetTxHex(txid string) (string, error) {
 	return txHex, nil
 }
 
-func (e *explorerSvc) Broadcast(txStr string) (string, error) {
-	clone := strings.Clone(txStr)
-	txStr, txid, err := parseBitcoinTx(clone)
-	if err != nil {
-		return "", err
+func (e *explorerSvc) Broadcast(txs ...string) (string, error) {
+	if len(txs) == 0 {
+		return "", fmt.Errorf("no txs to broadcast")
 	}
 
-	e.cache.Set(txid, txStr)
-
-	txid, err = e.broadcast(txStr)
-	if err != nil {
-		if strings.Contains(
-			strings.ToLower(err.Error()), "transaction already in block chain",
-		) {
-			return txid, nil
+	for _, tx := range txs {
+		txStr, txid, err := parseBitcoinTx(tx)
+		if err != nil {
+			return "", err
 		}
 
+		e.cache.Set(txid, txStr)
+	}
+
+	if len(txs) == 1 {
+		txid, err := e.broadcast(txs[0])
+		if err != nil {
+			if strings.Contains(
+				strings.ToLower(err.Error()), "transaction already in block chain",
+			) {
+				return txid, nil
+			}
+
+			return "", err
+		}
+
+		return txid, nil
+	}
+
+	// package
+	return e.broadcastPackage(txs...)
+}
+
+func (e *explorerSvc) broadcastPackage(txs ...string) (string, error) {
+	url := fmt.Sprintf("%s/txs/package", e.baseUrl)
+
+	// body is a json array of txs hex
+	body := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(body).Encode(txs); err != nil {
 		return "", err
 	}
 
-	return txid, nil
+	resp, err := http.Post(url, "application/json", body)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	bodyResponse, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", err
+	}
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("failed to broadcast package: %s", string(bodyResponse))
+	}
+
+	return string(bodyResponse), nil
 }
 
 func (e *explorerSvc) GetTxs(addr string) ([]tx, error) {
@@ -207,7 +244,7 @@ func (e *explorerSvc) GetTxOutspends(txid string) ([]spentStatus, error) {
 	return spentStatuses, nil
 }
 
-func (e *explorerSvc) GetUtxos(addr string) ([]utxo, error) {
+func (e *explorerSvc) GetUtxos(addr string) ([]Utxo, error) {
 	resp, err := http.Get(fmt.Sprintf("%s/address/%s/utxo", e.baseUrl, addr))
 	if err != nil {
 		return nil, err
@@ -222,7 +259,7 @@ func (e *explorerSvc) GetUtxos(addr string) ([]utxo, error) {
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("failed to get utxos: %s", string(body))
 	}
-	payload := []utxo{}
+	payload := []Utxo{}
 	if err := json.Unmarshal(body, &payload); err != nil {
 		return nil, err
 	}
@@ -448,7 +485,7 @@ func parseBitcoinTx(txStr string) (string, string, error) {
 	return txhex, txid, nil
 }
 
-func newUtxo(explorerUtxo utxo, delay common.RelativeLocktime, tapscripts []string) types.Utxo {
+func newUtxo(explorerUtxo Utxo, delay common.RelativeLocktime, tapscripts []string) types.Utxo {
 	utxoTime := explorerUtxo.Status.Blocktime
 	createdAt := time.Unix(utxoTime, 0)
 	if utxoTime == 0 {
