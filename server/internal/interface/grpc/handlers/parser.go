@@ -6,7 +6,6 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -35,24 +34,6 @@ func parseArkAddress(addr string) (string, error) {
 	return hex.EncodeToString(schnorr.SerializePubKey(a.VtxoTapKey)), nil
 }
 
-func parseNotes(notes []string) ([]note.Note, error) {
-	if len(notes) <= 0 {
-		return nil, fmt.Errorf("missing notes")
-	}
-
-	notesParsed := make([]note.Note, 0, len(notes))
-	for _, noteStr := range notes {
-		n, err := note.NewFromString(noteStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid note: %s", err)
-		}
-
-		notesParsed = append(notesParsed, *n)
-	}
-
-	return notesParsed, nil
-}
-
 func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
 	if len(ins) <= 0 {
 		return nil, fmt.Errorf("missing inputs")
@@ -60,12 +41,18 @@ func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
 
 	inputs := make([]ports.Input, 0, len(ins))
 	for _, input := range ins {
+		if input.GetOutpoint() == nil {
+			return nil, fmt.Errorf("missing input outpoint")
+		}
+		if input.GetTaprootTree() == nil {
+			return nil, fmt.Errorf("missing input taproot tree")
+		}
 		inputs = append(inputs, ports.Input{
 			VtxoKey: domain.VtxoKey{
 				Txid: input.GetOutpoint().GetTxid(),
 				VOut: input.GetOutpoint().GetVout(),
 			},
-			Tapscripts: input.GetTapscripts().GetScripts(),
+			Tapscripts: input.GetTaprootTree().GetScripts(),
 		})
 	}
 
@@ -270,18 +257,12 @@ func (i txReqsInfo) toProto() []*arkv1.TxRequestInfo {
 			})
 		}
 
-		notes := make([]string, 0, len(req.Notes))
-		for _, note := range req.Notes {
-			notes = append(notes, note.String())
-		}
-
 		list = append(list, &arkv1.TxRequestInfo{
 			Id:                  req.Id,
 			CreatedAt:           req.CreatedAt.Unix(),
 			Receivers:           receivers,
 			Inputs:              inputs,
 			BoardingInputs:      boardingInputs,
-			Notes:               notes,
 			SigningType:         req.SigningType,
 			CosignersPublicKeys: req.Cosigners,
 			LastPing:            req.LastPing.Unix(),

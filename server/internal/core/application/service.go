@@ -13,7 +13,6 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/bip322"
-	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -312,6 +311,11 @@ func (s *covenantlessService) SubmitRedeemTx(
 			return "", "", fmt.Errorf("vtxo already swept")
 		}
 
+		isNoteVtxo := len(vtxo.RoundTxid) == 0
+		if isNoteVtxo {
+			return "", "", fmt.Errorf("vtxo '%s' is a note, can't be spent in ark transaction", vtxo.String())
+		}
+
 		vtxoScript, err := tree.ParseVtxoScript(tapscripts)
 		if err != nil {
 			return "", "", fmt.Errorf("failed to parse vtxo script: %s", err)
@@ -594,53 +598,16 @@ func (s *covenantlessService) GetBoardingAddress(
 	return
 }
 
-func (s *covenantlessService) SpendNotes(ctx context.Context, notes []note.Note) (string, error) {
-	notesRepo := s.repoManager.Notes()
-
-	for _, note := range notes {
-		// verify the note signature
-		hash := note.Hash()
-
-		valid, err := s.wallet.VerifyMessageSignature(ctx, hash, note.Signature)
-		if err != nil {
-			return "", fmt.Errorf("failed to verify note signature: %s", err)
-		}
-
-		if !valid {
-			return "", fmt.Errorf("invalid note signature %s", note)
-		}
-
-		// verify that the note is spendable
-		spent, err := notesRepo.Contains(ctx, note.ID)
-		if err != nil {
-			return "", fmt.Errorf("failed to check if note is spent: %s", err)
-		}
-
-		if spent {
-			return "", fmt.Errorf("note already spent: %s", note)
-		}
-	}
-
-	request, err := domain.NewTxRequest(make([]domain.Vtxo, 0))
-	if err != nil {
-		return "", fmt.Errorf("failed to create tx request: %s", err)
-	}
-
-	if err := s.txRequests.pushWithNotes(*request, notes); err != nil {
-		return "", fmt.Errorf("failed to push tx requests: %s", err)
-	}
-
-	return request.Id, nil
-}
-
 func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) (string, error) {
-	vtxoKeys := make([]domain.VtxoKey, 0)
-	// the vtxo to swap for new ones
+	// vtxoKeysInputs keeps track of the vtxos that are inputs of the intent
+	vtxoKeysInputs := make([]domain.VtxoKey, 0)
+	// the vtxo to swap for new ones, require forfeit transactions
 	vtxosInputs := make([]domain.Vtxo, 0)
 	// the boarding utxos to add in the commitment tx
 	boardingInputs := make([]ports.BoardingInput, 0)
-	// the vtxos to recover (swept but unspent)
-	recoveredVtxos := make([]domain.Vtxo, 0)
+	// custodial vtxos = the vtxos to recover (swept but unspent) + note vtxos
+	// do not require forfeit transactions
+	custodialVtxos := make([]domain.Vtxo, 0)
 
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
 
@@ -714,7 +681,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 
 				vtxoScript, err := tree.ParseVtxoScript(tapscripts)
 				if err != nil {
-					return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+					return "", fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
 				}
 
 				// validate the vtxo script
@@ -794,15 +761,20 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			PkScript: pkScript,
 		}
 
-		if vtxo.Swept {
+		vtxoKeysInputs = append(vtxoKeysInputs, vtxo.VtxoKey)
+
+		isNoteVtxo := len(vtxo.RoundTxid) == 0
+
+		if vtxo.Swept || isNoteVtxo {
 			// the user is asking for recovery of the vtxo
-			recoveredVtxos = append(recoveredVtxos, vtxo)
+			// or try to redeem a note vtxo
+			custodialVtxos = append(custodialVtxos, vtxo)
 			continue
 		}
 
 		vtxoScript, err := tree.ParseVtxoScript(tapscripts)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+			return "", fmt.Errorf("failed to parse vtxo taproot tree: %s", err)
 		}
 
 		// validate the vtxo script
@@ -821,11 +793,13 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 		}
 
 		if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey)) {
-			return "", fmt.Errorf("descriptor does not match vtxo pubkey")
+			return "", fmt.Errorf(
+				"invalid vtxo taproot key: got %x expected %x",
+				schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey),
+			)
 		}
 
 		vtxosInputs = append(vtxosInputs, vtxo)
-		vtxoKeys = append(vtxoKeys, vtxo.VtxoKey)
 	}
 
 	prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
@@ -922,11 +896,12 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 		}
 	}
 
-	if err := s.txRequests.push(*request, boardingInputs, recoveredVtxos, message.Musig2Data); err != nil {
+	if err := s.txRequests.push(*request, boardingInputs, custodialVtxos, message.Musig2Data); err != nil {
 		return "", err
 	}
 
-	s.roundInputs.add(vtxoKeys)
+	// prevent the vtxos from being spent in a concurrent intent
+	s.roundInputs.add(vtxoKeysInputs)
 
 	return request.Id, nil
 }
@@ -971,7 +946,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 
 				vtxoScript, err := tree.ParseVtxoScript(input.Tapscripts)
 				if err != nil {
-					return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+					return "", fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
 				}
 
 				// validate the vtxo script
@@ -1032,7 +1007,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 
 		vtxoScript, err := tree.ParseVtxoScript(input.Tapscripts)
 		if err != nil {
-			return "", fmt.Errorf("failed to parse boarding descriptor: %s", err)
+			return "", fmt.Errorf("failed to parse vtxo taproot tree: %s", err)
 		}
 
 		// validate the vtxo script
@@ -1051,7 +1026,10 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		}
 
 		if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey)) {
-			return "", fmt.Errorf("descriptor does not match vtxo pubkey")
+			return "", fmt.Errorf(
+				"invalid vtxo taproot key: got %x expected %x",
+				schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey),
+			)
 		}
 
 		vtxosInputs = append(vtxosInputs, vtxo)
@@ -1081,7 +1059,7 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 
 	boardingScript, err := tree.ParseVtxoScript(input.Tapscripts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse boarding descriptor: %s", err)
+		return nil, fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
 	}
 
 	tapKey, _, err := boardingScript.TapTree()
@@ -1095,7 +1073,10 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 	}
 
 	if !bytes.Equal(output.PkScript, expectedScriptPubkey) {
-		return nil, fmt.Errorf("descriptor does not match script in transaction output")
+		return nil, fmt.Errorf(
+			"invalid boarding utxo taproot key: got %x expected %x",
+			output.PkScript, expectedScriptPubkey,
+		)
 	}
 
 	if err := boardingScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
@@ -1394,7 +1375,6 @@ func (s *covenantlessService) GetTxRequestQueue(
 			Receivers:      receivers,
 			Inputs:         request.Inputs,
 			BoardingInputs: request.boardingInputs,
-			Notes:          request.notes,
 			LastPing:       request.pingTimestamp,
 			SigningType:    signingType,
 			Cosigners:      cosigners,
@@ -1583,8 +1563,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	roundRemainingDuration := time.Duration((s.roundInterval/3)*2-1) * time.Second
 	thirdOfRemainingDuration := roundRemainingDuration / 3
 
-	var notes []note.Note
-	var recoveredVtxos []domain.Vtxo
+	var custodialVtxos []domain.Vtxo
 	var roundAborted bool
 	var vtxoKeys []domain.VtxoKey
 	defer func() {
@@ -1604,7 +1583,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 			return
 		}
 
-		s.finalizeRound(notes, recoveredVtxos, roundEndTime)
+		s.finalizeRound(custodialVtxos, roundEndTime)
 	}()
 
 	if round.IsFailed() {
@@ -1626,14 +1605,17 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	if num > s.roundMaxParticipantsCount {
 		num = s.roundMaxParticipantsCount
 	}
-	requests, boardingInputs, redeeemedNotes, musig2data, vtxosToRecover := s.txRequests.pop(num)
+	requests, boardingInputs, musig2data, recoveredAndNoteVtxos := s.txRequests.pop(num)
 	// save notes and recovered vtxos for finalize function
-	notes = redeeemedNotes
-	recoveredVtxos = vtxosToRecover
+	custodialVtxos = recoveredAndNoteVtxos
+
 	for _, req := range requests {
 		for _, in := range req.Inputs {
 			vtxoKeys = append(vtxoKeys, in.VtxoKey)
 		}
+	}
+	for _, vtxo := range custodialVtxos {
+		vtxoKeys = append(vtxoKeys, vtxo.VtxoKey)
 	}
 	s.numOfBoardingInputsMtx.Lock()
 	s.numOfBoardingInputs = len(boardingInputs)
@@ -1864,7 +1846,7 @@ func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combined
 	s.eventsCh <- ev
 }
 
-func (s *covenantlessService) finalizeRound(notes []note.Note, recoveredVtxos []domain.Vtxo, roundEndTime time.Time) {
+func (s *covenantlessService) finalizeRound(custodialVtxos []domain.Vtxo, roundEndTime time.Time) {
 	defer s.startRound()
 
 	ctx := context.Background()
@@ -2012,25 +1994,18 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, recoveredVtxos []
 		return
 	}
 
-	// mark the notes as spent
-	for _, note := range notes {
-		if err := s.repoManager.Notes().Add(ctx, note.ID); err != nil {
-			log.WithError(err).Warn("failed to mark note as spent")
-		}
+	custodialVtxosKeys := make([]domain.VtxoKey, 0)
+	for _, vtxo := range custodialVtxos {
+		custodialVtxosKeys = append(custodialVtxosKeys, vtxo.VtxoKey)
 	}
 
-	recoveredVtxosKeys := make([]domain.VtxoKey, 0)
-	for _, vtxo := range recoveredVtxos {
-		recoveredVtxosKeys = append(recoveredVtxosKeys, vtxo.VtxoKey)
-	}
-
-	// mark the recovered vtxos as spent
-	if err := s.repoManager.Vtxos().SpendVtxos(ctx, recoveredVtxosKeys, round.Txid); err != nil {
-		log.WithError(err).Warn("failed to mark recovered vtxos as spent")
+	// mark the recovered and notes vtxos as spent
+	if err := s.repoManager.Vtxos().SpendVtxos(ctx, custodialVtxosKeys, round.Txid); err != nil {
+		log.WithError(err).Warn("failed to mark custodial vtxos as spent")
 	}
 
 	go func() {
-		spentVtxos := append(s.getSpentVtxos(round.TxRequests), recoveredVtxos...)
+		spentVtxos := append(s.getSpentVtxos(round.TxRequests), custodialVtxos...)
 		for i := range spentVtxos {
 			spentVtxos[i].Spent = true
 			spentVtxos[i].SpentBy = round.Txid

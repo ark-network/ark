@@ -20,9 +20,6 @@ type V1RegisterIntentRequest struct {
 
 	// BIP322 signature embeds the outpoints and the proof of funds
 	Bip322Signature *V1Bip322Signature `json:"bip322Signature,omitempty"`
-
-	// notes
-	Notes []string `json:"notes"`
 }
 
 // Validate validates this v1 register intent request

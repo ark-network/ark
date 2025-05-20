@@ -9,7 +9,6 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/bip322"
-	"github.com/ark-network/ark/common/descriptor"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -68,26 +67,15 @@ func (h *handler) GetInfo(
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
-	desc := fmt.Sprintf(
-		descriptor.DefaultVtxoDescriptorTemplate,
-		hex.EncodeToString(tree.UnspendableKey().SerializeCompressed()),
-		"USER",
-		info.PubKey,
-		info.UnilateralExitDelay,
-		info.PubKey,
-	)
-
 	return &arkv1.GetInfoResponse{
-		Pubkey:                     info.PubKey,
-		VtxoTreeExpiry:             info.VtxoTreeExpiry,
-		UnilateralExitDelay:        info.UnilateralExitDelay,
-		BoardingExitDelay:          info.BoardingExitDelay,
-		RoundInterval:              info.RoundInterval,
-		Network:                    info.Network,
-		Dust:                       int64(info.Dust),
-		ForfeitAddress:             info.ForfeitAddress,
-		BoardingDescriptorTemplate: desc,
-		VtxoDescriptorTemplates:    []string{desc},
+		Pubkey:              info.PubKey,
+		VtxoTreeExpiry:      info.VtxoTreeExpiry,
+		UnilateralExitDelay: info.UnilateralExitDelay,
+		BoardingExitDelay:   info.BoardingExitDelay,
+		RoundInterval:       info.RoundInterval,
+		Network:             info.Network,
+		Dust:                int64(info.Dust),
+		ForfeitAddress:      info.ForfeitAddress,
 		MarketHour: &arkv1.MarketHour{
 			NextStartTime: info.NextMarketHour.StartTime.Unix(),
 			NextEndTime:   info.NextMarketHour.EndTime.Unix(),
@@ -127,10 +115,8 @@ func (h *handler) GetBoardingAddress(
 
 	return &arkv1.GetBoardingAddressResponse{
 		Address: addr,
-		TaprootTree: &arkv1.GetBoardingAddressResponse_Tapscripts{
-			Tapscripts: &arkv1.Tapscripts{
-				Scripts: tapscripts,
-			},
+		TaprootTree: &arkv1.Tapscripts{
+			Scripts: tapscripts,
 		},
 	}, nil
 }
@@ -138,49 +124,31 @@ func (h *handler) GetBoardingAddress(
 func (h *handler) RegisterIntent(
 	ctx context.Context, req *arkv1.RegisterIntentRequest,
 ) (*arkv1.RegisterIntentResponse, error) {
-	notesInputs := req.GetNotes()
 	bip322Signature := req.GetBip322Signature()
 
-	if len(notesInputs) <= 0 && bip322Signature == nil {
+	if bip322Signature == nil {
 		return nil, status.Error(codes.InvalidArgument, "missing inputs")
 	}
 
-	if bip322Signature != nil && len(notesInputs) > 0 {
-		return nil, status.Error(codes.InvalidArgument, "cannot mix vtxos and notes")
+	signature, err := bip322.DecodeSignature(bip322Signature.GetSignature())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 signature")
 	}
 
-	requestID := ""
+	intentMessage := bip322Signature.GetMessage()
 
-	if bip322Signature != nil {
-		signature, err := bip322.DecodeSignature(bip322Signature.Signature)
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 signature")
-		}
-
-		if len(bip322Signature.Message) <= 0 {
-			return nil, status.Error(codes.InvalidArgument, "missing message")
-		}
-
-		var message tree.IntentMessage
-		if err := message.Decode(bip322Signature.Message); err != nil {
-			return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 message")
-		}
-
-		requestID, err = h.svc.RegisterIntent(ctx, *signature, message)
-		if err != nil {
-			return nil, err
-		}
+	if len(intentMessage) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing message")
 	}
 
-	if len(notesInputs) > 0 {
-		notes, err := parseNotes(notesInputs)
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
-		}
-		requestID, err = h.svc.SpendNotes(ctx, notes)
-		if err != nil {
-			return nil, err
-		}
+	var message tree.IntentMessage
+	if err := message.Decode(intentMessage); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 message")
+	}
+
+	requestID, err := h.svc.RegisterIntent(ctx, *signature, message)
+	if err != nil {
+		return nil, err
 	}
 
 	return &arkv1.RegisterIntentResponse{
@@ -192,38 +160,18 @@ func (h *handler) RegisterInputsForNextRound(
 	ctx context.Context, req *arkv1.RegisterInputsForNextRoundRequest,
 ) (*arkv1.RegisterInputsForNextRoundResponse, error) {
 	vtxosInputs := req.GetInputs()
-	notesInputs := req.GetNotes()
 
-	if len(vtxosInputs) <= 0 && len(notesInputs) <= 0 {
+	if len(vtxosInputs) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing inputs")
 	}
 
-	if len(vtxosInputs) > 0 && len(notesInputs) > 0 {
-		return nil, status.Error(codes.InvalidArgument, "cannot mix vtxos and notes")
+	inputs, err := parseInputs(vtxosInputs)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
-
-	requestID := ""
-
-	if len(vtxosInputs) > 0 {
-		inputs, err := parseInputs(vtxosInputs)
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
-		}
-		requestID, err = h.svc.SpendVtxos(ctx, inputs)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if len(notesInputs) > 0 {
-		notes, err := parseNotes(notesInputs)
-		if err != nil {
-			return nil, status.Error(codes.InvalidArgument, err.Error())
-		}
-		requestID, err = h.svc.SpendNotes(ctx, notes)
-		if err != nil {
-			return nil, err
-		}
+	requestID, err := h.svc.SpendVtxos(ctx, inputs)
+	if err != nil {
+		return nil, err
 	}
 
 	return &arkv1.RegisterInputsForNextRoundResponse{

@@ -37,9 +37,6 @@ type TransportClient interface {
 	RegisterIntent(
 		ctx context.Context, signature, message string,
 	) (string, error)
-	RegisterNotesForNextRound(
-		ctx context.Context, notes []string,
-	) (string, error)
 	RegisterOutputsForNextRound(
 		ctx context.Context, requestID string, outputs []Output, musig2 *tree.Musig2,
 	) error
@@ -68,24 +65,23 @@ type TransportClient interface {
 }
 
 type Info struct {
-	Version                    string
-	PubKey                     string
-	VtxoTreeExpiry             int64
-	UnilateralExitDelay        int64
-	RoundInterval              int64
-	Network                    string
-	Dust                       uint64
-	BoardingExitDelay          int64
-	BoardingDescriptorTemplate string
-	ForfeitAddress             string
-	MarketHourStartTime        int64
-	MarketHourEndTime          int64
-	MarketHourPeriod           int64
-	MarketHourRoundInterval    int64
-	UtxoMinAmount              int64
-	UtxoMaxAmount              int64
-	VtxoMinAmount              int64
-	VtxoMaxAmount              int64
+	Version                 string
+	PubKey                  string
+	VtxoTreeExpiry          int64
+	UnilateralExitDelay     int64
+	RoundInterval           int64
+	Network                 string
+	Dust                    uint64
+	BoardingExitDelay       int64
+	ForfeitAddress          string
+	MarketHourStartTime     int64
+	MarketHourEndTime       int64
+	MarketHourPeriod        int64
+	MarketHourRoundInterval int64
+	UtxoMinAmount           int64
+	UtxoMaxAmount           int64
+	VtxoMinAmount           int64
+	VtxoMaxAmount           int64
 }
 
 type RoundEventChannel struct {

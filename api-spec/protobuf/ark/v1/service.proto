@@ -91,16 +91,14 @@ message GetInfoResponse {
   int64 round_interval = 4;
   string network = 5;
   int64 dust = 6;
-  string boarding_descriptor_template = 7;
-  repeated string vtxo_descriptor_templates = 8;
-  string forfeit_address = 9;
-  MarketHour market_hour = 10;
-  string version = 11;
-  int64 utxo_min_amount = 12; // -1 means native dust limit (default)
-  int64 utxo_max_amount = 13; // -1 means no limit (default), 0 means boarding not allowed
-  int64 vtxo_min_amount = 14; // -1 means native dust limit (default)
-  int64 vtxo_max_amount = 15; // -1 means no limit (default)
-  int64 boarding_exit_delay = 16;
+  string forfeit_address = 7;
+  MarketHour market_hour = 8;
+  string version = 9;
+  int64 utxo_min_amount = 10; // -1 means native dust limit (default)
+  int64 utxo_max_amount = 11; // -1 means no limit (default), 0 means boarding not allowed
+  int64 vtxo_min_amount = 12; // -1 means native dust limit (default)
+  int64 vtxo_max_amount = 13; // -1 means no limit (default)
+  int64 boarding_exit_delay = 14;
 }
 
 message GetBoardingAddressRequest {
@@ -108,10 +106,7 @@ message GetBoardingAddressRequest {
 }
 message GetBoardingAddressResponse {
   string address = 1;
-  oneof taproot_tree {
-    string descriptor = 2;
-    Tapscripts tapscripts = 3;
-  }
+  Tapscripts taproot_tree = 2;
 }
 
 /* In-Round Transaction API messages */
@@ -119,7 +114,6 @@ message GetBoardingAddressResponse {
 message RegisterIntentRequest {
   // BIP322 signature embeds the outpoints and the proof of funds
   Bip322Signature bip322_signature = 1;
-  repeated string notes = 2;
 }
 message RegisterIntentResponse {
   string request_id = 1;
@@ -127,7 +121,6 @@ message RegisterIntentResponse {
 
 message RegisterInputsForNextRoundRequest {
   repeated Input inputs = 1;
-  repeated string notes = 2;
 }
 message RegisterInputsForNextRoundResponse {
   string request_id = 1;

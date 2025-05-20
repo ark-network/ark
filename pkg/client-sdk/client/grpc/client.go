@@ -66,24 +66,23 @@ func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
 		return nil, err
 	}
 	return &client.Info{
-		PubKey:                     resp.GetPubkey(),
-		VtxoTreeExpiry:             resp.GetVtxoTreeExpiry(),
-		UnilateralExitDelay:        resp.GetUnilateralExitDelay(),
-		RoundInterval:              resp.GetRoundInterval(),
-		Network:                    resp.GetNetwork(),
-		Dust:                       uint64(resp.GetDust()),
-		BoardingDescriptorTemplate: resp.GetBoardingDescriptorTemplate(),
-		BoardingExitDelay:          resp.GetBoardingExitDelay(),
-		ForfeitAddress:             resp.GetForfeitAddress(),
-		Version:                    resp.GetVersion(),
-		MarketHourStartTime:        resp.GetMarketHour().GetNextStartTime(),
-		MarketHourEndTime:          resp.GetMarketHour().GetNextEndTime(),
-		MarketHourPeriod:           resp.GetMarketHour().GetPeriod(),
-		MarketHourRoundInterval:    resp.GetMarketHour().GetRoundInterval(),
-		UtxoMinAmount:              resp.GetUtxoMinAmount(),
-		UtxoMaxAmount:              resp.GetUtxoMaxAmount(),
-		VtxoMinAmount:              resp.GetVtxoMinAmount(),
-		VtxoMaxAmount:              resp.GetVtxoMaxAmount(),
+		PubKey:                  resp.GetPubkey(),
+		VtxoTreeExpiry:          resp.GetVtxoTreeExpiry(),
+		UnilateralExitDelay:     resp.GetUnilateralExitDelay(),
+		RoundInterval:           resp.GetRoundInterval(),
+		Network:                 resp.GetNetwork(),
+		Dust:                    uint64(resp.GetDust()),
+		BoardingExitDelay:       resp.GetBoardingExitDelay(),
+		ForfeitAddress:          resp.GetForfeitAddress(),
+		Version:                 resp.GetVersion(),
+		MarketHourStartTime:     resp.GetMarketHour().GetNextStartTime(),
+		MarketHourEndTime:       resp.GetMarketHour().GetNextEndTime(),
+		MarketHourPeriod:        resp.GetMarketHour().GetPeriod(),
+		MarketHourRoundInterval: resp.GetMarketHour().GetRoundInterval(),
+		UtxoMinAmount:           resp.GetUtxoMinAmount(),
+		UtxoMaxAmount:           resp.GetUtxoMaxAmount(),
+		VtxoMinAmount:           resp.GetVtxoMinAmount(),
+		VtxoMaxAmount:           resp.GetVtxoMaxAmount(),
 	}, nil
 }
 
@@ -125,19 +124,6 @@ func (a *grpcClient) RegisterIntent(
 		},
 	}
 
-	resp, err := a.svc.RegisterIntent(ctx, req)
-	if err != nil {
-		return "", err
-	}
-	return resp.GetRequestId(), nil
-}
-
-func (a *grpcClient) RegisterNotesForNextRound(
-	ctx context.Context, notes []string,
-) (string, error) {
-	req := &arkv1.RegisterIntentRequest{
-		Notes: notes,
-	}
 	resp, err := a.svc.RegisterIntent(ctx, req)
 	if err != nil {
 		return "", err

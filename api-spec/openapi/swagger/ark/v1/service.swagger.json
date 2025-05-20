@@ -442,10 +442,7 @@
         "address": {
           "type": "string"
         },
-        "descriptor": {
-          "type": "string"
-        },
-        "tapscripts": {
+        "taprootTree": {
           "$ref": "#/definitions/v1Tapscripts"
         }
       }
@@ -494,15 +491,6 @@
         "dust": {
           "type": "string",
           "format": "int64"
-        },
-        "boardingDescriptorTemplate": {
-          "type": "string"
-        },
-        "vtxoDescriptorTemplates": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         },
         "forfeitAddress": {
           "type": "string"
@@ -556,10 +544,7 @@
         "outpoint": {
           "$ref": "#/definitions/v1Outpoint"
         },
-        "descriptor": {
-          "type": "string"
-        },
-        "tapscripts": {
+        "taprootTree": {
           "$ref": "#/definitions/v1Tapscripts"
         }
       }
@@ -676,12 +661,6 @@
             "type": "object",
             "$ref": "#/definitions/v1Input"
           }
-        },
-        "notes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         }
       }
     },
@@ -699,12 +678,6 @@
         "bip322Signature": {
           "$ref": "#/definitions/v1Bip322Signature",
           "title": "BIP322 signature embeds the outpoints and the proof of funds"
-        },
-        "notes": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
         }
       }
     },

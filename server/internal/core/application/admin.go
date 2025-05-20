@@ -2,8 +2,11 @@ package application
 
 import (
 	"context"
+	"encoding/hex"
+	"time"
 
 	"github.com/ark-network/ark/common/note"
+	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 )
 
@@ -187,22 +190,47 @@ func (a *adminService) GetWalletStatus(ctx context.Context) (*WalletStatus, erro
 	}, nil
 }
 
+// CreateNotes generates random notes and create the associated vtxos in the database
 func (a *adminService) CreateNotes(ctx context.Context, value uint32, quantity int) ([]string, error) {
 	notes := make([]string, 0, quantity)
+	vtxos := make([]domain.Vtxo, 0, quantity)
+
+	now := time.Now().Unix()
+
 	for i := 0; i < quantity; i++ {
-		data, err := note.New(value)
+		note, err := note.New(value)
 		if err != nil {
 			return nil, err
 		}
 
-		noteHash := data.Hash()
-
-		signature, err := a.walletSvc.SignMessage(ctx, noteHash)
+		bip322Input, err := note.BIP322Input()
 		if err != nil {
 			return nil, err
 		}
-		note := data.ToNote(signature)
+
+		vtxo := domain.Vtxo{
+			VtxoKey: domain.VtxoKey{
+				Txid: bip322Input.OutPoint.Hash.String(),
+				VOut: bip322Input.OutPoint.Index,
+			},
+			Amount:    uint64(note.Value),
+			PubKey:    hex.EncodeToString(bip322Input.WitnessUtxo.PkScript[2:]),
+			RoundTxid: "",
+			SpentBy:   "",
+			Spent:     false,
+			Redeemed:  false,
+			Swept:     false,
+			CreatedAt: now,
+			RedeemTx:  "",
+		}
+
 		notes = append(notes, note.String())
+		vtxos = append(vtxos, vtxo)
+	}
+
+	vtxoRepo := a.repoManager.Vtxos()
+	if err := vtxoRepo.AddVtxos(ctx, vtxos); err != nil {
+		return nil, err
 	}
 
 	return notes, nil

@@ -1,4 +1,4 @@
-.PHONY: genrest test vet lint migrate sqlc build-wasm test-wasm
+.PHONY: genrest test vet lint migrate sqlc
 
 ark_client_dir = $(or $(REST_DIR),$(PWD)/client/rest/service)
 indexer_client_dir = $(or $(REST_DIR),$(PWD)/indexer/rest/service)
@@ -16,7 +16,7 @@ genrest:
 ## test: runs unit tests
 test:
 	@echo "Running unit tests..."
-	@go test -v -count=1 -race $$(go list ./... | grep -v '/test/wasm')
+	@go test -v -count=1 -race ./...
 
 ## vet: code analysis
 vet:
@@ -36,25 +36,3 @@ migrate:
 sqlc:
 	@echo "gen sql..."
 	@docker run --rm -v ./store/sql:/src -w /src sqlc/sqlc generate
-
-## wasm: compiles the client-sdk to wasm
-WASM_DIR = wasm
-BUILD_DIR = build
-VERSION := $(shell git describe --tags --always --dirty)
-GO_VERSION := $(shell go version | cut -d' ' -f3)
-
-build-wasm:
-	@mkdir -p $(BUILD_DIR)
-	@echo "Version: $(VERSION)"
-	@GOOS=js GOARCH=wasm GO111MODULE=on go build -ldflags="-s -w -X 'main.Version=$(VERSION)'" -o $(BUILD_DIR)/ark-sdk.wasm $(WASM_DIR)/*.go
-
-test-wasm:
-	$(MAKE) build-wasm BUILD_DIR=./test/wasm/web
-	@echo "Copying $(go env GOROOT)/misc/wasm/wasm_exec.js"
-	@cp `go env GOROOT`/misc/wasm/wasm_exec.js ./test/wasm/web
-	@echo "Starting web server..."
-	@cd ./test/wasm/web && python3 -m http.server 8000 &
-	@echo "Waiting for server to start..."
-	@sleep 3
-	@echo "Running tests..."
-	@cd ./test/wasm && go test -v
