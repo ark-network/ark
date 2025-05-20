@@ -853,7 +853,10 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 
 		vtxoKeysInputs = append(vtxoKeysInputs, vtxo.VtxoKey)
 
-		if !vtxo.IsNote() {
+		// We want to validate the taproot tree of an input vtxo only if it requires
+		// to be forfeited. Note and swept vtxos can't go onchain, so there's no reason to
+		// check if the user is trying to trick us.
+		if vtxo.RequiresForfeit() {
 			vtxoScript, err := tree.ParseVtxoScript(tapscripts)
 			if err != nil {
 				return "", fmt.Errorf("failed to parse vtxo taproot tree: %s", err)
