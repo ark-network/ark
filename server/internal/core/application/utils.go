@@ -2,6 +2,7 @@ package application
 
 import (
 	"context"
+	"encoding/hex"
 	"fmt"
 	"sort"
 	"strings"
@@ -266,7 +267,8 @@ func (m *forfeitTxsMap) init(connectors tree.TxTree, requests []domain.TxRequest
 	vtxosToSign := make([]domain.Vtxo, 0)
 	for _, request := range requests {
 		for _, vtxo := range request.Inputs {
-			if vtxo.Swept || vtxo.IsNote() {
+			// If the vtxo is swept or is a note, it doens't require to be forfeited so we skip it
+			if !vtxo.RequiresForfeit() {
 				continue
 			}
 			vtxosToSign = append(vtxosToSign, vtxo)
@@ -520,25 +522,33 @@ func getSpentVtxos(requests map[string]domain.TxRequest) []domain.VtxoKey {
 	return vtxos
 }
 
-func decodeTx(tx string) (string, []ports.TxIn, []ports.TxOut, error) {
-	ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+func decodeTx(offchainTx domain.OffchainTx) (string, []domain.VtxoKey, []domain.Vtxo, error) {
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(offchainTx.VirtualTx), true)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("failed to parse partial tx: %s", err)
 	}
 
 	txid := ptx.UnsignedTx.TxHash().String()
-	ins := make([]ports.TxIn, 0, len(ptx.UnsignedTx.TxIn))
+	ins := make([]domain.VtxoKey, 0, len(ptx.UnsignedTx.TxIn))
 	for _, input := range ptx.UnsignedTx.TxIn {
-		ins = append(ins, ports.TxIn{
+		ins = append(ins, domain.VtxoKey{
 			Txid: input.PreviousOutPoint.Hash.String(),
 			VOut: input.PreviousOutPoint.Index,
 		})
 	}
-	outs := make([]ports.TxOut, 0, len(ptx.UnsignedTx.TxOut))
-	for _, output := range ptx.UnsignedTx.TxOut {
-		outs = append(outs, ports.TxOut{
-			Amount:   uint64(output.Value),
-			PkScript: output.PkScript,
+	outs := make([]domain.Vtxo, 0, len(ptx.UnsignedTx.TxOut))
+	for outIndex, out := range ptx.UnsignedTx.TxOut {
+		outs = append(outs, domain.Vtxo{
+			VtxoKey: domain.VtxoKey{
+				Txid: txid,
+				VOut: uint32(outIndex),
+			},
+			PubKey:    hex.EncodeToString(out.PkScript[2:]),
+			Amount:    uint64(out.Value),
+			ExpireAt:  offchainTx.ExpiryTimestamp,
+			RoundTxid: offchainTx.RootCommitmentTxid(),
+			RedeemTx:  offchainTx.VirtualTx,
+			CreatedAt: offchainTx.EndingTimestamp,
 		})
 	}
 	return txid, ins, outs, nil

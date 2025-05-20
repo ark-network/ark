@@ -2,7 +2,7 @@ package ports
 
 import "github.com/ark-network/ark/server/internal/core/domain"
 
-type TxIn domain.VtxoKey
+type TxIn = domain.VtxoKey
 
 type TxOut struct {
 	Amount   uint64

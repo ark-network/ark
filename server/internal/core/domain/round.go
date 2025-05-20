@@ -156,7 +156,9 @@ func (r *Round) EndFinalization(forfeitTxs []ForfeitTx, txid, finalCommitmentTx 
 	if len(forfeitTxs) <= 0 {
 		for _, request := range r.TxRequests {
 			for _, in := range request.Inputs {
-				if !in.IsNote() && !in.Swept {
+				// The list of signed forfeit txs is required only if there is at least
+				// one input that is not either a note or swept..
+				if in.RequiresForfeit() {
 					return nil, fmt.Errorf("missing list of signed forfeit txs")
 				}
 			}

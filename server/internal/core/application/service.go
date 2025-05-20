@@ -221,36 +221,16 @@ func NewService(
 				return
 			}
 
-			txid, ins, outs, err := decodeTx(offchainTx.VirtualTx)
+			txid, spentVtxoKeys, newVtxos, err := decodeTx(*offchainTx)
 			if err != nil {
 				log.WithError(err).Warn("failed to decode virtual tx")
 				return
 			}
 
-			spentVtxoKeys := make([]domain.VtxoKey, 0, len(ins))
-			for _, in := range ins {
-				spentVtxoKeys = append(spentVtxoKeys, domain.VtxoKey(in))
-			}
 			spentVtxos, err := svc.repoManager.Vtxos().GetVtxos(context.Background(), spentVtxoKeys)
 			if err != nil {
 				log.WithError(err).Warn("failed to get spent vtxos")
 				return
-			}
-
-			newVtxos := make([]domain.Vtxo, 0, len(outs))
-			for outIndex, out := range outs {
-				newVtxos = append(newVtxos, domain.Vtxo{
-					VtxoKey: domain.VtxoKey{
-						Txid: txid,
-						VOut: uint32(outIndex),
-					},
-					PubKey:    hex.EncodeToString(out.PkScript[2:]),
-					Amount:    uint64(out.Amount),
-					ExpireAt:  offchainTx.ExpiryTimestamp,
-					RoundTxid: offchainTx.RootCommitmentTxid(),
-					RedeemTx:  offchainTx.VirtualTx,
-					CreatedAt: offchainTx.EndingTimestamp,
-				})
 			}
 
 			go func() {
@@ -300,15 +280,17 @@ func (s *covenantlessService) Start() error {
 }
 
 func (s *covenantlessService) Stop() {
+	ctx := context.Background()
+
 	s.sweeper.stop()
 	// nolint
-	vtxos, _ := s.repoManager.Vtxos().GetAllSweepableVtxos(context.Background())
+	vtxos, _ := s.repoManager.Vtxos().GetAllSweepableVtxos(ctx)
 	if len(vtxos) > 0 {
 		s.stopWatchingVtxos(vtxos)
 	}
 
 	// nolint
-	s.wallet.Lock(context.Background())
+	s.wallet.Lock(ctx)
 	log.Debug("locked wallet")
 	s.wallet.Close()
 	log.Debug("closed connection to wallet")
@@ -382,7 +364,6 @@ func (s *covenantlessService) SubmitRedeemTx(
 	indexedSpentVtxos := make(map[domain.VtxoKey]domain.Vtxo)
 	indexedCommitmentTxids := make(map[string]struct{}, 0)
 	for _, vtxo := range spentVtxos {
-		// nolint
 		indexedSpentVtxos[vtxo.VtxoKey] = vtxo
 		indexedCommitmentTxids[vtxo.RoundTxid] = struct{}{}
 	}

@@ -227,12 +227,11 @@ func (s *service) Close() {
 }
 
 func (s *service) updateProjectionsAfterRoundEvents(events []domain.Event) {
+	ctx := context.Background()
 	round := domain.NewRoundFromEvents(events)
 
-	ctx := context.Background()
-
 	if err := s.roundStore.AddOrUpdateRound(ctx, *round); err != nil {
-		log.WithError(err).Fatalf("failed to add round %s", round.Id)
+		log.WithError(err).Fatalf("failed to add or update round %s", round.Id)
 	}
 	log.Debugf("added or updated round %s", round.Id)
 
@@ -271,23 +270,24 @@ func (s *service) updateProjectionsAfterRoundEvents(events []domain.Event) {
 }
 
 func (s *service) updateProjectionsAfterOffchainTxEvents(events []domain.Event) {
+	ctx := context.Background()
 	offchainTx := domain.NewOffchainTxFromEvents(events)
+
+	if err := s.offchainTxStore.AddOrUpdateOffchainTx(ctx, offchainTx); err != nil {
+		log.WithError(err).Fatalf("failed to add or update offchain tx %s", offchainTx.VirtualTxid)
+	}
+	log.Debugf("added or updated offchain tx %s", offchainTx.VirtualTxid)
+
 	if !offchainTx.IsFinalized() {
 		return
 	}
 
-	ctx := context.Background()
 	repo := s.vtxoStore
 
-	txid, ins, outs, err := s.txDecoder.DecodeTx(offchainTx.VirtualTx)
+	txid, spentVtxos, outs, err := s.txDecoder.DecodeTx(offchainTx.VirtualTx)
 	if err != nil {
 		log.WithError(err).Warn("failed to decode virtual tx")
 		return
-	}
-
-	spentVtxos := make([]domain.VtxoKey, 0, len(ins))
-	for _, in := range ins {
-		spentVtxos = append(spentVtxos, domain.VtxoKey(in))
 	}
 
 	// Create new vtxos, update spent vtxos state

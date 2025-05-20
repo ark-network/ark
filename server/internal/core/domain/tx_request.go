@@ -98,7 +98,8 @@ func (t TxRequests) CountSpentVtxos() int {
 	count := 0
 	for _, request := range t {
 		for _, in := range request.Inputs {
-			if in.Swept || in.IsNote() {
+			// Notes and swept vtxos are excluded from this count.
+			if !in.RequiresForfeit() {
 				continue
 			}
 			count++
