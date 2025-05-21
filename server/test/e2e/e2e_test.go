@@ -310,6 +310,7 @@ func TestCollaborativeExit(t *testing.T) {
 }
 
 func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
+	// TODO remove when checkpoint is implemented
 	t.Skip()
 
 	ctx := context.Background()
@@ -382,6 +383,7 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 }
 
 func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
+	// TODO remove when checkpoint is implemented
 	t.Skip()
 
 	t.Run("default vtxo script", func(t *testing.T) {
