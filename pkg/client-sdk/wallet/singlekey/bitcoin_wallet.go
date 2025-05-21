@@ -206,12 +206,7 @@ func (s *bitcoinWallet) SignTransaction(
 
 	txsighashes := txscript.NewTxSigHashes(updater.Upsbt.UnsignedTx, prevoutFetcher)
 
-	onchainAddr, err := s.getP2TRAddress(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	onchainPkScript, err := txscript.PayToAddrScript(onchainAddr)
+	onchainPkScript, err := common.P2TRScript(txscript.ComputeTaprootKeyNoScript(s.walletData.PubKey))
 	if err != nil {
 		return "", err
 	}
@@ -257,7 +252,8 @@ func (w *bitcoinWallet) signTapscriptSpend(
 	for _, leaf := range input.TaprootLeafScript {
 		closure, err := tree.DecodeClosure(leaf.Script)
 		if err != nil {
-			return err
+			// skip unknown leaf
+			continue
 		}
 
 		sign := false
@@ -450,6 +446,10 @@ func (w *bitcoinWallet) getP2TRAddress(
 	data, err := w.configStore.GetData(ctx)
 	if err != nil {
 		return nil, err
+	}
+
+	if data == nil {
+		return nil, fmt.Errorf("config not set, cannot create P2TR address")
 	}
 
 	netParams := utils.ToBitcoinNetwork(data.Network)
