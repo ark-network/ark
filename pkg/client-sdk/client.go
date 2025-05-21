@@ -707,7 +707,7 @@ func (a *covenantlessArkClient) StartUnilateralExit(ctx context.Context) error {
 				// the branch tx is in the mempool, we must wait for confirmation
 				// print only, do not make the function to fail
 				// continue to try other branches
-				log.Infof(err.Error())
+				log.Info(err.Error())
 				isWaitingForConfirmation = true
 				continue
 			}
