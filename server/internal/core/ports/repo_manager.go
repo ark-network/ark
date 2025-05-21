@@ -3,10 +3,10 @@ package ports
 import "github.com/ark-network/ark/server/internal/core/domain"
 
 type RepoManager interface {
-	Events() domain.RoundEventRepository
+	Events() domain.EventRepository
 	Rounds() domain.RoundRepository
 	Vtxos() domain.VtxoRepository
 	MarketHourRepo() domain.MarketHourRepo
-	RegisterEventsHandler(func(*domain.Round))
+	OffchainTxs() domain.OffchainTxRepository
 	Close()
 }

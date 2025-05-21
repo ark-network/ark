@@ -17,8 +17,10 @@ import (
 	blockscheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/block"
 	timescheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/gocron"
 	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
+	bitcointxdecoder "github.com/ark-network/ark/server/internal/infrastructure/tx-decoder/bitcoin"
 	envunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/env"
 	fileunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/file"
+	walletclient "github.com/ark-network/ark/server/internal/infrastructure/wallet"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -44,13 +46,6 @@ var (
 		"env":  {},
 		"file": {},
 	}
-	supportedNetworks = supportedType{
-		common.Bitcoin.Name:          {},
-		common.BitcoinTestNet.Name:   {},
-		common.BitcoinSigNet.Name:    {},
-		common.BitcoinMutinyNet.Name: {},
-		common.BitcoinRegTest.Name:   {},
-	}
 )
 
 type Config struct {
@@ -68,7 +63,6 @@ type Config struct {
 	DbDir               string
 	EventDbDir          string
 	RoundInterval       int64
-	Network             common.Network
 	SchedulerType       string
 	TxBuilderType       string
 	WalletAddr          string
@@ -103,6 +97,7 @@ type Config struct {
 	scanner   ports.BlockchainScanner
 	scheduler ports.SchedulerService
 	unlocker  ports.Unlocker
+	network   *common.Network
 }
 
 var (
@@ -115,7 +110,6 @@ var (
 	SchedulerType             = "SCHEDULER_TYPE"
 	TxBuilderType             = "TX_BUILDER_TYPE"
 	LogLevel                  = "LOG_LEVEL"
-	Network                   = "NETWORK"
 	VtxoTreeExpiry            = "VTXO_TREE_EXPIRY"
 	UnilateralExitDelay       = "UNILATERAL_EXIT_DELAY"
 	BoardingExitDelay         = "BOARDING_EXIT_DELAY"
@@ -146,7 +140,6 @@ var (
 	defaultEventDbType         = "badger"
 	defaultSchedulerType       = "gocron"
 	defaultTxBuilderType       = "covenantless"
-	defaultNetwork             = "bitcoin"
 	defaultEsploraURL          = "https://blockstream.info/api"
 	defaultLogLevel            = 4
 	defaultVtxoTreeExpiry      = 604672  // 7 days
@@ -175,7 +168,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(DbType, defaultDbType)
 	viper.SetDefault(NoTLS, defaultNoTLS)
 	viper.SetDefault(LogLevel, defaultLogLevel)
-	viper.SetDefault(Network, defaultNetwork)
 	viper.SetDefault(RoundInterval, defaultRoundInterval)
 	viper.SetDefault(VtxoTreeExpiry, defaultVtxoTreeExpiry)
 	viper.SetDefault(SchedulerType, defaultSchedulerType)
@@ -194,11 +186,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(UtxoMinAmount, defaultUtxoMinAmount)
 	viper.SetDefault(VtxoMaxAmount, defaultVtxoMaxAmount)
 	viper.SetDefault(VtxoMinAmount, defaultVtxoMinAmount)
-
-	net, err := getNetwork()
-	if err != nil {
-		return nil, fmt.Errorf("error while getting network: %s", err)
-	}
 
 	if err := initDatadir(); err != nil {
 		return nil, fmt.Errorf("error while creating datadir: %s", err)
@@ -219,7 +206,6 @@ func LoadConfig() (*Config, error) {
 		DbDir:                     dbPath,
 		EventDbDir:                dbPath,
 		LogLevel:                  viper.GetInt(LogLevel),
-		Network:                   net,
 		VtxoTreeExpiry:            determineLocktimeType(viper.GetInt64(VtxoTreeExpiry)),
 		UnilateralExitDelay:       determineLocktimeType(viper.GetInt64(UnilateralExitDelay)),
 		BoardingExitDelay:         determineLocktimeType(viper.GetInt64(BoardingExitDelay)),
@@ -256,25 +242,6 @@ func makeDirectoryIfNotExists(path string) error {
 	return nil
 }
 
-func getNetwork() (common.Network, error) {
-	switch strings.ToLower(viper.GetString(Network)) {
-	case common.Bitcoin.Name:
-		return common.Bitcoin, nil
-	case common.BitcoinTestNet.Name:
-		return common.BitcoinTestNet, nil
-	case common.BitcoinTestNet4.Name:
-		return common.BitcoinTestNet4, nil
-	case common.BitcoinSigNet.Name:
-		return common.BitcoinSigNet, nil
-	case common.BitcoinMutinyNet.Name:
-		return common.BitcoinMutinyNet, nil
-	case common.BitcoinRegTest.Name:
-		return common.BitcoinRegTest, nil
-	default:
-		return common.Network{}, fmt.Errorf("unknown network %s", viper.GetString(Network))
-	}
-}
-
 func determineLocktimeType(locktime int64) common.RelativeLocktime {
 	if locktime >= minAllowedSequence {
 		return common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: uint32(locktime)}
@@ -301,9 +268,6 @@ func (c *Config) Validate() error {
 	}
 	if c.RoundInterval < 2 {
 		return fmt.Errorf("invalid round interval, must be at least 2 seconds")
-	}
-	if !supportedNetworks.supports(c.Network.Name) {
-		return fmt.Errorf("invalid network, must be one of: %s", supportedNetworks)
 	}
 	if c.VtxoTreeExpiry.Type == common.LocktimeTypeBlock {
 		if c.SchedulerType != "block" {
@@ -429,12 +393,14 @@ func (c *Config) repoManager() error {
 		return fmt.Errorf("unknown db type")
 	}
 
+	txDecoder := bitcointxdecoder.NewService()
+
 	svc, err = db.NewService(db.ServiceConfig{
 		EventStoreType:   c.EventDbType,
 		DataStoreType:    c.DbType,
 		EventStoreConfig: eventStoreConfig,
 		DataStoreConfig:  dataStoreConfig,
-	})
+	}, txDecoder)
 	if err != nil {
 		return err
 	}
@@ -449,12 +415,13 @@ func (c *Config) walletService() error {
 		return fmt.Errorf("ark wallet address not set")
 	}
 
-	walletSvc, err := walletclient.New(context.Background(), arkWallet)
+	walletSvc, network, err := walletclient.New(arkWallet)
 	if err != nil {
 		return err
 	}
 
 	c.wallet = walletSvc
+	c.network = network
 	return nil
 }
 
@@ -464,7 +431,7 @@ func (c *Config) txBuilderService() error {
 	switch c.TxBuilderType {
 	case "covenantless":
 		svc = txbuilder.NewTxBuilder(
-			c.wallet, c.Network, c.VtxoTreeExpiry, c.BoardingExitDelay,
+			c.wallet, *c.network, c.VtxoTreeExpiry, c.BoardingExitDelay,
 		)
 	default:
 		err = fmt.Errorf("unknown tx builder type")
@@ -503,7 +470,7 @@ func (c *Config) schedulerService() error {
 
 func (c *Config) appService() error {
 	svc, err := application.NewService(
-		c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay,
+		*c.network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 		c.RoundMaxParticipantsCount, c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount,

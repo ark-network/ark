@@ -80,25 +80,6 @@ func getOutputVtxosLeaves(
 	return leaves, nil
 }
 
-func countSpentVtxos(requests []domain.TxRequest) uint64 {
-	var sum uint64
-	for _, request := range requests {
-		sum += uint64(len(request.Inputs))
-	}
-	return sum
-}
-
 func taprootOutputScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
 	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(schnorr.SerializePubKey(taprootKey)).Script()
-}
-
-func isOnchainOnly(requests []domain.TxRequest) bool {
-	for _, request := range requests {
-		for _, r := range request.Receivers {
-			if !r.IsOnchain() {
-				return false
-			}
-		}
-	}
-	return true
 }
