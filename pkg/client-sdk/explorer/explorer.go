@@ -24,7 +24,7 @@ const (
 
 type Explorer interface {
 	GetTxHex(txid string) (string, error)
-	Broadcast(txHex ...string) (string, error)
+	Broadcast(txs ...string) (string, error)
 	GetTxs(addr string) ([]tx, error)
 	IsRBFTx(txid, txHex string) (bool, string, int64, error)
 	GetTxOutspends(tx string) ([]spentStatus, error)
