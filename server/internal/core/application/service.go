@@ -681,9 +681,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 	vtxosInputs := make([]domain.Vtxo, 0)
 	// the boarding utxos to add in the commitment tx
 	boardingInputs := make([]ports.BoardingInput, 0)
-	// custodial vtxos = the vtxos to recover (swept but unspent) + note vtxos
-	// do not require forfeit transactions
-	// custodialVtxos := make([]domain.Vtxo, 0)
 
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
 

@@ -264,6 +264,11 @@ func TestUnilateralExit(t *testing.T) {
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
 
+	_, err = utils.RunCommand("nigiri", "faucet", receive.Onchain)
+	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
 	_, err = runArkCommand("redeem", "--force", "--password", utils.Password)
 	require.NoError(t, err)
 
