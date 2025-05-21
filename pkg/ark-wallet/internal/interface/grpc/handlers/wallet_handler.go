@@ -2,9 +2,9 @@ package handlers
 
 import (
 	"context"
-	application "github.com/ark-network/ark/pkg/ark-wallet/internal/core"
 
 	arkwalletv1 "github.com/ark-network/ark/api-spec/protobuf/gen/arkwallet/v1"
+	application "github.com/ark-network/ark/pkg/ark-wallet/internal/core"
 )
 
 type WalletServiceHandler struct {
@@ -45,7 +45,7 @@ func (h *WalletServiceHandler) Unlock(ctx context.Context, req *arkwalletv1.Unlo
 }
 
 func (h *WalletServiceHandler) Lock(ctx context.Context, req *arkwalletv1.LockRequest) (*arkwalletv1.LockResponse, error) {
-	if err := h.walletSvc.Lock(ctx, req.GetPassword()); err != nil {
+	if err := h.walletSvc.Lock(ctx); err != nil {
 		return nil, err
 	}
 	return &arkwalletv1.LockResponse{}, nil
@@ -69,6 +69,11 @@ func (h *WalletServiceHandler) GetPubkey(ctx context.Context, _ *arkwalletv1.Get
 		return nil, err
 	}
 	return &arkwalletv1.GetPubkeyResponse{Pubkey: pubkey.SerializeCompressed()}, nil
+}
+
+func (h *WalletServiceHandler) GetNetwork(ctx context.Context, _ *arkwalletv1.GetNetworkRequest) (*arkwalletv1.GetNetworkResponse, error) {
+	network := h.walletSvc.GetNetwork(ctx)
+	return &arkwalletv1.GetNetworkResponse{Network: network}, nil
 }
 
 func (h *WalletServiceHandler) GetForfeitAddress(
@@ -333,17 +338,17 @@ func (h *WalletServiceHandler) IsTransactionConfirmed(
 	}, nil
 }
 
-// GetSyncedUpdate streams an empty response when the wallet is synced.
-func (h *WalletServiceHandler) GetSyncedUpdate(
-	_ *arkwalletv1.GetSyncedUpdateRequest, stream arkwalletv1.WalletService_GetSyncedUpdateServer,
+// GetReadyUpdate streams an empty response when the wallet is unlocker and synced.
+func (h *WalletServiceHandler) GetReadyUpdate(
+	_ *arkwalletv1.GetReadyUpdateRequest, stream arkwalletv1.WalletService_GetReadyUpdateServer,
 ) error {
-	ch := h.walletSvc.GetSyncedUpdate(stream.Context())
+	ch := h.walletSvc.GetReadyUpdate(stream.Context())
 	select {
 	case <-stream.Context().Done():
 		return stream.Context().Err()
 	case <-ch:
-		return stream.Send(&arkwalletv1.GetSyncedUpdateResponse{
-			Synced: true,
+		return stream.Send(&arkwalletv1.GetReadyUpdateResponse{
+			Ready: true,
 		})
 	}
 }

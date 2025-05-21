@@ -1,26 +1,33 @@
 package db
 
 import (
+	"context"
 	"embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	badgerdb "github.com/ark-network/ark/server/internal/infrastructure/db/badger"
 	sqlitedb "github.com/ark-network/ark/server/internal/infrastructure/db/sqlite"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/golang-migrate/migrate/v4"
 	sqlitemigrate "github.com/golang-migrate/migrate/v4/database/sqlite"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
+	log "github.com/sirupsen/logrus"
 )
 
 //go:embed sqlite/migration/*
 var migrations embed.FS
 
 var (
-	eventStoreTypes = map[string]func(...interface{}) (domain.RoundEventRepository, error){
+	eventStoreTypes = map[string]func(...interface{}) (domain.EventRepository, error){
 		"badger": badgerdb.NewRoundEventRepository,
 	}
 	roundStoreTypes = map[string]func(...interface{}) (domain.RoundRepository, error){
@@ -34,6 +41,10 @@ var (
 	marketHourStoreTypes = map[string]func(...interface{}) (domain.MarketHourRepo, error){
 		"badger": badgerdb.NewMarketHourRepository,
 		"sqlite": sqlitedb.NewMarketHourRepository,
+	}
+	offchainTxStoreTypes = map[string]func(...interface{}) (domain.OffchainTxRepository, error){
+		"badger": badgerdb.NewOffchainTxRepository,
+		"sqlite": sqlitedb.NewOffchainTxRepository,
 	}
 )
 
@@ -50,13 +61,16 @@ type ServiceConfig struct {
 }
 
 type service struct {
-	eventStore     domain.RoundEventRepository
-	roundStore     domain.RoundRepository
-	vtxoStore      domain.VtxoRepository
-	marketHourRepo domain.MarketHourRepo
+	eventStore      domain.EventRepository
+	roundStore      domain.RoundRepository
+	vtxoStore       domain.VtxoRepository
+	marketHourStore domain.MarketHourRepo
+	offchainTxStore domain.OffchainTxRepository
+
+	txDecoder ports.TxDecoder
 }
 
-func NewService(config ServiceConfig) (ports.RepoManager, error) {
+func NewService(config ServiceConfig, txDecoder ports.TxDecoder) (ports.RepoManager, error) {
 	eventStoreFactory, ok := eventStoreTypes[config.EventStoreType]
 	if !ok {
 		return nil, fmt.Errorf("event store type not supported")
@@ -73,11 +87,16 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 	if !ok {
 		return nil, fmt.Errorf("invalid data store type: %s", config.DataStoreType)
 	}
+	offchainTxStoreFactory, ok := offchainTxStoreTypes[config.DataStoreType]
+	if !ok {
+		return nil, fmt.Errorf("invalid data store type: %s", config.DataStoreType)
+	}
 
-	var eventStore domain.RoundEventRepository
+	var eventStore domain.EventRepository
 	var roundStore domain.RoundRepository
 	var vtxoStore domain.VtxoRepository
-	var marketHourRepo domain.MarketHourRepo
+	var marketHourStore domain.MarketHourRepo
+	var offchainTxStore domain.OffchainTxRepository
 	var err error
 
 	switch config.EventStoreType {
@@ -100,9 +119,13 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to open vtxo store: %s", err)
 		}
-		marketHourRepo, err = marketHourStoreFactory(config.DataStoreConfig...)
+		marketHourStore, err = marketHourStoreFactory(config.DataStoreConfig...)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create market hour store: %w", err)
+		}
+		offchainTxStore, err = offchainTxStoreFactory(config.DataStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create offchain tx store: %w", err)
 		}
 	case "sqlite":
 		if len(config.DataStoreConfig) != 1 {
@@ -147,25 +170,35 @@ func NewService(config ServiceConfig) (ports.RepoManager, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to open vtxo store: %s", err)
 		}
-		marketHourRepo, err = marketHourStoreFactory(db)
+		marketHourStore, err = marketHourStoreFactory(db)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create market hour store: %w", err)
 		}
+		offchainTxStore, err = offchainTxStoreFactory(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create offchain tx store: %w", err)
+		}
 	}
 
-	return &service{
-		eventStore:     eventStore,
-		roundStore:     roundStore,
-		vtxoStore:      vtxoStore,
-		marketHourRepo: marketHourRepo,
-	}, nil
+	svc := &service{
+		eventStore:      eventStore,
+		roundStore:      roundStore,
+		vtxoStore:       vtxoStore,
+		marketHourStore: marketHourStore,
+		offchainTxStore: offchainTxStore,
+		txDecoder:       txDecoder,
+	}
+
+	// Register handlers that take care of keeping the projection store up-to-date.
+	if txDecoder != nil {
+		eventStore.RegisterEventsHandler(domain.RoundTopic, svc.updateProjectionsAfterRoundEvents)
+		eventStore.RegisterEventsHandler(domain.OffchainTxTopic, svc.updateProjectionsAfterOffchainTxEvents)
+	}
+
+	return svc, nil
 }
 
-func (s *service) RegisterEventsHandler(handler func(round *domain.Round)) {
-	s.eventStore.RegisterEventsHandler(handler)
-}
-
-func (s *service) Events() domain.RoundEventRepository {
+func (s *service) Events() domain.EventRepository {
 	return s.eventStore
 }
 
@@ -178,12 +211,155 @@ func (s *service) Vtxos() domain.VtxoRepository {
 }
 
 func (s *service) MarketHourRepo() domain.MarketHourRepo {
-	return s.marketHourRepo
+	return s.marketHourStore
+}
+
+func (s *service) OffchainTxs() domain.OffchainTxRepository {
+	return s.offchainTxStore
 }
 
 func (s *service) Close() {
 	s.eventStore.Close()
 	s.roundStore.Close()
 	s.vtxoStore.Close()
-	s.marketHourRepo.Close()
+	s.marketHourStore.Close()
+	s.offchainTxStore.Close()
+}
+
+func (s *service) updateProjectionsAfterRoundEvents(events []domain.Event) {
+	ctx := context.Background()
+	round := domain.NewRoundFromEvents(events)
+
+	if err := s.roundStore.AddOrUpdateRound(ctx, *round); err != nil {
+		log.WithError(err).Fatalf("failed to add or update round %s", round.Id)
+	}
+	log.Debugf("added or updated round %s", round.Id)
+
+	if !round.IsEnded() {
+		return
+	}
+
+	repo := s.vtxoStore
+
+	spentVtxos := getSpentVtxoKeysFromRound(round.TxRequests)
+	newVtxos := getNewVtxosFromRound(round)
+
+	if len(spentVtxos) > 0 {
+		for {
+			if err := repo.SpendVtxos(ctx, spentVtxos, round.Txid); err != nil {
+				log.WithError(err).Warn("failed to add new vtxos, retrying...")
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			log.Debugf("spent %d vtxos", len(spentVtxos))
+			break
+		}
+	}
+
+	if len(newVtxos) > 0 {
+		for {
+			if err := repo.AddVtxos(ctx, newVtxos); err != nil {
+				log.WithError(err).Warn("failed to add new vtxos, retrying soon")
+				time.Sleep(100 * time.Millisecond)
+				continue
+			}
+			log.Debugf("added %d new vtxos", len(newVtxos))
+			break
+		}
+	}
+}
+
+func (s *service) updateProjectionsAfterOffchainTxEvents(events []domain.Event) {
+	ctx := context.Background()
+	offchainTx := domain.NewOffchainTxFromEvents(events)
+
+	if err := s.offchainTxStore.AddOrUpdateOffchainTx(ctx, offchainTx); err != nil {
+		log.WithError(err).Fatalf("failed to add or update offchain tx %s", offchainTx.VirtualTxid)
+	}
+	log.Debugf("added or updated offchain tx %s", offchainTx.VirtualTxid)
+
+	if !offchainTx.IsFinalized() {
+		return
+	}
+
+	repo := s.vtxoStore
+
+	txid, spentVtxos, outs, err := s.txDecoder.DecodeTx(offchainTx.VirtualTx)
+	if err != nil {
+		log.WithError(err).Warn("failed to decode virtual tx")
+		return
+	}
+
+	// Create new vtxos, update spent vtxos state
+	newVtxos := make([]domain.Vtxo, 0, len(outs))
+	for outIndex, out := range outs {
+		newVtxos = append(newVtxos, domain.Vtxo{
+			VtxoKey: domain.VtxoKey{
+				Txid: txid,
+				VOut: uint32(outIndex),
+			},
+			PubKey:    hex.EncodeToString(out.PkScript[2:]),
+			Amount:    uint64(out.Amount),
+			ExpireAt:  offchainTx.ExpiryTimestamp,
+			RoundTxid: offchainTx.RootCommitmentTxid(),
+			RedeemTx:  offchainTx.VirtualTx,
+			CreatedAt: offchainTx.EndingTimestamp,
+		})
+	}
+
+	if err := repo.AddVtxos(ctx, newVtxos); err != nil {
+		log.WithError(err).Warn("failed to add vtxos")
+		return
+	}
+	log.Debugf("added %d vtxos", len(newVtxos))
+
+	if err := repo.SpendVtxos(ctx, spentVtxos, txid); err != nil {
+		log.WithError(err).Warn("failed to spend vtxos")
+		return
+	}
+	log.Debugf("spent %d vtxos", len(spentVtxos))
+}
+
+func getSpentVtxoKeysFromRound(requests map[string]domain.TxRequest) []domain.VtxoKey {
+	vtxos := make([]domain.VtxoKey, 0)
+	for _, request := range requests {
+		for _, vtxo := range request.Inputs {
+			vtxos = append(vtxos, vtxo.VtxoKey)
+		}
+	}
+	return vtxos
+}
+
+func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
+	if len(round.VtxoTree) <= 0 {
+		return nil
+	}
+
+	leaves := round.VtxoTree.Leaves()
+	vtxos := make([]domain.Vtxo, 0)
+	for _, node := range leaves {
+		tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+		if err != nil {
+			log.WithError(err).Warn("failed to parse tx")
+			continue
+		}
+		for i, out := range tx.UnsignedTx.TxOut {
+			vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
+			if err != nil {
+				log.WithError(err).Warn("failed to parse vtxo tap key")
+				continue
+			}
+
+			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
+			vtxos = append(vtxos, domain.Vtxo{
+				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+				PubKey:    vtxoPubkey,
+				Amount:    uint64(out.Value),
+				RoundTxid: round.Txid,
+				CreatedAt: round.EndingTimestamp,
+				ExpireAt:  round.ExpiryTimestamp(),
+			})
+		}
+	}
+	return vtxos
 }

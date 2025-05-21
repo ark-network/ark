@@ -123,19 +123,6 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 	return list
 }
 
-type vtxoKeyList []domain.VtxoKey
-
-func (v vtxoKeyList) toProto() []*arkv1.Outpoint {
-	list := make([]*arkv1.Outpoint, 0, len(v))
-	for _, vtxoKey := range v {
-		list = append(list, &arkv1.Outpoint{
-			Txid: vtxoKey.Txid,
-			Vout: vtxoKey.VOut,
-		})
-	}
-	return list
-}
-
 type connectorsIndex map[string]domain.Outpoint
 
 func (c connectorsIndex) toProto() map[string]*arkv1.Outpoint {
@@ -181,9 +168,9 @@ func (s stage) toProto() arkv1.RoundStage {
 	}
 
 	switch s.Code {
-	case domain.RegistrationStage:
+	case int(domain.RoundRegistrationStage):
 		return arkv1.RoundStage_ROUND_STAGE_REGISTRATION
-	case domain.FinalizationStage:
+	case int(domain.RoundFinalizationStage):
 		if s.Ended {
 			return arkv1.RoundStage_ROUND_STAGE_FINALIZED
 		}
@@ -197,11 +184,10 @@ type roundTxEvent application.RoundTransactionEvent
 
 func (e roundTxEvent) toProto() *arkv1.RoundTransaction {
 	return &arkv1.RoundTransaction{
-		Txid:                 e.RoundTxid,
-		SpentVtxos:           vtxoList(e.SpentVtxos).toProto(),
-		SpendableVtxos:       vtxoList(e.SpendableVtxos).toProto(),
-		ClaimedBoardingUtxos: vtxoKeyList(e.ClaimedBoardingInputs).toProto(),
-		Hex:                  e.TxHex,
+		Txid:           e.RoundTxid,
+		SpentVtxos:     vtxoList(e.SpentVtxos).toProto(),
+		SpendableVtxos: vtxoList(e.SpendableVtxos).toProto(),
+		Hex:            e.TxHex,
 	}
 }
 

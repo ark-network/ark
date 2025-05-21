@@ -20,7 +20,9 @@ func NewWalletInitializerHandler(
 	walletService ports.WalletService, onInit, onUnlock func(string), onReady func(),
 ) arkv1.WalletInitializerServiceServer {
 	svc := walletInitHandler{walletService, onInit, onUnlock, onReady}
-	go svc.listenWhenReady()
+	if onInit != nil && onUnlock != nil && onReady != nil {
+		go svc.listenWhenReady()
+	}
 	return &svc
 }
 
@@ -81,17 +83,6 @@ func (a *walletInitHandler) Unlock(ctx context.Context, req *arkv1.UnlockRequest
 
 	go a.onUnlock(req.GetPassword())
 
-	go func() {
-		status, err := a.walletService.Status(context.Background())
-		if err != nil {
-			log.Warnf("failed to get wallet status: %s", err)
-			return
-		}
-		if status.IsUnlocked() && status.IsSynced() {
-			a.onReady()
-		}
-	}()
-
 	return &arkv1.UnlockResponse{}, nil
 }
 
@@ -110,15 +101,18 @@ func (a *walletInitHandler) GetStatus(ctx context.Context, _ *arkv1.GetStatusReq
 
 func (a *walletInitHandler) listenWhenReady() {
 	ctx := context.Background()
-	<-a.walletService.GetSyncedUpdate(ctx)
-
-	status, err := a.walletService.Status(ctx)
+	ch, err := a.walletService.GetReadyUpdate(ctx)
 	if err != nil {
-		log.Warnf("failed to get wallet status: %s", err)
+		log.WithError(err).Warn("failed to get wallet ready update")
+		return
 	}
-	if status.IsUnlocked() && status.IsSynced() {
-		a.onReady()
+
+	_, ok := <-ch
+	if !ok {
+		return
 	}
+
+	a.onReady()
 }
 
 type walletHandler struct {
@@ -130,10 +124,7 @@ func NewWalletHandler(walletService ports.WalletService) arkv1.WalletServiceServ
 }
 
 func (a *walletHandler) Lock(ctx context.Context, req *arkv1.LockRequest) (*arkv1.LockResponse, error) {
-	if len(req.GetPassword()) <= 0 {
-		return nil, fmt.Errorf("missing wallet password")
-	}
-	if err := a.walletService.Lock(ctx, req.GetPassword()); err != nil {
+	if err := a.walletService.Lock(ctx); err != nil {
 		return nil, err
 	}
 

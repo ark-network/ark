@@ -3,6 +3,7 @@ package txbuilder_test
 import (
 	"context"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
@@ -13,14 +14,14 @@ type mockedWallet struct {
 	mock.Mock
 }
 
-func (m *mockedWallet) GetSyncedUpdate(ctx context.Context) <-chan struct{} {
+func (m *mockedWallet) GetReadyUpdate(ctx context.Context) (<-chan struct{}, error) {
 	args := m.Called(ctx)
 
 	var res chan struct{}
 	if a := args.Get(0); a != nil {
 		res = a.(chan struct{})
 	}
-	return res
+	return res, args.Error(1)
 }
 
 func (m *mockedWallet) GenSeed(ctx context.Context) (string, error) {
@@ -48,8 +49,8 @@ func (m *mockedWallet) Unlock(ctx context.Context, password string) error {
 	return args.Error(0)
 }
 
-func (m *mockedWallet) Lock(ctx context.Context, password string) error {
-	args := m.Called(ctx, password)
+func (m *mockedWallet) Lock(ctx context.Context) error {
+	args := m.Called(ctx)
 	return args.Error(0)
 }
 
@@ -93,6 +94,16 @@ func (m *mockedWallet) GetPubkey(ctx context.Context) (*secp256k1.PublicKey, err
 	var res *secp256k1.PublicKey
 	if a := args.Get(0); a != nil {
 		res = a.(*secp256k1.PublicKey)
+	}
+	return res, args.Error(1)
+}
+
+func (m *mockedWallet) GetNetwork(ctx context.Context) (*common.Network, error) {
+	args := m.Called(ctx)
+
+	var res *common.Network
+	if a := args.Get(0); a != nil {
+		res = a.(*common.Network)
 	}
 	return res, args.Error(1)
 }

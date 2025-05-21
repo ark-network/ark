@@ -6,13 +6,6 @@ import (
 	"github.com/ark-network/ark/common/tree"
 )
 
-type RoundEventRepository interface {
-	Save(ctx context.Context, id string, events ...RoundEvent) (*Round, error)
-	Load(ctx context.Context, id string) (*Round, error)
-	RegisterEventsHandler(func(*Round))
-	Close()
-}
-
 type RoundRepository interface {
 	AddOrUpdateRound(ctx context.Context, round Round) error
 	GetRoundWithId(ctx context.Context, id string) (*Round, error)
@@ -26,30 +19,6 @@ type RoundRepository interface {
 	GetSweptRoundsConnectorAddress(ctx context.Context) ([]string, error)
 	GetTxsWithTxids(ctx context.Context, txids []string) ([]string, error)
 	GetExistingRounds(ctx context.Context, txids []string) (map[string]any, error)
-	Close()
-}
-
-type VtxoRepository interface {
-	AddVtxos(ctx context.Context, vtxos []Vtxo) error
-	SpendVtxos(ctx context.Context, vtxos []VtxoKey, txid string) error
-	RedeemVtxos(ctx context.Context, vtxos []VtxoKey) error
-	GetVtxos(ctx context.Context, vtxos []VtxoKey) ([]Vtxo, error)
-	GetVtxosForRound(ctx context.Context, txid string) ([]Vtxo, error)
-	SweepVtxos(ctx context.Context, vtxos []VtxoKey) error
-	GetAllNonRedeemedVtxos(ctx context.Context, pubkey string) ([]Vtxo, []Vtxo, error)
-	GetAllSweepableVtxos(ctx context.Context) ([]Vtxo, error)
-	GetSpendableVtxosWithPubKey(ctx context.Context, pubkey string) ([]Vtxo, error)
-	GetAll(ctx context.Context) ([]Vtxo, error)
-	GetAllVtxosWithPubKey(ctx context.Context, pubkey string) ([]Vtxo, []Vtxo, error)
-	GetAllVtxosWithPubKeys(ctx context.Context, pubkeys []string, spendableOnly, spentOnly bool) ([]Vtxo, error)
-	UpdateExpireAt(ctx context.Context, vtxos []VtxoKey, expireAt int64) error
-	GetLeafVtxosForRound(ctx context.Context, txid string) ([]Vtxo, error)
-	Close()
-}
-
-type MarketHourRepo interface {
-	Get(ctx context.Context) (*MarketHour, error)
-	Upsert(ctx context.Context, marketHour MarketHour) error
 	Close()
 }
 

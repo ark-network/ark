@@ -91,3 +91,30 @@ type Receiver struct {
 func (r Receiver) IsOnchain() bool {
 	return len(r.OnchainAddress) > 0
 }
+
+type TxRequests []TxRequest
+
+func (t TxRequests) CountSpentVtxos() int {
+	count := 0
+	for _, request := range t {
+		for _, in := range request.Inputs {
+			// Notes and swept vtxos are excluded from this count.
+			if !in.RequiresForfeit() {
+				continue
+			}
+			count++
+		}
+	}
+	return count
+}
+
+func (t TxRequests) HaveOnlyOnchainOutput() bool {
+	for _, request := range t {
+		for _, r := range request.Receivers {
+			if !r.IsOnchain() {
+				return false
+			}
+		}
+	}
+	return true
+}

@@ -188,6 +188,25 @@ func local_request_WalletService_GetPubkey_0(ctx context.Context, marshaler runt
 	return msg, metadata, err
 }
 
+func request_WalletService_GetNetwork_0(ctx context.Context, marshaler runtime.Marshaler, client WalletServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetNetworkRequest
+		metadata runtime.ServerMetadata
+	)
+	io.Copy(io.Discard, req.Body)
+	msg, err := client.GetNetwork(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_WalletService_GetNetwork_0(ctx context.Context, marshaler runtime.Marshaler, server WalletServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq GetNetworkRequest
+		metadata runtime.ServerMetadata
+	)
+	msg, err := server.GetNetwork(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_WalletService_GetForfeitAddress_0(ctx context.Context, marshaler runtime.Marshaler, client WalletServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq GetForfeitAddressRequest
@@ -370,13 +389,13 @@ func local_request_WalletService_WaitForSync_0(ctx context.Context, marshaler ru
 	return msg, metadata, err
 }
 
-func request_WalletService_GetSyncedUpdate_0(ctx context.Context, marshaler runtime.Marshaler, client WalletServiceClient, req *http.Request, pathParams map[string]string) (WalletService_GetSyncedUpdateClient, runtime.ServerMetadata, error) {
+func request_WalletService_GetReadyUpdate_0(ctx context.Context, marshaler runtime.Marshaler, client WalletServiceClient, req *http.Request, pathParams map[string]string) (WalletService_GetReadyUpdateClient, runtime.ServerMetadata, error) {
 	var (
-		protoReq GetSyncedUpdateRequest
+		protoReq GetReadyUpdateRequest
 		metadata runtime.ServerMetadata
 	)
 	io.Copy(io.Discard, req.Body)
-	stream, err := client.GetSyncedUpdate(ctx, &protoReq)
+	stream, err := client.GetReadyUpdate(ctx, &protoReq)
 	if err != nil {
 		return nil, metadata, err
 	}
@@ -938,6 +957,26 @@ func RegisterWalletServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		}
 		forward_WalletService_GetPubkey_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_WalletService_GetNetwork_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/arkwallet.v1.WalletService/GetNetwork", runtime.WithHTTPPathPattern("/v1/wallet/network"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_WalletService_GetNetwork_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_WalletService_GetNetwork_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_WalletService_GetForfeitAddress_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -1099,7 +1138,7 @@ func RegisterWalletServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		forward_WalletService_WaitForSync_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
-	mux.Handle(http.MethodGet, pattern_WalletService_GetSyncedUpdate_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_WalletService_GetReadyUpdate_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		err := status.Error(codes.Unimplemented, "streaming calls are not yet supported in the in-process transport")
 		_, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
 		runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
@@ -1591,6 +1630,23 @@ func RegisterWalletServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		}
 		forward_WalletService_GetPubkey_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
+	mux.Handle(http.MethodGet, pattern_WalletService_GetNetwork_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/arkwallet.v1.WalletService/GetNetwork", runtime.WithHTTPPathPattern("/v1/wallet/network"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_WalletService_GetNetwork_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_WalletService_GetNetwork_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
 	mux.Handle(http.MethodGet, pattern_WalletService_GetForfeitAddress_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
@@ -1727,22 +1783,22 @@ func RegisterWalletServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		}
 		forward_WalletService_WaitForSync_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodGet, pattern_WalletService_GetSyncedUpdate_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_WalletService_GetReadyUpdate_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/arkwallet.v1.WalletService/GetSyncedUpdate", runtime.WithHTTPPathPattern("/v1/wallet/synced-update"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/arkwallet.v1.WalletService/GetReadyUpdate", runtime.WithHTTPPathPattern("/v1/wallet/ready-update"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_WalletService_GetSyncedUpdate_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_WalletService_GetReadyUpdate_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_WalletService_GetSyncedUpdate_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
+		forward_WalletService_GetReadyUpdate_0(annotatedContext, mux, outboundMarshaler, w, req, func() (proto.Message, error) { return resp.Recv() }, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodGet, pattern_WalletService_IsTransactionConfirmed_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -2044,6 +2100,7 @@ var (
 	pattern_WalletService_Lock_0                     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "lock"}, ""))
 	pattern_WalletService_Status_0                   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "status"}, ""))
 	pattern_WalletService_GetPubkey_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "pubkey"}, ""))
+	pattern_WalletService_GetNetwork_0               = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "network"}, ""))
 	pattern_WalletService_GetForfeitAddress_0        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "forfeit-address"}, ""))
 	pattern_WalletService_DeriveConnectorAddress_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "connector-address"}, ""))
 	pattern_WalletService_DeriveAddresses_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "derive-addresses"}, ""))
@@ -2052,7 +2109,7 @@ var (
 	pattern_WalletService_SelectUtxos_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "select-utxos"}, ""))
 	pattern_WalletService_BroadcastTransaction_0     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "broadcast"}, ""))
 	pattern_WalletService_WaitForSync_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "wait-for-sync"}, ""))
-	pattern_WalletService_GetSyncedUpdate_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "synced-update"}, ""))
+	pattern_WalletService_GetReadyUpdate_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "ready-update"}, ""))
 	pattern_WalletService_IsTransactionConfirmed_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "transaction-confirmed"}, ""))
 	pattern_WalletService_EstimateFees_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "estimate-fees"}, ""))
 	pattern_WalletService_MinRelayFee_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "min-relay-fee"}, ""))
@@ -2080,6 +2137,7 @@ var (
 	forward_WalletService_Lock_0                     = runtime.ForwardResponseMessage
 	forward_WalletService_Status_0                   = runtime.ForwardResponseMessage
 	forward_WalletService_GetPubkey_0                = runtime.ForwardResponseMessage
+	forward_WalletService_GetNetwork_0               = runtime.ForwardResponseMessage
 	forward_WalletService_GetForfeitAddress_0        = runtime.ForwardResponseMessage
 	forward_WalletService_DeriveConnectorAddress_0   = runtime.ForwardResponseMessage
 	forward_WalletService_DeriveAddresses_0          = runtime.ForwardResponseMessage
@@ -2088,7 +2146,7 @@ var (
 	forward_WalletService_SelectUtxos_0              = runtime.ForwardResponseMessage
 	forward_WalletService_BroadcastTransaction_0     = runtime.ForwardResponseMessage
 	forward_WalletService_WaitForSync_0              = runtime.ForwardResponseMessage
-	forward_WalletService_GetSyncedUpdate_0          = runtime.ForwardResponseStream
+	forward_WalletService_GetReadyUpdate_0           = runtime.ForwardResponseStream
 	forward_WalletService_IsTransactionConfirmed_0   = runtime.ForwardResponseMessage
 	forward_WalletService_EstimateFees_0             = runtime.ForwardResponseMessage
 	forward_WalletService_MinRelayFee_0              = runtime.ForwardResponseMessage

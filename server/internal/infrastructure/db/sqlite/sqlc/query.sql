@@ -20,12 +20,11 @@ INSERT INTO round (
     ended, failed,
     stage_code,
     txid,
-    unsigned_tx,
     connector_address,
-    dust_amount,
     version,
-    swept
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    swept,
+    vtxo_tree_expiration
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     starting_timestamp = EXCLUDED.starting_timestamp,
     ending_timestamp = EXCLUDED.ending_timestamp,
@@ -33,11 +32,10 @@ ON CONFLICT(id) DO UPDATE SET
     failed = EXCLUDED.failed,
     stage_code = EXCLUDED.stage_code,
     txid = EXCLUDED.txid,
-    unsigned_tx = EXCLUDED.unsigned_tx,
     connector_address = EXCLUDED.connector_address,
-    dust_amount = EXCLUDED.dust_amount,
     version = EXCLUDED.version,
-    swept = EXCLUDED.swept;
+    swept = EXCLUDED.swept,
+    vtxo_tree_expiration = EXCLUDED.vtxo_tree_expiration;
 
 -- name: GetTxsByTxid :many
 SELECT
@@ -214,12 +212,6 @@ UPDATE vtxo SET spent = true, spent_by = ? WHERE txid = ? AND vout = ?;
 -- name: UpdateVtxoExpireAt :exec
 UPDATE vtxo SET expire_at = ? WHERE txid = ? AND vout = ?;
 
--- name: InsertNote :exec
-INSERT INTO note (id) VALUES (?);
-
--- name: ContainsNote :one
-SELECT EXISTS(SELECT 1 FROM note WHERE id = ?);
-
 -- name: InsertMarketHour :one
 INSERT INTO market_hour (
     start_time,
@@ -257,3 +249,33 @@ SELECT txid FROM round WHERE txid IN (sqlc.slice('txids'));
 -- name: SelectLeafVtxosByRoundTxid :many
 SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE round_tx = ? AND (redeem_tx IS NULL or redeem_tx = '');
+
+-- name: UpsertVirtualTransaction :exec
+INSERT INTO virtual_tx (
+    txid, tx, offchain_txid, type, position
+) VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(txid) DO UPDATE SET
+    txid = EXCLUDED.txid,
+    tx = EXCLUDED.tx,
+    offchain_txid = EXCLUDED.offchain_txid,
+    type = EXCLUDED.type,
+    position = EXCLUDED.position;
+
+-- name: UpsertOffchainTx :exec
+INSERT INTO offchain_tx (
+    txid, starting_timestamp, ending_timestamp, expiry_timestamp, fail_reason, stage_code
+) VALUES (?, ?, ?, ?, ?, ?)
+ON CONFLICT(txid) DO UPDATE SET
+    txid = EXCLUDED.txid,
+    starting_timestamp = EXCLUDED.starting_timestamp,
+    ending_timestamp = EXCLUDED.ending_timestamp,
+    expiry_timestamp = EXCLUDED.expiry_timestamp,
+    fail_reason = EXCLUDED.fail_reason,
+    stage_code = EXCLUDED.stage_code;
+
+-- name: SelectOffchainTxWithTxId :many
+SELECT sqlc.embed(offchain_tx),
+       sqlc.embed(offchain_tx_virtual_tx_vw)
+FROM offchain_tx
+         LEFT OUTER JOIN offchain_tx_virtual_tx_vw ON offchain_tx.txid=offchain_tx_virtual_tx_vw.offchain_txid
+WHERE offchain_tx.txid = ?;

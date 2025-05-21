@@ -10,6 +10,7 @@ import (
 	"encoding/hex"
 
 	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/server/internal/core/domain"
 )
 
 // signer should react to this event by generating a musig2 nonce for each transaction in the tree
@@ -38,5 +39,5 @@ func (e RoundSigningNoncesGenerated) SerializeNonces() (string, error) {
 }
 
 // implement domain.RoundEvent interface
-func (r RoundSigningStarted) IsEvent()         {}
-func (r RoundSigningNoncesGenerated) IsEvent() {}
+func (r RoundSigningStarted) GetTopic() string         { return domain.RoundTopic }
+func (r RoundSigningNoncesGenerated) GetTopic() string { return domain.RoundTopic }

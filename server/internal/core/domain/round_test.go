@@ -10,8 +10,7 @@ import (
 )
 
 var (
-	dustAmount = uint64(450)
-	requests   = []domain.TxRequest{
+	requests = []domain.TxRequest{
 		{
 			Id: "0",
 			Inputs: []domain.Vtxo{
@@ -20,8 +19,9 @@ var (
 						Txid: txid,
 						VOut: 0,
 					},
-					PubKey: pubkey,
-					Amount: 2000,
+					PubKey:    pubkey,
+					Amount:    2000,
+					RoundTxid: txid,
 				},
 			},
 			Receivers: []domain.Receiver{
@@ -47,16 +47,18 @@ var (
 						Txid: txid,
 						VOut: 0,
 					},
-					PubKey: pubkey,
-					Amount: 1000,
+					PubKey:    pubkey,
+					Amount:    1000,
+					RoundTxid: txid,
 				},
 				{
 					VtxoKey: domain.VtxoKey{
 						Txid: txid,
 						VOut: 0,
 					},
-					PubKey: pubkey,
-					Amount: 1000,
+					PubKey:    pubkey,
+					Amount:    1000,
+					RoundTxid: txid,
 				},
 			},
 			Receivers: []domain.Receiver{{
@@ -141,7 +143,9 @@ var (
 		emptyForfeitTx, emptyForfeitTx, emptyForfeitTx, emptyForfeitTx, emptyForfeitTx,
 		emptyForfeitTx, emptyForfeitTx, emptyForfeitTx, emptyForfeitTx,
 	}
-	roundTx = emptyTx
+	roundTx      = emptyTx
+	finalRoundTx = emptyTx
+	expiration   = int64(600) // seconds
 )
 
 func TestRound(t *testing.T) {
@@ -159,7 +163,7 @@ func TestRound(t *testing.T) {
 func testStartRegistration(t *testing.T) {
 	t.Run("start_registration", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
-			round := domain.NewRound(dustAmount)
+			round := domain.NewRound()
 			require.NotNil(t, round)
 			require.NotEmpty(t, round.Id)
 			require.Empty(t, round.Events())
@@ -189,7 +193,7 @@ func testStartRegistration(t *testing.T) {
 					round: &domain.Round{
 						Id: "id",
 						Stage: domain.Stage{
-							Code:   domain.UndefinedStage,
+							Code:   int(domain.RoundUndefinedStage),
 							Failed: true,
 						},
 					},
@@ -199,7 +203,7 @@ func testStartRegistration(t *testing.T) {
 					round: &domain.Round{
 						Id: "id",
 						Stage: domain.Stage{
-							Code: domain.RegistrationStage,
+							Code: int(domain.RoundRegistrationStage),
 						},
 					},
 					expectedErr: "not in a valid stage to start tx requests registration",
@@ -208,7 +212,7 @@ func testStartRegistration(t *testing.T) {
 					round: &domain.Round{
 						Id: "id",
 						Stage: domain.Stage{
-							Code: domain.FinalizationStage,
+							Code: int(domain.RoundFinalizationStage),
 						},
 					},
 					expectedErr: "not in a valid stage to start tx requests registration",
@@ -227,7 +231,7 @@ func testStartRegistration(t *testing.T) {
 func testRegisterTxRequests(t *testing.T) {
 	t.Run("register_tx_requests", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
-			round := domain.NewRound(dustAmount)
+			round := domain.NewRound()
 			events, err := round.StartRegistration()
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
@@ -269,7 +273,7 @@ func testRegisterTxRequests(t *testing.T) {
 					round: &domain.Round{
 						Id: "id",
 						Stage: domain.Stage{
-							Code:   domain.RegistrationStage,
+							Code:   int(domain.RoundRegistrationStage),
 							Failed: true,
 						},
 					},
@@ -280,7 +284,7 @@ func testRegisterTxRequests(t *testing.T) {
 					round: &domain.Round{
 						Id: "id",
 						Stage: domain.Stage{
-							Code: domain.FinalizationStage,
+							Code: int(domain.RoundFinalizationStage),
 						},
 					},
 					requests:    requests,
@@ -290,7 +294,7 @@ func testRegisterTxRequests(t *testing.T) {
 					round: &domain.Round{
 						Id: "id",
 						Stage: domain.Stage{
-							Code: domain.RegistrationStage,
+							Code: int(domain.RoundRegistrationStage),
 						},
 					},
 					requests:    nil,
@@ -310,7 +314,7 @@ func testRegisterTxRequests(t *testing.T) {
 func testStartFinalization(t *testing.T) {
 	t.Run("start_finalization", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
-			round := domain.NewRound(dustAmount)
+			round := domain.NewRound()
 			events, err := round.StartRegistration()
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
@@ -328,7 +332,7 @@ func testStartFinalization(t *testing.T) {
 					Txid: txid2,
 					VOut: 1,
 				},
-			})
+			}, expiration)
 			require.NoError(t, err)
 			require.Len(t, events, 1)
 			require.True(t, round.IsStarted())
@@ -353,18 +357,20 @@ func testStartFinalization(t *testing.T) {
 				connectors  tree.TxTree
 				tree        tree.TxTree
 				roundTx     string
+				expiration  int64
 				expectedErr string
 			}{
 				{
 					round: &domain.Round{
 						Id: "0",
 						Stage: domain.Stage{
-							Code: domain.RegistrationStage,
+							Code: int(domain.RoundRegistrationStage),
 						},
 						TxRequests: requestsById,
 					},
 					connectors:  connectors,
 					tree:        vtxoTree,
+					expiration:  expiration,
 					roundTx:     "",
 					expectedErr: "missing unsigned round tx",
 				},
@@ -372,12 +378,26 @@ func testStartFinalization(t *testing.T) {
 					round: &domain.Round{
 						Id: "0",
 						Stage: domain.Stage{
-							Code: domain.RegistrationStage,
+							Code: int(domain.RoundRegistrationStage),
+						},
+						TxRequests: requestsById,
+					},
+					connectors:  connectors,
+					tree:        vtxoTree,
+					roundTx:     roundTx,
+					expectedErr: "missing vtxo tree expiration",
+				},
+				{
+					round: &domain.Round{
+						Id: "0",
+						Stage: domain.Stage{
+							Code: int(domain.RoundRegistrationStage),
 						},
 						TxRequests: nil,
 					},
 					connectors:  connectors,
 					tree:        vtxoTree,
+					expiration:  expiration,
 					roundTx:     roundTx,
 					expectedErr: "no tx requests registered",
 				},
@@ -385,12 +405,13 @@ func testStartFinalization(t *testing.T) {
 					round: &domain.Round{
 						Id: "0",
 						Stage: domain.Stage{
-							Code: domain.UndefinedStage,
+							Code: int(domain.RoundUndefinedStage),
 						},
 						TxRequests: requestsById,
 					},
 					connectors:  connectors,
 					tree:        vtxoTree,
+					expiration:  expiration,
 					roundTx:     roundTx,
 					expectedErr: "not in a valid stage to start finalization",
 				},
@@ -398,13 +419,14 @@ func testStartFinalization(t *testing.T) {
 					round: &domain.Round{
 						Id: "0",
 						Stage: domain.Stage{
-							Code:   domain.RegistrationStage,
+							Code:   int(domain.RoundRegistrationStage),
 							Failed: true,
 						},
 						TxRequests: requestsById,
 					},
 					connectors:  connectors,
 					tree:        vtxoTree,
+					expiration:  expiration,
 					roundTx:     roundTx,
 					expectedErr: "not in a valid stage to start finalization",
 				},
@@ -412,12 +434,13 @@ func testStartFinalization(t *testing.T) {
 					round: &domain.Round{
 						Id: "0",
 						Stage: domain.Stage{
-							Code: domain.FinalizationStage,
+							Code: int(domain.RoundFinalizationStage),
 						},
 						TxRequests: requestsById,
 					},
 					connectors:  connectors,
 					tree:        vtxoTree,
+					expiration:  expiration,
 					roundTx:     roundTx,
 					expectedErr: "not in a valid stage to start finalization",
 				},
@@ -430,7 +453,7 @@ func testStartFinalization(t *testing.T) {
 						Txid: txid,
 						VOut: 0,
 					},
-				})
+				}, f.expiration)
 				require.EqualError(t, err, f.expectedErr)
 				require.Empty(t, events)
 			}
@@ -439,9 +462,9 @@ func testStartFinalization(t *testing.T) {
 }
 
 func testEndFinalization(t *testing.T) {
-	t.Run("end_registration", func(t *testing.T) {
+	t.Run("end_finalization", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
-			round := domain.NewRound(dustAmount)
+			round := domain.NewRound()
 			events, err := round.StartRegistration()
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
@@ -455,11 +478,11 @@ func testEndFinalization(t *testing.T) {
 					Txid: txid,
 					VOut: 0,
 				},
-			})
+			}, expiration)
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.EndFinalization(forfeitTxs, txid)
+			events, err = round.EndFinalization(forfeitTxs, txid, finalRoundTx)
 			require.NoError(t, err)
 			require.Len(t, events, 1)
 			require.False(t, round.IsStarted())
@@ -489,7 +512,7 @@ func testEndFinalization(t *testing.T) {
 					round: &domain.Round{
 						Id: "0",
 						Stage: domain.Stage{
-							Code: domain.FinalizationStage,
+							Code: int(domain.RoundFinalizationStage),
 						},
 						TxRequests: requestsById,
 					},
@@ -501,7 +524,7 @@ func testEndFinalization(t *testing.T) {
 					round: &domain.Round{
 						Id: "0",
 						Stage: domain.Stage{
-							Code: domain.FinalizationStage,
+							Code: int(domain.RoundFinalizationStage),
 						},
 					},
 					forfeitTxs:  forfeitTxs,
@@ -520,7 +543,7 @@ func testEndFinalization(t *testing.T) {
 					round: &domain.Round{
 						Id: "0",
 						Stage: domain.Stage{
-							Code: domain.RegistrationStage,
+							Code: int(domain.RoundRegistrationStage),
 						},
 					},
 					forfeitTxs:  forfeitTxs,
@@ -531,7 +554,7 @@ func testEndFinalization(t *testing.T) {
 					round: &domain.Round{
 						Id: "0",
 						Stage: domain.Stage{
-							Code:   domain.FinalizationStage,
+							Code:   int(domain.RoundFinalizationStage),
 							Failed: true,
 						},
 					},
@@ -543,7 +566,7 @@ func testEndFinalization(t *testing.T) {
 					round: &domain.Round{
 						Id: "0",
 						Stage: domain.Stage{
-							Code:  domain.FinalizationStage,
+							Code:  int(domain.RoundFinalizationStage),
 							Ended: true,
 						},
 					},
@@ -554,7 +577,7 @@ func testEndFinalization(t *testing.T) {
 			}
 
 			for _, f := range fixtures {
-				events, err := f.round.EndFinalization(f.forfeitTxs, f.txid)
+				events, err := f.round.EndFinalization(f.forfeitTxs, f.txid, finalRoundTx)
 				require.EqualError(t, err, f.expectedErr)
 				require.Empty(t, events)
 			}
@@ -565,7 +588,7 @@ func testEndFinalization(t *testing.T) {
 func testFail(t *testing.T) {
 	t.Run("fail", func(t *testing.T) {
 		t.Run("valid", func(t *testing.T) {
-			round := domain.NewRound(dustAmount)
+			round := domain.NewRound()
 			events, err := round.StartRegistration()
 			require.NoError(t, err)
 			require.NotEmpty(t, events)

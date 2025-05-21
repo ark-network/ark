@@ -90,7 +90,7 @@ func (r *roundRepository) GetRoundWithTxid(
 func (r *roundRepository) GetExpiredRoundsTxid(
 	ctx context.Context,
 ) ([]string, error) {
-	query := badgerhold.Where("Stage.Code").Eq(domain.FinalizationStage).
+	query := badgerhold.Where("Stage.Code").Eq(domain.RoundFinalizationStage).
 		And("Stage.Ended").Eq(true).And("Swept").Eq(false)
 	rounds, err := r.findRound(ctx, query)
 	if err != nil {
@@ -122,7 +122,7 @@ func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid s
 func (r *roundRepository) GetSweptRoundsConnectorAddress(
 	ctx context.Context,
 ) ([]string, error) {
-	query := badgerhold.Where("Stage.Code").Eq(domain.FinalizationStage).
+	query := badgerhold.Where("Stage.Code").Eq(domain.RoundFinalizationStage).
 		And("Stage.Ended").Eq(true).And("Swept").Eq(true).And("ConnectorAddress").Ne("")
 	rounds, err := r.findRound(ctx, query)
 	if err != nil {

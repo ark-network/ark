@@ -6,13 +6,10 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/btcsuite/btcd/rpcclient"
-	"github.com/lightninglabs/neutrino"
 	"strings"
 	"sync"
 	"time"
 
-	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
@@ -66,241 +63,7 @@ var (
 	outputLockDuration    = time.Minute
 )
 
-// NewService creates the wallet service, an option must be set to configure the chain source.
-func NewService(cfg WalletConfig, options ...WalletOption) (WalletService, error) {
-	wallet.UseLogger(logger("wallet"))
-
-	svc := &service{
-		cfg:                cfg,
-		watchedScriptsLock: sync.RWMutex{},
-		watchedScripts:     make(map[string]struct{}),
-		syncedCh:           make(chan struct{}),
-	}
-
-	for _, option := range options {
-		if err := option(svc); err != nil {
-			return nil, err
-		}
-	}
-
-	return svc, nil
-}
-
-// WithNeutrino creates a start a neutrino node using the provided service datadir
-func WithNeutrino(initialPeer string, esploraURL string) WalletOption {
-	return func(s *service) error {
-		if s.cfg.Network.Name == common.BitcoinRegTest.Name && len(initialPeer) == 0 {
-			return fmt.Errorf("initial neutrino peer required for regtest network, set NEUTRINO_PEER env var")
-		}
-
-		db, err := createOrOpenWalletDB(s.cfg.Datadir + "/neutrino.db")
-		if err != nil {
-			return err
-		}
-
-		netParams := s.cfg.chainParams()
-
-		config := neutrino.Config{
-			DataDir:     s.cfg.Datadir,
-			ChainParams: *netParams,
-			Database:    db,
-		}
-
-		if len(initialPeer) > 0 {
-			config.AddPeers = []string{initialPeer}
-		}
-
-		neutrino.UseLogger(logger("neutrino"))
-		btcwallet.UseLogger(logger("btcwallet"))
-
-		neutrinoSvc, err := neutrino.NewChainService(config)
-		if err != nil {
-			return err
-		}
-
-		chainSrc := chain.NewNeutrinoClient(netParams, neutrinoSvc)
-		scanner := chain.NewNeutrinoClient(netParams, neutrinoSvc)
-
-		esploraClient := &esploraClient{url: esploraURL}
-		estimator, err := chainfee.NewWebAPIEstimator(esploraClient, true, 5*time.Minute, 20*time.Minute)
-		if err != nil {
-			return err
-		}
-
-		if err := withExtraAPI(esploraClient)(s); err != nil {
-			return err
-		}
-
-		if err := withFeeEstimator(estimator)(s); err != nil {
-			return err
-		}
-
-		if err := withChainSource(chainSrc)(s); err != nil {
-			return err
-		}
-		return withScanner(scanner)(s)
-	}
-}
-
-func WithPollingBitcoind(host, user, pass string) WalletOption {
-	return func(s *service) error {
-		netParams := s.cfg.chainParams()
-		// Create a new bitcoind configuration
-		bitcoindConfig := &chain.BitcoindConfig{
-			ChainParams: netParams,
-			Host:        host,
-			User:        user,
-			Pass:        pass,
-			PollingConfig: &chain.PollingConfig{
-				BlockPollingInterval:    10 * time.Second,
-				TxPollingInterval:       5 * time.Second,
-				TxPollingIntervalJitter: 0.1,
-				RPCBatchSize:            20,
-				RPCBatchInterval:        1 * time.Second,
-			},
-		}
-
-		btcwallet.UseLogger(logger("btcwallet"))
-
-		// Create the BitcoindConn first
-		bitcoindConn, err := chain.NewBitcoindConn(bitcoindConfig)
-		if err != nil {
-			return fmt.Errorf("failed to create bitcoind connection: %w", err)
-		}
-
-		// Start the bitcoind connection
-		if err := bitcoindConn.Start(); err != nil {
-			return fmt.Errorf("failed to start bitcoind connection: %w", err)
-		}
-
-		// Now create the BitcoindClient using the connection
-		chainClient := bitcoindConn.NewBitcoindClient()
-
-		// Start the chain client
-		if err := chainClient.Start(); err != nil {
-			bitcoindConn.Stop()
-			return fmt.Errorf("failed to start bitcoind client: %w", err)
-		}
-
-		// wait for bitcoind to sync
-		for !chainClient.IsCurrent() {
-			time.Sleep(1 * time.Second)
-		}
-
-		estimator, err := chainfee.NewBitcoindEstimator(
-			rpcclient.ConnConfig{
-				Host: bitcoindConfig.Host,
-				User: bitcoindConfig.User,
-				Pass: bitcoindConfig.Pass,
-			},
-			"ECONOMICAL",
-			chainfee.AbsoluteFeePerKwFloor,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to create bitcoind fee estimator: %w", err)
-		}
-
-		if err := withExtraAPI(&bitcoindRPCClient{chainClient})(s); err != nil {
-			return err
-		}
-
-		if err := withFeeEstimator(estimator)(s); err != nil {
-			return err
-		}
-
-		// Set up the wallet as chain source and scanner
-		if err := withChainSource(chainClient)(s); err != nil {
-			chainClient.Stop()
-			bitcoindConn.Stop()
-			return fmt.Errorf("failed to set chain source: %w", err)
-		}
-
-		if err := withScanner(chainClient)(s); err != nil {
-			chainClient.Stop()
-			bitcoindConn.Stop()
-			return fmt.Errorf("failed to set scanner: %w", err)
-		}
-
-		return nil
-	}
-}
-
-func WithBitcoindZMQ(block, tx string, host, user, pass string) WalletOption {
-	return func(s *service) error {
-		if s.chainSource != nil {
-			return fmt.Errorf("chain source already set")
-		}
-
-		bitcoindConfig := &chain.BitcoindConfig{
-			ChainParams: s.cfg.chainParams(),
-			Host:        host,
-			User:        user,
-			Pass:        pass,
-			ZMQConfig: &chain.ZMQConfig{
-				ZMQBlockHost:    block,
-				ZMQTxHost:       tx,
-				ZMQReadDeadline: 5 * time.Second,
-			},
-		}
-
-		btcwallet.UseLogger(logger("btcwallet"))
-
-		bitcoindConn, err := chain.NewBitcoindConn(bitcoindConfig)
-		if err != nil {
-			return fmt.Errorf("failed to create bitcoind connection: %w", err)
-		}
-
-		if err := bitcoindConn.Start(); err != nil {
-			return fmt.Errorf("failed to start bitcoind connection: %w", err)
-		}
-
-		chainClient := bitcoindConn.NewBitcoindClient()
-
-		if err := chainClient.Start(); err != nil {
-			bitcoindConn.Stop()
-			return fmt.Errorf("failed to start bitcoind client: %w", err)
-		}
-
-		for !chainClient.IsCurrent() {
-			time.Sleep(1 * time.Second)
-		}
-
-		estimator, err := chainfee.NewBitcoindEstimator(
-			rpcclient.ConnConfig{
-				Host: bitcoindConfig.Host,
-				User: bitcoindConfig.User,
-				Pass: bitcoindConfig.Pass,
-			},
-			"ECONOMICAL",
-			chainfee.AbsoluteFeePerKwFloor,
-		)
-		if err != nil {
-			return fmt.Errorf("failed to create bitcoind fee estimator: %w", err)
-		}
-
-		if err := withExtraAPI(&bitcoindRPCClient{chainClient})(s); err != nil {
-			return err
-		}
-
-		if err := withFeeEstimator(estimator)(s); err != nil {
-			return err
-		}
-
-		if err := withChainSource(chainClient)(s); err != nil {
-			chainClient.Stop()
-			bitcoindConn.Stop()
-			return fmt.Errorf("failed to set chain source: %w", err)
-		}
-
-		if err := withScanner(chainClient)(s); err != nil {
-			chainClient.Stop()
-			bitcoindConn.Stop()
-			return fmt.Errorf("failed to set scanner: %w", err)
-		}
-
-		return nil
-	}
-}
+type accountName string
 
 type service struct {
 	wallet *btcwallet.BtcWallet
@@ -320,43 +83,29 @@ type service struct {
 	// cached forfeit addres
 	forfeitAddr string
 
-	isSynced bool
-	syncedCh chan struct{}
+	isSynced   bool
+	isUnlocked bool
+	readyCh    chan struct{}
 }
 
-type WalletOption func(*service) error
+// NewService creates the wallet service, an option must be set to configure the chain source.
+func NewService(cfg WalletConfig, options ...WalletOption) (WalletService, error) {
+	wallet.UseLogger(logger("wallet"))
 
-type WalletConfig struct {
-	Datadir string
-	Network common.Network
-}
-
-func (c WalletConfig) chainParams() *chaincfg.Params {
-	switch c.Network.Name {
-	case common.Bitcoin.Name:
-		return &chaincfg.MainNetParams
-	//case common.BitcoinTestNet4.Name: //TODO uncomment once supported
-	//	return &chaincfg.TestNet4Params
-	case common.BitcoinTestNet.Name:
-		return &chaincfg.TestNet3Params
-	case common.BitcoinSigNet.Name:
-		return &chaincfg.SigNetParams
-	case common.BitcoinMutinyNet.Name:
-		return &common.MutinyNetSigNetParams
-	case common.BitcoinRegTest.Name:
-		return &chaincfg.RegressionNetParams
-	default:
-		return &chaincfg.MainNetParams
+	svc := &service{
+		cfg:                cfg,
+		watchedScriptsLock: sync.RWMutex{},
+		watchedScripts:     make(map[string]struct{}),
+		readyCh:            make(chan struct{}),
 	}
-}
 
-type accountName string
+	for _, option := range options {
+		if err := option(svc); err != nil {
+			return nil, err
+		}
+	}
 
-// add additional chain API not supported by the chain.Interface type
-type extraChainAPI interface {
-	getTx(txid string) (*wire.MsgTx, error)
-	getTxStatus(txid string) (isConfirmed bool, blockHeight, blocktime int64, err error)
-	broadcast(txHex string) error
+	return svc, nil
 }
 
 func (s *service) Close() {
@@ -366,8 +115,8 @@ func (s *service) Close() {
 	s.chainSource.Stop()
 }
 
-func (s *service) GetSyncedUpdate(_ context.Context) <-chan struct{} {
-	return s.syncedCh
+func (s *service) GetReadyUpdate(_ context.Context) <-chan struct{} {
+	return s.readyCh
 }
 
 func (s *service) GenSeed(_ context.Context) (string, error) {
@@ -428,16 +177,25 @@ func (s *service) Unlock(_ context.Context, password string) error {
 		s.serverKeyAddr = serverAddr
 		s.forfeitAddr = forfeitAddr
 		s.wallet = wlt
+		s.isUnlocked = true
 
 		go s.listenToSynced()
 
 		return nil
 	}
 
-	return s.wallet.InternalWallet().Unlock([]byte(password), nil)
+	if err := s.wallet.InternalWallet().Unlock([]byte(password), nil); err != nil {
+		return err
+	}
+
+	s.isUnlocked = true
+	if s.isUnlocked && s.isSynced {
+		s.readyCh <- struct{}{}
+	}
+	return nil
 }
 
-func (s *service) Lock(_ context.Context, _ string) error {
+func (s *service) Lock(_ context.Context) error {
 	if !s.isLoaded() {
 		return ErrNotLoaded
 	}
@@ -535,6 +293,10 @@ func (s *service) GetPubkey(_ context.Context) (*secp256k1.PublicKey, error) {
 		return nil, ErrNotLoaded
 	}
 	return s.serverKeyAddr.PubKey(), nil
+}
+
+func (s *service) GetNetwork(_ context.Context) string {
+	return s.cfg.chainParams().Name
 }
 
 func (s *service) GetForfeitAddress(_ context.Context) (string, error) {
@@ -1262,7 +1024,9 @@ func (s *service) listenToSynced() {
 		if s.wallet.InternalWallet().ChainSynced() {
 			log.Debug("wallet: syncing completed")
 			s.isSynced = true
-			s.syncedCh <- struct{}{}
+			if s.isUnlocked && s.isSynced {
+				s.readyCh <- struct{}{}
+			}
 			return
 		}
 
@@ -1289,7 +1053,9 @@ func (s *service) listenToSynced() {
 				case 1:
 					log.Debug("wallet: syncing completed")
 					s.isSynced = true
-					s.syncedCh <- struct{}{}
+					if s.isUnlocked && s.isSynced {
+						s.readyCh <- struct{}{}
+					}
 					return
 				default:
 					log.Debugf("wallet: syncing progress %.0f%%", progress*100)
@@ -1504,55 +1270,6 @@ func (s *service) listUtxos(scope waddrmgr.KeyScope) ([]*wallet.TransactionOutpu
 		}
 	}
 	return filtered, nil
-}
-
-func withChainSource(chainSource chain.Interface) WalletOption {
-	return func(s *service) error {
-		if s.chainSource != nil {
-			return fmt.Errorf("chain source already set")
-		}
-
-		s.chainSource = chainSource
-		return nil
-	}
-}
-
-func withScanner(chainSource chain.Interface) WalletOption {
-	return func(s *service) error {
-		if s.scanner != nil {
-			return fmt.Errorf("scanner already set")
-		}
-		if err := chainSource.Start(); err != nil {
-			return fmt.Errorf("failed to start scanner: %s", err)
-		}
-		s.scanner = chainSource
-		return nil
-	}
-}
-
-func withExtraAPI(api extraChainAPI) WalletOption {
-	return func(s *service) error {
-		if s.extraAPI != nil {
-			return fmt.Errorf("extra chain API already set")
-		}
-		s.extraAPI = api
-		return nil
-	}
-}
-
-func withFeeEstimator(estimator chainfee.Estimator) WalletOption {
-	return func(s *service) error {
-		if s.feeEstimator != nil {
-			return fmt.Errorf("fee estimator already set")
-		}
-
-		if err := estimator.Start(); err != nil {
-			return fmt.Errorf("failed to start fee estimator: %s", err)
-		}
-
-		s.feeEstimator = estimator
-		return nil
-	}
 }
 
 func createOrOpenWalletDB(path string) (walletdb.DB, error) {
