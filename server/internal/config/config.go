@@ -8,8 +8,6 @@ import (
 	"strings"
 	"time"
 
-	walletclient "github.com/ark-network/ark/server/internal/infrastructure/wallet"
-
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/ports"
