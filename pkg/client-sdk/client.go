@@ -737,19 +737,19 @@ func (a *covenantlessArkClient) StartUnilateralExit(ctx context.Context) error {
 		return nil
 	}
 
-	for _, txHex := range transactions {
-		var ancestor wire.MsgTx
-		if err := ancestor.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
+	for _, parent := range transactions {
+		var parentTx wire.MsgTx
+		if err := parentTx.Deserialize(hex.NewDecoder(strings.NewReader(parent))); err != nil {
 			return err
 		}
 
-		bumpTx, err := a.bumpAnchorTx(ctx, &ancestor)
+		child, err := a.bumpAnchorTx(ctx, &parentTx)
 		if err != nil {
 			return err
 		}
 
-		// broadcast the package (ancestor + bump)
-		packageResponse, err := a.explorer.Broadcast(txHex, bumpTx)
+		// broadcast the package (parent + child)
+		packageResponse, err := a.explorer.Broadcast(parent, child)
 		if err != nil {
 			return err
 		}
@@ -762,8 +762,8 @@ func (a *covenantlessArkClient) StartUnilateralExit(ctx context.Context) error {
 
 // bumpAnchorTx is crafting and signing a transaction bumping the fees for a given tx with P2A output
 // it is using the onchain P2TR account to select UTXOs
-func (a *covenantlessArkClient) bumpAnchorTx(ctx context.Context, ancestor *wire.MsgTx) (string, error) {
-	anchor, err := findAnchorOutpoint(ancestor)
+func (a *covenantlessArkClient) bumpAnchorTx(ctx context.Context, parent *wire.MsgTx) (string, error) {
+	anchor, err := findAnchorOutpoint(parent)
 	if err != nil {
 		return "", err
 	}
@@ -779,9 +779,9 @@ func (a *covenantlessArkClient) bumpAnchorTx(ctx context.Context, ancestor *wire
 	weightEstimator.AddTaprootKeySpendInput(txscript.SigHashDefault)
 	weightEstimator.AddP2TROutput()
 
-	bumpVSize := weightEstimator.Weight().ToVB()
+	childVSize := weightEstimator.Weight().ToVB()
 
-	packageSize := bumpVSize + computeVSize(ancestor)
+	packageSize := childVSize + computeVSize(parent)
 	feeRate, err := a.explorer.GetFeeRate()
 	if err != nil {
 		return "", err
@@ -867,10 +867,7 @@ func (a *covenantlessArkClient) bumpAnchorTx(ctx context.Context, ancestor *wire
 		return "", err
 	}
 
-	ptx.Inputs[0].WitnessUtxo = &wire.TxOut{
-		Value:    tree.ANCHOR_VALUE,
-		PkScript: tree.ANCHOR_PKSCRIPT,
-	}
+	ptx.Inputs[0].WitnessUtxo = tree.AnchorOutput()
 
 	b64, err := ptx.B64Encode()
 	if err != nil {
@@ -893,13 +890,13 @@ func (a *covenantlessArkClient) bumpAnchorTx(ctx context.Context, ancestor *wire
 		}
 	}
 
-	signedBump, err := tree.ExtractWithAnchors(signedPtx)
+	childTx, err := tree.ExtractWithAnchors(signedPtx)
 	if err != nil {
 		return "", err
 	}
 
 	var serializedTx bytes.Buffer
-	if err := signedBump.Serialize(&serializedTx); err != nil {
+	if err := childTx.Serialize(&serializedTx); err != nil {
 		return "", err
 	}
 
