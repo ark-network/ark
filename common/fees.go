@@ -11,20 +11,6 @@ import (
 	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
-var TreeTxSize = (&input.TxWeightEstimator{}).
-	AddTaprootKeySpendInput(txscript.SigHashDefault). // parent
-	AddP2TROutput().                                  // left child
-	AddP2TROutput().                                  // right child
-	VSize()
-
-var ConnectorTxSize = (&input.TxWeightEstimator{}).
-	AddTaprootKeySpendInput(txscript.SigHashDefault).
-	AddP2TROutput().
-	AddP2TROutput().
-	AddP2TROutput().
-	AddP2TROutput().
-	VSize()
-
 func ComputeForfeitTxFee(
 	feeRate chainfee.SatPerKVByte,
 	tapscript *waddrmgr.Tapscript,
@@ -55,33 +41,4 @@ func ComputeForfeitTxFee(
 	}
 
 	return uint64(feeRate.FeeForVSize(lntypes.VByte(txWeightEstimator.VSize())).ToUnit(btcutil.AmountSatoshi)), nil
-}
-
-func ComputeRedeemTxFee(
-	feeRate chainfee.SatPerKVByte,
-	vtxos []VtxoInput,
-	numOutputs int,
-) (int64, error) {
-	if len(vtxos) <= 0 {
-		return 0, fmt.Errorf("missing vtxos")
-	}
-
-	redeemTxWeightEstimator := &input.TxWeightEstimator{}
-
-	// Estimate inputs
-	for _, vtxo := range vtxos {
-		if vtxo.Tapscript == nil {
-			txid := vtxo.Outpoint.Hash.String()
-			return 0, fmt.Errorf("missing tapscript for vtxo %s", txid)
-		}
-
-		redeemTxWeightEstimator.AddTapscriptInput(lntypes.WeightUnit(vtxo.WitnessSize), vtxo.Tapscript)
-	}
-
-	// Estimate outputs
-	for i := 0; i < numOutputs; i++ {
-		redeemTxWeightEstimator.AddP2TROutput()
-	}
-
-	return int64(feeRate.FeeForVSize(lntypes.VByte(redeemTxWeightEstimator.VSize())).ToUnit(btcutil.AmountSatoshi)), nil
 }

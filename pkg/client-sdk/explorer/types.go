@@ -36,7 +36,7 @@ type replacement struct {
 	Replaces  []replacement `json:"replaces"`
 }
 
-type utxo struct {
+type Utxo struct {
 	Txid   string `json:"txid"`
 	Vout   uint32 `json:"vout"`
 	Amount uint64 `json:"value"`
@@ -47,6 +47,6 @@ type utxo struct {
 	} `json:"status"`
 }
 
-func (e utxo) ToUtxo(delay common.RelativeLocktime, tapscripts []string) types.Utxo {
+func (e Utxo) ToUtxo(delay common.RelativeLocktime, tapscripts []string) types.Utxo {
 	return newUtxo(e, delay, tapscripts)
 }

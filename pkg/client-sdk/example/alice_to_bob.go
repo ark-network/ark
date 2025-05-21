@@ -56,7 +56,7 @@ func main() {
 	defer aliceArkClient.Lock(ctx)
 
 	log.Info("alice is acquiring onchain funds...")
-	_, boardingAddress, err := aliceArkClient.Receive(ctx)
+	_, _, boardingAddress, err := aliceArkClient.Receive(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func main() {
 	//nolint:all
 	defer bobArkClient.Lock(ctx)
 
-	bobOffchainAddr, _, err := bobArkClient.Receive(ctx)
+	_, bobOffchainAddr, _, err := bobArkClient.Receive(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}

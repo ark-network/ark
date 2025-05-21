@@ -524,11 +524,6 @@ func (b *txBuilder) BuildRoundTx(
 		return "", nil, "", nil, err
 	}
 
-	feeAmount, err := b.minRelayFeeTreeTx()
-	if err != nil {
-		return "", nil, "", nil, err
-	}
-
 	sweepScript, err := (&tree.CSVMultisigClosure{
 		MultisigClosure: tree.MultisigClosure{
 			PubKeys: []*secp256k1.PublicKey{serverPubkey},
@@ -543,7 +538,7 @@ func (b *txBuilder) BuildRoundTx(
 
 	if !requests.HaveOnlyOnchainOutput() {
 		sharedOutputScript, sharedOutputAmount, err = tree.CraftSharedOutput(
-			receivers, feeAmount, sweepTapscriptRoot[:],
+			receivers, sweepTapscriptRoot[:],
 		)
 		if err != nil {
 			return "", nil, "", nil, err
@@ -553,11 +548,6 @@ func (b *txBuilder) BuildRoundTx(
 	nbOfConnectors := requests.CountSpentVtxos()
 
 	dustAmount, err := b.wallet.GetDustAmount(context.Background())
-	if err != nil {
-		return "", nil, "", nil, err
-	}
-
-	minRelayFeeConnectorTx, err := b.minRelayFeeConnectorTx()
 	if err != nil {
 		return "", nil, "", nil, err
 	}
@@ -610,7 +600,6 @@ func (b *txBuilder) BuildRoundTx(
 
 		connectorsTreePkScript, connectorsTreeAmount, err = tree.CraftConnectorsOutput(
 			connectorsTreeLeaves,
-			minRelayFeeConnectorTx,
 		)
 		if err != nil {
 			return "", nil, "", nil, err
@@ -641,7 +630,7 @@ func (b *txBuilder) BuildRoundTx(
 		}
 
 		vtxoTree, err = tree.BuildVtxoTree(
-			initialOutpoint, receivers, feeAmount, sweepTapscriptRoot[:], b.vtxoTreeExpiry,
+			initialOutpoint, receivers, sweepTapscriptRoot[:], b.vtxoTreeExpiry,
 		)
 		if err != nil {
 			return "", nil, "", nil, err
@@ -665,7 +654,6 @@ func (b *txBuilder) BuildRoundTx(
 	connectors, err := tree.BuildConnectorsTree(
 		rootConnectorsOutpoint,
 		connectorsTreeLeaves,
-		minRelayFeeConnectorTx,
 	)
 	if err != nil {
 		return "", nil, "", nil, err
@@ -1044,10 +1032,6 @@ func (b *txBuilder) createRoundTx(
 	return ptx, nil
 }
 
-func (b *txBuilder) minRelayFeeConnectorTx() (uint64, error) {
-	return b.wallet.MinRelayFee(context.Background(), uint64(common.ConnectorTxSize))
-}
-
 func (b *txBuilder) CountSignedTaprootInputs(tx string) (int, error) {
 	ptx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
 	if err != nil {
@@ -1118,10 +1102,6 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 	}
 
 	return roundTx.B64Encode()
-}
-
-func (b *txBuilder) minRelayFeeTreeTx() (uint64, error) {
-	return b.wallet.MinRelayFee(context.Background(), uint64(common.TreeTxSize))
 }
 
 func (b *txBuilder) selectUtxos(

@@ -45,20 +45,20 @@ func NewBitcoinWallet(
 
 func (w *bitcoinWallet) GetAddresses(
 	ctx context.Context,
-) ([]wallet.TapscriptsAddress, []wallet.TapscriptsAddress, []wallet.TapscriptsAddress, error) {
-	offchainAddr, boardingAddr, err := w.getAddress(ctx)
+) ([]string, []wallet.TapscriptsAddress, []wallet.TapscriptsAddress, []wallet.TapscriptsAddress, error) {
+	offchainAddr, boardingAddr, err := w.getArkAddresses(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	encodedOffchainAddr, err := offchainAddr.Address.Encode()
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	data, err := w.configStore.GetData(ctx)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	netParams := utils.ToBitcoinNetwork(data.Network)
@@ -68,7 +68,7 @@ func (w *bitcoinWallet) GetAddresses(
 		&netParams,
 	)
 	if err != nil {
-		return nil, nil, nil, err
+		return nil, nil, nil, nil, err
 	}
 
 	offchainAddrs := []wallet.TapscriptsAddress{
@@ -89,23 +89,34 @@ func (w *bitcoinWallet) GetAddresses(
 			Address:    redemptionAddr.EncodeAddress(),
 		},
 	}
-	return offchainAddrs, boardingAddrs, redemptionAddrs, nil
+
+	onchainAddr, err := w.getP2TRAddress(ctx)
+	if err != nil {
+		return nil, nil, nil, nil, err
+	}
+
+	return []string{onchainAddr.EncodeAddress()}, offchainAddrs, boardingAddrs, redemptionAddrs, nil
 }
 
 func (w *bitcoinWallet) NewAddress(
 	ctx context.Context, _ bool,
-) (*wallet.TapscriptsAddress, *wallet.TapscriptsAddress, error) {
-	offchainAddr, boardingAddr, err := w.getAddress(ctx)
+) (string, *wallet.TapscriptsAddress, *wallet.TapscriptsAddress, error) {
+	offchainAddr, boardingAddr, err := w.getArkAddresses(ctx)
 	if err != nil {
-		return nil, nil, err
+		return "", nil, nil, err
 	}
 
 	encodedOffchainAddr, err := offchainAddr.Address.Encode()
 	if err != nil {
-		return nil, nil, err
+		return "", nil, nil, err
 	}
 
-	return &wallet.TapscriptsAddress{
+	onchainAddr, err := w.getP2TRAddress(ctx)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	return onchainAddr.EncodeAddress(), &wallet.TapscriptsAddress{
 		Tapscripts: offchainAddr.Tapscripts,
 		Address:    encodedOffchainAddr,
 	}, boardingAddr, nil
@@ -113,10 +124,10 @@ func (w *bitcoinWallet) NewAddress(
 
 func (w *bitcoinWallet) NewAddresses(
 	ctx context.Context, _ bool, num int,
-) ([]wallet.TapscriptsAddress, []wallet.TapscriptsAddress, error) {
-	offchainAddr, boardingAddr, err := w.getAddress(ctx)
+) ([]string, []wallet.TapscriptsAddress, []wallet.TapscriptsAddress, error) {
+	offchainAddr, boardingAddr, err := w.getArkAddresses(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	offchainAddrs := make([]wallet.TapscriptsAddress, 0, num)
@@ -124,7 +135,7 @@ func (w *bitcoinWallet) NewAddresses(
 	for i := 0; i < num; i++ {
 		encodedOffchainAddr, err := offchainAddr.Address.Encode()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		offchainAddrs = append(offchainAddrs, wallet.TapscriptsAddress{
@@ -136,7 +147,17 @@ func (w *bitcoinWallet) NewAddresses(
 			Address:    boardingAddr.Address,
 		})
 	}
-	return offchainAddrs, boardingAddrs, nil
+
+	onchainAddrs := make([]string, 0, num)
+	for i := 0; i < num; i++ {
+		onchainAddr, err := w.getP2TRAddress(ctx)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		onchainAddrs = append(onchainAddrs, onchainAddr.EncodeAddress())
+	}
+
+	return onchainAddrs, offchainAddrs, boardingAddrs, nil
 }
 
 func (s *bitcoinWallet) SignTransaction(
@@ -194,95 +215,168 @@ func (s *bitcoinWallet) SignTransaction(
 	)
 
 	txsighashes := txscript.NewTxSigHashes(updater.Upsbt.UnsignedTx, prevoutFetcher)
-	myPubkey := schnorr.SerializePubKey(s.walletData.PubKey)
+
+	onchainPkScript, err := common.P2TRScript(txscript.ComputeTaprootKeyNoScript(s.walletData.PubKey))
+	if err != nil {
+		return "", err
+	}
 
 	for i, input := range ptx.Inputs {
 		if len(input.TaprootLeafScript) > 0 {
-			for _, leaf := range input.TaprootLeafScript {
-				closure, err := tree.DecodeClosure(leaf.Script)
-				if err != nil {
-					// in case of invalid script, we skip signing the input
-					continue
-				}
-
-				sign := false
-
-				switch c := closure.(type) {
-				case *tree.CSVMultisigClosure:
-					for _, key := range c.PubKeys {
-						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
-							sign = true
-							break
-						}
-					}
-				case *tree.MultisigClosure:
-					for _, key := range c.PubKeys {
-						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
-							sign = true
-							break
-						}
-					}
-				case *tree.CLTVMultisigClosure:
-					for _, key := range c.PubKeys {
-						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
-							sign = true
-							break
-						}
-					}
-				case *tree.ConditionMultisigClosure:
-					for _, key := range c.PubKeys {
-						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
-							sign = true
-							break
-						}
-					}
-				}
-
-				if sign {
-					if err := updater.AddInSighashType(txscript.SigHashDefault, i); err != nil {
-						return "", err
-					}
-
-					hash := txscript.NewTapLeaf(leaf.LeafVersion, leaf.Script).TapHash()
-
-					preimage, err := txscript.CalcTapscriptSignaturehash(
-						txsighashes,
-						txscript.SigHashDefault,
-						ptx.UnsignedTx,
-						i,
-						prevoutFetcher,
-						txscript.NewBaseTapLeaf(leaf.Script),
-					)
-					if err != nil {
-						return "", err
-					}
-
-					sig, err := schnorr.Sign(s.privateKey, preimage)
-					if err != nil {
-						return "", err
-					}
-
-					if !sig.Verify(preimage, s.walletData.PubKey) {
-						return "", fmt.Errorf("signature verification failed")
-					}
-
-					if len(updater.Upsbt.Inputs[i].TaprootScriptSpendSig) == 0 {
-						updater.Upsbt.Inputs[i].TaprootScriptSpendSig = make([]*psbt.TaprootScriptSpendSig, 0)
-					}
-
-					updater.Upsbt.Inputs[i].TaprootScriptSpendSig = append(updater.Upsbt.Inputs[i].TaprootScriptSpendSig, &psbt.TaprootScriptSpendSig{
-						XOnlyPubKey: myPubkey,
-						LeafHash:    hash.CloneBytes(),
-						Signature:   sig.Serialize(),
-						SigHash:     txscript.SigHashDefault,
-					})
-				}
+			if err := s.signTapscriptSpend(updater, input, i, txsighashes, prevoutFetcher); err != nil {
+				return "", err
 			}
+			continue
+		}
+
+		if input.WitnessUtxo != nil {
+			// onchain P2TR
+			if bytes.Equal(input.WitnessUtxo.PkScript, onchainPkScript) {
+				updater.Upsbt.Inputs[i].TaprootInternalKey = schnorr.SerializePubKey(txscript.ComputeTaprootKeyNoScript(s.walletData.PubKey))
+				input = updater.Upsbt.Inputs[i]
+			}
+		}
+
+		// taproot key path spend
+		if len(input.TaprootInternalKey) > 0 {
+			if err := s.signTaprootKeySpend(updater, input, i, txsighashes, prevoutFetcher); err != nil {
+				return "", err
+			}
+			continue
 		}
 
 	}
 
 	return ptx.B64Encode()
+}
+
+func (w *bitcoinWallet) signTapscriptSpend(
+	updater *psbt.Updater,
+	input psbt.PInput,
+	inputIndex int,
+	txsighashes *txscript.TxSigHashes,
+	prevoutFetcher *txscript.MultiPrevOutFetcher,
+) error {
+	myPubkey := schnorr.SerializePubKey(w.walletData.PubKey)
+
+	for _, leaf := range input.TaprootLeafScript {
+		closure, err := tree.DecodeClosure(leaf.Script)
+		if err != nil {
+			// skip unknown leaf
+			continue
+		}
+
+		sign := false
+
+		switch c := closure.(type) {
+		case *tree.CSVMultisigClosure:
+			for _, key := range c.PubKeys {
+				if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
+					sign = true
+					break
+				}
+			}
+		case *tree.MultisigClosure:
+			for _, key := range c.PubKeys {
+				if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
+					sign = true
+					break
+				}
+			}
+		case *tree.CLTVMultisigClosure:
+			for _, key := range c.PubKeys {
+				if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
+					sign = true
+					break
+				}
+			}
+		case *tree.ConditionMultisigClosure:
+			for _, key := range c.PubKeys {
+				if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
+					sign = true
+					break
+				}
+			}
+		}
+
+		if sign {
+			if err := updater.AddInSighashType(txscript.SigHashDefault, inputIndex); err != nil {
+				return err
+			}
+
+			hash := txscript.NewTapLeaf(leaf.LeafVersion, leaf.Script).TapHash()
+
+			preimage, err := txscript.CalcTapscriptSignaturehash(
+				txsighashes,
+				txscript.SigHashDefault,
+				updater.Upsbt.UnsignedTx,
+				inputIndex,
+				prevoutFetcher,
+				txscript.NewBaseTapLeaf(leaf.Script),
+			)
+			if err != nil {
+				return err
+			}
+
+			sig, err := schnorr.Sign(w.privateKey, preimage)
+			if err != nil {
+				return err
+			}
+
+			if len(updater.Upsbt.Inputs[inputIndex].TaprootScriptSpendSig) == 0 {
+				updater.Upsbt.Inputs[inputIndex].TaprootScriptSpendSig = make([]*psbt.TaprootScriptSpendSig, 0)
+			}
+
+			updater.Upsbt.Inputs[inputIndex].TaprootScriptSpendSig = append(updater.Upsbt.Inputs[inputIndex].TaprootScriptSpendSig, &psbt.TaprootScriptSpendSig{
+				XOnlyPubKey: myPubkey,
+				LeafHash:    hash.CloneBytes(),
+				Signature:   sig.Serialize(),
+				SigHash:     txscript.SigHashDefault,
+			})
+		}
+	}
+
+	return nil
+}
+
+func (w *bitcoinWallet) signTaprootKeySpend(
+	updater *psbt.Updater,
+	input psbt.PInput,
+	inputIndex int,
+	txsighashes *txscript.TxSigHashes,
+	prevoutFetcher *txscript.MultiPrevOutFetcher,
+) error {
+	if len(input.TaprootKeySpendSig) > 0 {
+		// already signed, skip
+		return nil
+	}
+
+	xOnlyPubkey := schnorr.SerializePubKey(txscript.ComputeTaprootKeyNoScript(w.walletData.PubKey))
+	if !bytes.Equal(xOnlyPubkey, input.TaprootInternalKey) {
+		// not the wallet's key, skip
+		return nil
+	}
+
+	preimage, err := txscript.CalcTaprootSignatureHash(
+		txsighashes,
+		txscript.SigHashDefault,
+		updater.Upsbt.UnsignedTx,
+		inputIndex,
+		prevoutFetcher,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	sig, err := schnorr.Sign(txscript.TweakTaprootPrivKey(*w.privateKey, nil), preimage)
+	if err != nil {
+		return err
+	}
+
+	updater.Upsbt.Inputs[inputIndex].TaprootKeySpendSig = sig.Serialize()
+
+	return nil
 }
 
 func (w *bitcoinWallet) NewVtxoTreeSigner(
@@ -352,7 +446,34 @@ type addressWithTapscripts struct {
 	Tapscripts []string
 }
 
-func (w *bitcoinWallet) getAddress(
+func (w *bitcoinWallet) getP2TRAddress(
+	ctx context.Context,
+) (*btcutil.AddressTaproot, error) {
+	if w.walletData == nil {
+		return nil, fmt.Errorf("wallet not initialized")
+	}
+
+	data, err := w.configStore.GetData(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if data == nil {
+		return nil, fmt.Errorf("config not set, cannot create P2TR address")
+	}
+
+	netParams := utils.ToBitcoinNetwork(data.Network)
+
+	tapKey := txscript.ComputeTaprootKeyNoScript(w.walletData.PubKey)
+	addr, err := btcutil.NewAddressTaproot(schnorr.SerializePubKey(tapKey), &netParams)
+	if err != nil {
+		return nil, err
+	}
+
+	return addr, nil
+}
+
+func (w *bitcoinWallet) getArkAddresses(
 	ctx context.Context,
 ) (
 	*addressWithTapscripts,

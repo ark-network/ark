@@ -22,15 +22,14 @@ const (
 // radix is hardcoded to 2
 func CraftSharedOutput(
 	receivers []Leaf,
-	feeSatsPerNode uint64,
 	sweepTapTreeRoot []byte,
 ) ([]byte, int64, error) {
-	root, err := createTxTree(receivers, feeSatsPerNode, sweepTapTreeRoot, vtxoTreeRadix)
+	root, err := createTxTree(receivers, sweepTapTreeRoot, vtxoTreeRadix)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	amount := root.getAmount() + int64(feeSatsPerNode)
+	amount := root.getAmount() + ANCHOR_VALUE
 
 	aggregatedKey, err := AggregateKeys(root.getCosigners(), sweepTapTreeRoot)
 	if err != nil {
@@ -50,11 +49,10 @@ func CraftSharedOutput(
 func BuildVtxoTree(
 	initialInput *wire.OutPoint,
 	receivers []Leaf,
-	feeSatsPerNode uint64,
 	sweepTapTreeRoot []byte,
 	vtxoTreeExpiry common.RelativeLocktime,
 ) (TxTree, error) {
-	root, err := createTxTree(receivers, feeSatsPerNode, sweepTapTreeRoot, vtxoTreeRadix)
+	root, err := createTxTree(receivers, sweepTapTreeRoot, vtxoTreeRadix)
 	if err != nil {
 		return nil, err
 	}
@@ -66,14 +64,13 @@ func BuildVtxoTree(
 // radix is hardcoded to 4
 func CraftConnectorsOutput(
 	receivers []Leaf,
-	feeSatsPerNode uint64,
 ) ([]byte, int64, error) {
-	root, err := createTxTree(receivers, feeSatsPerNode, nil, connectorsTreeRadix)
+	root, err := createTxTree(receivers, nil, connectorsTreeRadix)
 	if err != nil {
 		return nil, 0, err
 	}
 
-	amount := root.getAmount() + int64(feeSatsPerNode)
+	amount := root.getAmount() + ANCHOR_VALUE
 
 	aggregatedKey, err := AggregateKeys(root.getCosigners(), nil)
 	if err != nil {
@@ -93,9 +90,8 @@ func CraftConnectorsOutput(
 func BuildConnectorsTree(
 	initialInput *wire.OutPoint,
 	receivers []Leaf,
-	feeSatsPerNode uint64,
 ) (TxTree, error) {
-	root, err := createTxTree(receivers, feeSatsPerNode, nil, connectorsTreeRadix)
+	root, err := createTxTree(receivers, nil, connectorsTreeRadix)
 	if err != nil {
 		return nil, err
 	}
@@ -150,7 +146,7 @@ func toTxTree(root node, initialInput *wire.OutPoint, expiry *common.RelativeLoc
 }
 
 type node interface {
-	getAmount() int64 // returns the input amount of the node = sum of all receivers' amounts + fees
+	getAmount() int64 // returns the input amount of the node = sum of all receivers' amounts
 	getOutputs() ([]*wire.TxOut, error)
 	getChildren() []node
 	getCosigners() []*secp256k1.PublicKey
@@ -167,7 +163,6 @@ type branch struct {
 	cosigners []*secp256k1.PublicKey
 	pkScript  []byte
 	children  []node
-	feeAmount int64
 }
 
 func (b *branch) getCosigners() []*secp256k1.PublicKey {
@@ -190,7 +185,7 @@ func (b *branch) getAmount() int64 {
 	amount := int64(0)
 	for _, child := range b.children {
 		amount += child.getAmount()
-		amount += b.feeAmount
+		amount += ANCHOR_VALUE
 	}
 
 	return amount
@@ -206,6 +201,7 @@ func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
 			Value:    l.amount,
 			PkScript: l.pkScript,
 		},
+		AnchorOutput(),
 	}, nil
 }
 
@@ -214,12 +210,12 @@ func (b *branch) getOutputs() ([]*wire.TxOut, error) {
 
 	for _, child := range b.children {
 		outputs = append(outputs, &wire.TxOut{
-			Value:    child.getAmount() + b.feeAmount,
+			Value:    child.getAmount(),
 			PkScript: b.pkScript,
 		})
 	}
 
-	return outputs, nil
+	return append(outputs, AnchorOutput()), nil
 }
 
 func getTreeNode(
@@ -257,7 +253,7 @@ func getTx(
 		return nil, err
 	}
 
-	tx, err := psbt.New([]*wire.OutPoint{input}, outputs, 2, 0, []uint32{wire.MaxTxInSequenceNum})
+	tx, err := psbt.New([]*wire.OutPoint{input}, outputs, 3, 0, []uint32{wire.MaxTxInSequenceNum})
 	if err != nil {
 		return nil, err
 	}
@@ -290,7 +286,6 @@ func getTx(
 // from the leaves to the root.
 func createTxTree(
 	receivers []Leaf,
-	feeSatsPerNode uint64,
 	tapTreeRoot []byte,
 	radix int,
 ) (root node, err error) {
@@ -372,7 +367,7 @@ func createTxTree(
 	}
 
 	for len(nodes) > 1 {
-		nodes, err = createUpperLevel(nodes, int64(feeSatsPerNode), tapTreeRoot, radix)
+		nodes, err = createUpperLevel(nodes, tapTreeRoot, radix)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create tx tree: %w", err)
 		}
@@ -381,20 +376,20 @@ func createTxTree(
 	return nodes[0], nil
 }
 
-func createUpperLevel(nodes []node, feeAmount int64, tapTreeRoot []byte, radix int) ([]node, error) {
+func createUpperLevel(nodes []node, tapTreeRoot []byte, radix int) ([]node, error) {
 	if len(nodes) <= 1 {
 		return nodes, nil
 	}
 
 	if len(nodes) < radix {
-		return createUpperLevel(nodes, feeAmount, tapTreeRoot, len(nodes))
+		return createUpperLevel(nodes, tapTreeRoot, len(nodes))
 	}
 
 	remainder := len(nodes) % radix
 	if remainder != 0 {
 		// Handle nodes that don't form a complete group
 		last := nodes[len(nodes)-remainder:]
-		groups, err := createUpperLevel(nodes[:len(nodes)-remainder], feeAmount, tapTreeRoot, radix)
+		groups, err := createUpperLevel(nodes[:len(nodes)-remainder], tapTreeRoot, radix)
 		if err != nil {
 			return nil, err
 		}
@@ -425,7 +420,6 @@ func createUpperLevel(nodes []node, feeAmount int64, tapTreeRoot []byte, radix i
 		branchNode := &branch{
 			pkScript:  pkScript,
 			cosigners: cosigners,
-			feeAmount: feeAmount,
 			children:  children,
 		}
 

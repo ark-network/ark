@@ -20,7 +20,7 @@ type ArkClient interface {
 	Unlock(ctx context.Context, password string) error
 	Lock(ctx context.Context) error
 	Balance(ctx context.Context, computeExpiryDetails bool) (*Balance, error)
-	Receive(ctx context.Context) (offchainAddr, boardingAddr string, err error)
+	Receive(ctx context.Context) (onchainAddr, offchainAddr, boardingAddr string, err error)
 	SendOffChain(
 		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver,
 		withZeroFees bool,

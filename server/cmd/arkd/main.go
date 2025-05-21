@@ -65,10 +65,6 @@ func mainAction(_ *cli.Context) error {
 		TLSExtraDomains: cfg.TLSExtraDomains,
 	}
 
-	if cfg.AllowZeroFees {
-		log.Warn("WARNING: AllowZeroFees is enabled")
-	}
-
 	svc, err := grpcservice.NewService(Version, svcConfig, cfg)
 	if err != nil {
 		return err

@@ -141,8 +141,17 @@ func (r *CovenantlessRedeemBranch) OffchainPath() ([]*psbt.Packet, error) {
 		ptx := r.branch[i]
 		txHash := ptx.UnsignedTx.TxHash().String()
 
-		if _, err := r.explorer.GetTxHex(txHash); err != nil {
+		confirmed, _, err := r.explorer.GetTxBlockTime(txHash)
+
+		// if the tx is not found, it's offchain, let's continue
+		if err != nil {
 			continue
+		}
+
+		// if found but not confirmed, it means the tx is in the mempool
+		// an unilateral exit is running, we must wait for it to be confirmed
+		if !confirmed {
+			return nil, ErrPendingConfirmation{Txid: txHash}
 		}
 
 		// if no error, the tx exists onchain, so we can remove it (+ the parents) from the branch
@@ -156,4 +165,14 @@ func (r *CovenantlessRedeemBranch) OffchainPath() ([]*psbt.Packet, error) {
 	}
 
 	return offchainPath, nil
+}
+
+// ErrPendingConfirmation is returned when computing the offchain path of a redeem branch. Due to P2A relay policy, only 1C1P packages are accepted.
+// This error is returned when the tx is found onchain but not confirmed yet, allowing the user to know when to wait for the tx to be confirmed or to continue with the redemption.
+type ErrPendingConfirmation struct {
+	Txid string
+}
+
+func (e ErrPendingConfirmation) Error() string {
+	return fmt.Sprintf("unilateral exit is running, please wait for tx %s to be confirmed", e.Txid)
 }

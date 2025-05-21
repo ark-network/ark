@@ -105,21 +105,21 @@ func (a *arkClient) Dump(ctx context.Context) (string, error) {
 	return a.wallet.Dump(ctx)
 }
 
-func (a *arkClient) Receive(ctx context.Context) (string, string, error) {
+func (a *arkClient) Receive(ctx context.Context) (string, string, string, error) {
 	if a.wallet == nil {
-		return "", "", fmt.Errorf("wallet not initialized")
+		return "", "", "", fmt.Errorf("wallet not initialized")
 	}
 
-	offchainAddr, boardingAddr, err := a.wallet.NewAddress(ctx, false)
+	onchainAddr, offchainAddr, boardingAddr, err := a.wallet.NewAddress(ctx, false)
 	if err != nil {
-		return "", "", err
+		return "", "", "", err
 	}
 
 	if a.UtxoMaxAmount == 0 {
 		boardingAddr.Address = ""
 	}
 
-	return offchainAddr.Address, boardingAddr.Address, nil
+	return onchainAddr, offchainAddr.Address, boardingAddr.Address, nil
 }
 
 func (a *arkClient) GetTransactionEventChannel(_ context.Context) chan types.TransactionEvent {
@@ -163,7 +163,7 @@ func (a *arkClient) Stop() {
 func (a *arkClient) ListVtxos(
 	ctx context.Context,
 ) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
-	offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	_, offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return
 	}
