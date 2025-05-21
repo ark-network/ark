@@ -124,10 +124,10 @@ func (w *bitcoinWallet) NewAddress(
 
 func (w *bitcoinWallet) NewAddresses(
 	ctx context.Context, _ bool, num int,
-) ([]wallet.TapscriptsAddress, []wallet.TapscriptsAddress, error) {
+) ([]string, []wallet.TapscriptsAddress, []wallet.TapscriptsAddress, error) {
 	offchainAddr, boardingAddr, err := w.getArkAddresses(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	offchainAddrs := make([]wallet.TapscriptsAddress, 0, num)
@@ -135,7 +135,7 @@ func (w *bitcoinWallet) NewAddresses(
 	for i := 0; i < num; i++ {
 		encodedOffchainAddr, err := offchainAddr.Address.Encode()
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 
 		offchainAddrs = append(offchainAddrs, wallet.TapscriptsAddress{
@@ -147,7 +147,17 @@ func (w *bitcoinWallet) NewAddresses(
 			Address:    boardingAddr.Address,
 		})
 	}
-	return offchainAddrs, boardingAddrs, nil
+
+	onchainAddrs := make([]string, 0, num)
+	for i := 0; i < num; i++ {
+		onchainAddr, err := w.getP2TRAddress(ctx)
+		if err != nil {
+			return nil, nil, nil, err
+		}
+		onchainAddrs = append(onchainAddrs, onchainAddr.EncodeAddress())
+	}
+
+	return onchainAddrs, offchainAddrs, boardingAddrs, nil
 }
 
 func (s *bitcoinWallet) SignTransaction(

@@ -32,7 +32,7 @@ type WalletService interface {
 	) (onchainAddr string, offchainAddr, boardingAddr *TapscriptsAddress, err error)
 	NewAddresses(
 		ctx context.Context, change bool, num int,
-	) (offchainAddresses, onchainAddresses []TapscriptsAddress, err error)
+	) (onchainAddresses []string, offchainAddresses, boardingAddresses []TapscriptsAddress, err error)
 	SignTransaction(
 		ctx context.Context, explorerSvc explorer.Explorer, tx string,
 	) (signedTx string, err error)

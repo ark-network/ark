@@ -101,10 +101,11 @@ func TestWallet(t *testing.T) {
 			require.Len(t, boardingAddrs, expectedNumOfAddresses)
 
 			num := 3
-			offchainAddrs, boardingAddrs, err = walletSvc.NewAddresses(ctx, false, num)
+			onchainAddrs, offchainAddrs, boardingAddrs, err = walletSvc.NewAddresses(ctx, false, num)
 			require.NoError(t, err)
 			require.Len(t, offchainAddrs, num)
 			require.Len(t, boardingAddrs, num)
+			require.Len(t, onchainAddrs, num)
 
 			expectedNumOfAddresses += num
 			if strings.Contains(tt.name, wallet.SingleKeyWallet) {
