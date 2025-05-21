@@ -267,7 +267,7 @@ func TestUnilateralExit(t *testing.T) {
 	_, err = utils.RunCommand("nigiri", "faucet", receive.Onchain)
 	require.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(5 * time.Second)
 
 	_, err = runArkCommand("redeem", "--force", "--password", utils.Password)
 	require.NoError(t, err)
