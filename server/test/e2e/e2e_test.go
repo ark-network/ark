@@ -376,11 +376,13 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 		require.NoError(t, err)
 
 		time.Sleep(1 * time.Second)
-		utils.GenerateBlock()
+		err = utils.GenerateBlock()
+		require.NoError(t, err)
 	}
 
 	// give time for the server to detect and process the fraud
-	utils.GenerateBlocks(30)
+	err = utils.GenerateBlocks(30)
+	require.NoError(t, err)
 
 	balance, err := client.Balance(ctx, false)
 	require.NoError(t, err)
@@ -481,11 +483,14 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			require.NoError(t, err)
 
 			time.Sleep(1 * time.Second)
-			utils.GenerateBlock()
+			err = utils.GenerateBlock()
+			require.NoError(t, err)
 		}
 
 		// give time for the server to detect and process the fraud
-		utils.GenerateBlocks(30)
+		err = utils.GenerateBlocks(30)
+		require.NoError(t, err)
+
 		balance, err := sdkClient.Balance(ctx, false)
 		require.NoError(t, err)
 
@@ -775,11 +780,13 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			require.NoError(t, err)
 
 			time.Sleep(1 * time.Second)
-			utils.GenerateBlock()
+			err = utils.GenerateBlock()
+			require.NoError(t, err)
 		}
 
 		// give time for the server to detect and process the fraud
-		utils.GenerateBlocks(30)
+		err = utils.GenerateBlocks(30)
+		require.NoError(t, err)
 
 		// make sure the vtxo of bob is not redeemed
 		// the checkpoint is not the bob's virtual tx
