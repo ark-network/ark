@@ -205,7 +205,7 @@ This will compile the `arkd` binary for your current architecture. For more deta
 3. Clone this repository:
 
    ```sh
-   git clone https://github.com/ark-network/ark.git
+   git clone https://github.com/arkade-os/arkd.git
    cd ark
    ```
 
