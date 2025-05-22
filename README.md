@@ -37,7 +37,7 @@ and uses [lnwallet](https://pkg.go.dev/github.com/lightningnetwork/lnd/lnwallet/
 
 ## Usage Documentation
 
-Welcome to the `arkd` repository, a Bitcoin server for off-chain Bitcoin transactions using the Ark protocol.
+In this documentation, you'll learn how to install and use `arkd`, a Bitcoin server for off-chain Bitcoin transactions.
 
 ### Installing from GitHub Releases
 
@@ -68,7 +68,6 @@ The `arkd` server can be configured using environment variables.
 | `ARK_EVENT_DB_TYPE` | Event database type (badger) | `badger` |
 | `ARK_SCHEDULER_TYPE` | Scheduler type (gocron, block) | `gocron` |
 | `ARK_TX_BUILDER_TYPE` | Transaction builder type (covenantless) | `covenantless` |
-| `ARK_WALLET_ADDR` | Wallet address | - |
 | `ARK_VTXO_TREE_EXPIRY` | VTXO tree expiry in blocks | `604672` (7 days) |
 | `ARK_UNILATERAL_EXIT_DELAY` | Unilateral exit delay in blocks | `86400` (24 hours) |
 | `ARK_BOARDING_EXIT_DELAY` | Boarding exit delay in blocks | `7776000` (3 months) |
