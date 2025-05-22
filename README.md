@@ -68,9 +68,9 @@ The `arkd` server can be configured using environment variables.
 | `ARK_EVENT_DB_TYPE` | Event database type (badger) | `badger` |
 | `ARK_SCHEDULER_TYPE` | Scheduler type (gocron, block) | `gocron` |
 | `ARK_TX_BUILDER_TYPE` | Transaction builder type (covenantless) | `covenantless` |
-| `ARK_VTXO_TREE_EXPIRY` | VTXO tree expiry in blocks | `604672` (7 days) |
-| `ARK_UNILATERAL_EXIT_DELAY` | Unilateral exit delay in blocks | `86400` (24 hours) |
-| `ARK_BOARDING_EXIT_DELAY` | Boarding exit delay in blocks | `7776000` (3 months) |
+| `ARK_VTXO_TREE_EXPIRY` | VTXO tree expiry in seconds | `604672` (7 days) |
+| `ARK_UNILATERAL_EXIT_DELAY` | Unilateral exit delay in seconds | `86400` (24 hours) |
+| `ARK_BOARDING_EXIT_DELAY` | Boarding exit delay in seconds | `7776000` (3 months) |
 | `ARK_ESPLORA_URL` | Esplora API URL | `https://blockstream.info/api` |
 | `ARK_NEUTRINO_PEER` | Neutrino peer address | - |
 | `ARK_BITCOIND_RPC_USER` | Bitcoin Core RPC username | - |
