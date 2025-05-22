@@ -11,6 +11,19 @@
 > `arkd` is currently in alpha stage. This software is experimental and under active development.
 > **DO NOT ATTEMPT TO USE IN PRODUCTION**. Use at your own risk.
 
+
+## What is arkd?
+
+`arkd` is the server implementation of Arkade instance that builds on top of the Ark protocol, a layer-2 solution for Bitcoin that enables fast, low-cost off-chain transactions while maintaining Bitcoin's security guarantees. As an Ark Operator, the server:
+
+- Creates and manages Batch Outputs through on-chain Bitcoin transactions
+- Facilitates off-chain transactions between users
+- Provides liquidity for commitment transactions (on-chain settlements that finalize each batch)
+- Co-signs multisignature arrangements while preserving user exit rights
+
+The Operator's role is designed with strict boundaries that ensure users always maintain control over their funds. This architecture allows for efficient transaction batching while preserving the trustless nature of Bitcoin.
+
+
 ## Supported Networks and Wallets
 
 `arkd` supports the following Bitcoin network:
