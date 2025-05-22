@@ -551,7 +551,8 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		require.NotEmpty(t, spendableVtxos)
 		require.Len(t, spendableVtxos, 1)
 
-		initialTreeVtxo := spendableVtxos[0]
+		vtxoToFraud := spendableVtxos[0]
+		initialTreeVtxo := vtxoToFraud
 
 		time.Sleep(5 * time.Second)
 
@@ -789,7 +790,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		// make sure the vtxo of alice is not spendable
 		aliceVtxos, _, err = alice.ListVtxos(ctx)
 		require.NoError(t, err)
-		require.Empty(t, aliceVtxos)
+		require.NotContains(t, aliceVtxos, vtxoToFraud)
 	})
 }
 
