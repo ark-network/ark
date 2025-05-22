@@ -1,4 +1,4 @@
-\.PHONY: build-server build-client build-all-server build-all-client proto proto-lint build build-all
+.PHONY: build-server build-client build-all-server build-all-client proto proto-lint build build-all
 
 build-server:
 	@echo "Building arkd binary..."
