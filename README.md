@@ -80,7 +80,7 @@ The `arkd` server can be configured using environment variables.
 | `ARK_BITCOIND_ZMQ_TX` | Bitcoin Core ZMQ transaction endpoint | - |
 | `ARK_NO_MACAROONS` | Disable macaroon authentication | `false` |
 | `ARK_NO_TLS` | Disable TLS | `true` |
-| `ARK_UNLOCKER_TYPE` | Wallet unlocker type (env, file) | - |
+| `ARK_UNLOCKER_TYPE` | Wallet unlocker type (env, file) to enable auto-unlock | - |
 | `ARK_UNLOCKER_FILE_PATH` | Path to unlocker file | - |
 | `ARK_UNLOCKER_PASSWORD` | Wallet unlocker password | - |
 | `ARK_ROUND_MAX_PARTICIPANTS_COUNT` | Maximum number of participants per round | `128` |
