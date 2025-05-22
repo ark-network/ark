@@ -85,10 +85,6 @@ The `arkd` server can be configured using environment variables.
 | `ARK_UNLOCKER_PASSWORD` | Wallet unlocker password | - |
 | `ARK_ROUND_MAX_PARTICIPANTS_COUNT` | Maximum number of participants per round | `128` |
 
-For a complete list of configuration options, run:
-```sh
-arkd help
-```
 
 ## Provisioning
 
