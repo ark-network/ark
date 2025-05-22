@@ -7,6 +7,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcwallet/waddrmgr"
 )
 
 const (
@@ -14,15 +15,15 @@ const (
 	cltvSequence = wire.MaxTxInSequenceNum - 1
 )
 
-// BuildRedeemTx builds a redeem tx for the given vtxos and outputs.
+// buildRedeemTx builds a redeem tx for the given vtxos and outputs.
 // The redeem tx is spending VTXOs using collaborative taproot path.
 // An anchor output is added to the transaction
-func BuildRedeemTx(
+func buildRedeemTx(
 	vtxos []common.VtxoInput,
 	outputs []*wire.TxOut,
-) (string, error) {
+) (*psbt.Packet, error) {
 	if len(vtxos) <= 0 {
-		return "", fmt.Errorf("missing vtxos")
+		return nil, fmt.Errorf("missing vtxos")
 	}
 
 	ins := make([]*wire.OutPoint, 0, len(vtxos))
@@ -35,7 +36,7 @@ func BuildRedeemTx(
 
 	for index, vtxo := range vtxos {
 		if len(vtxo.RevealedTapscripts) == 0 {
-			return "", fmt.Errorf("missing tapscripts for input %d", index)
+			return nil, fmt.Errorf("missing tapscripts for input %d", index)
 		}
 
 		tapscripts[index] = vtxo.RevealedTapscripts
@@ -45,7 +46,7 @@ func BuildRedeemTx(
 
 		vtxoOutputScript, err := common.P2TRScript(taprootKey)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		witnessUtxos[index] = &wire.TxOut{
@@ -55,7 +56,7 @@ func BuildRedeemTx(
 
 		ctrlBlockBytes, err := vtxo.Tapscript.ControlBlock.ToBytes()
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		signingTapLeaves[index] = &psbt.TaprootTapLeafScript{
@@ -66,7 +67,7 @@ func BuildRedeemTx(
 
 		closure, err := DecodeClosure(vtxo.Tapscript.RevealedScript)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		// check if the closure is a CLTV multisig closure,
@@ -76,11 +77,11 @@ func BuildRedeemTx(
 			locktime = &cltv.Locktime
 			if locktime.IsSeconds() {
 				if txLocktime != 0 && !txLocktime.IsSeconds() {
-					return "", fmt.Errorf("mixed absolute locktime types")
+					return nil, fmt.Errorf("mixed absolute locktime types")
 				}
 			} else {
 				if txLocktime != 0 && txLocktime.IsSeconds() {
-					return "", fmt.Errorf("mixed absolute locktime types")
+					return nil, fmt.Errorf("mixed absolute locktime types")
 				}
 			}
 
@@ -101,21 +102,107 @@ func BuildRedeemTx(
 		ins, append(outputs, AnchorOutput()), 3, uint32(txLocktime), sequences,
 	)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	for i := range redeemPtx.Inputs {
 		redeemPtx.Inputs[i].WitnessUtxo = witnessUtxos[i]
 		redeemPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{signingTapLeaves[i]}
 		if err := AddTaprootTree(i, redeemPtx, tapscripts[i]); err != nil {
-			return "", err
+			return nil, err
 		}
 	}
 
-	redeemTx, err := redeemPtx.B64Encode()
+	return redeemPtx, nil
+}
+
+// buildCheckpoint creates a redeem tx sending to a "checkpoint" vtxo script composed of
+// the server exit script + the owner's spending closure.
+func buildCheckpoint(vtxo common.VtxoInput, serverExitScript *CSVMultisigClosure) (*psbt.Packet, common.VtxoInput, error) {
+	// create the checkpoint vtxo script from spending closure
+	spendingClosure, err := DecodeClosure(vtxo.Tapscript.RevealedScript)
 	if err != nil {
-		return "", err
+		return nil, common.VtxoInput{}, err
 	}
 
-	return redeemTx, nil
+	checkpointVtxoScript := TapscriptsVtxoScript{
+		[]Closure{serverExitScript, spendingClosure},
+	}
+
+	tapKey, tapTree, err := checkpointVtxoScript.TapTree()
+	if err != nil {
+		return nil, common.VtxoInput{}, err
+	}
+
+	checkpointPkScript, err := common.P2TRScript(tapKey)
+	if err != nil {
+		return nil, common.VtxoInput{}, err
+	}
+
+	// build the checkpoint redeem tx
+	checkpointPtx, err := buildRedeemTx(
+		[]common.VtxoInput{vtxo},
+		[]*wire.TxOut{{Value: vtxo.Amount, PkScript: checkpointPkScript}},
+	)
+	if err != nil {
+		return nil, common.VtxoInput{}, err
+	}
+
+	// get the proof of the output created by the checkpoint tx
+	spendingLeafProof, err := tapTree.GetTaprootMerkleProof(txscript.NewBaseTapLeaf(vtxo.Tapscript.RevealedScript).TapHash())
+	if err != nil {
+		return nil, common.VtxoInput{}, err
+	}
+
+	ctrlBlock, err := txscript.ParseControlBlock(spendingLeafProof.ControlBlock)
+	if err != nil {
+		return nil, common.VtxoInput{}, err
+	}
+
+	revealedTapscripts, err := checkpointVtxoScript.Encode()
+	if err != nil {
+		return nil, common.VtxoInput{}, err
+	}
+
+	checkpointInput := common.VtxoInput{
+		Outpoint: &wire.OutPoint{
+			Hash:  checkpointPtx.UnsignedTx.TxHash(),
+			Index: 0,
+		},
+		Amount: vtxo.Amount,
+		Tapscript: &waddrmgr.Tapscript{
+			ControlBlock:   ctrlBlock,
+			RevealedScript: spendingLeafProof.Script,
+		},
+		RevealedTapscripts: revealedTapscripts,
+	}
+
+	return checkpointPtx, checkpointInput, nil
+}
+
+// BuildOffchainTx builds an offchain tx for the given vtxos and outputs.
+// it also builds the checkpoint redeem txs for each input vtxo.
+func BuildOffchainTx(
+	vtxos []common.VtxoInput, outputs []*wire.TxOut,
+	serverExitScript *CSVMultisigClosure,
+) (*psbt.Packet, []*psbt.Packet, error) {
+	checkpointsInputs := make([]common.VtxoInput, 0, len(vtxos))
+	checkpointsTxs := make([]*psbt.Packet, 0, len(vtxos))
+
+	for _, vtxo := range vtxos {
+		checkpointPtx, checkpointInput, err := buildCheckpoint(vtxo, serverExitScript)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		checkpointsInputs = append(checkpointsInputs, checkpointInput)
+		checkpointsTxs = append(checkpointsTxs, checkpointPtx)
+	}
+
+	redeemPtx, err := buildRedeemTx(checkpointsInputs, outputs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return redeemPtx, checkpointsTxs, nil
 }

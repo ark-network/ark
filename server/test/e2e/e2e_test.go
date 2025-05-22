@@ -643,7 +643,15 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			tapscripts = append(tapscripts, hex.EncodeToString(script))
 		}
 
-		ptx, err := tree.BuildRedeemTx(
+		infos, err := grpcTransportClient.GetInfo(ctx)
+		require.NoError(t, err)
+
+		unilateralExitDelayType := common.LocktimeTypeSecond
+		if infos.UnilateralExitDelay < 512 {
+			unilateralExitDelayType = common.LocktimeTypeBlock
+		}
+
+		ptx, checkpointsPtx, err := tree.BuildOffchainTx(
 			[]common.VtxoInput{
 				{
 					Outpoint: &wire.OutPoint{
@@ -651,7 +659,6 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 						Index: bobOutputIndex,
 					},
 					Tapscript:          tapscript,
-					WitnessSize:        closure.WitnessSize(),
 					Amount:             bobOutput.Value,
 					RevealedTapscripts: tapscripts,
 				},
@@ -662,21 +669,55 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 					PkScript: alicePkScript,
 				},
 			},
+			&tree.CSVMultisigClosure{
+				Locktime: common.RelativeLocktime{
+					Type:  unilateralExitDelayType,
+					Value: uint32(infos.UnilateralExitDelay),
+				},
+				MultisigClosure: tree.MultisigClosure{
+					PubKeys: []*secp256k1.PublicKey{aliceAddr.Server},
+				},
+			},
 		)
+		require.NoError(t, err)
+
+		explorer := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+
+		encodedVirtualTx, err := ptx.B64Encode()
 		require.NoError(t, err)
 
 		signedTx, err := bobWallet.SignTransaction(
 			ctx,
-			explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest),
-			ptx,
+			explorer,
+			encodedVirtualTx,
 		)
 		require.NoError(t, err)
+
+		checkpoints := make([]string, 0, len(checkpointsPtx))
+		for _, ptx := range checkpointsPtx {
+			encoded, err := ptx.B64Encode()
+			require.NoError(t, err)
+			checkpoints = append(checkpoints, encoded)
+		}
 
 		// Generate blocks to pass the timelock
 		for i := 0; i < cltvBlocks+1; i++ {
 			err = utils.GenerateBlock()
 			require.NoError(t, err)
 		}
+
+		signedCheckpoints, _, bobTxid, err := grpcTransportClient.SubmitOffchainTx(ctx, signedTx, checkpoints)
+		require.NoError(t, err)
+
+		finalCheckpoints := make([]string, 0, len(signedCheckpoints))
+		for _, checkpoint := range signedCheckpoints {
+			finalCheckpoint, err := bobWallet.SignTransaction(ctx, explorer, checkpoint)
+			require.NoError(t, err)
+			finalCheckpoints = append(finalCheckpoints, finalCheckpoint)
+		}
+
+		err = grpcTransportClient.FinalizeOffchainTx(ctx, bobTxid, finalCheckpoints)
+		require.NoError(t, err)
 
 		wg.Add(1)
 		go func() {
@@ -685,8 +726,6 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, vtxos)
 		}()
-		_, bobTxid, err := grpcTransportClient.SubmitRedeemTx(ctx, signedTx)
-		require.NoError(t, err)
 
 		wg.Wait()
 
@@ -707,16 +746,14 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		round, err := grpcTransportClient.GetRound(ctx, initialTreeVtxo.RoundTxid)
 		require.NoError(t, err)
 
-		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
-
-		branch, err := redemption.NewRedeemBranch(expl, round.Tree, initialTreeVtxo)
+		branch, err := redemption.NewRedeemBranch(explorer, round.Tree, initialTreeVtxo)
 		require.NoError(t, err)
 
 		txs, err := branch.RedeemPath()
 		require.NoError(t, err)
 
 		for _, tx := range txs {
-			_, err := expl.Broadcast(tx)
+			_, err := explorer.Broadcast(tx)
 			require.NoError(t, err)
 		}
 
@@ -1133,7 +1170,15 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 		tapscripts = append(tapscripts, hex.EncodeToString(script))
 	}
 
-	ptx, err := tree.BuildRedeemTx(
+	infos, err := grpcAlice.GetInfo(ctx)
+	require.NoError(t, err)
+
+	unilateralExitDelayType := common.LocktimeTypeSecond
+	if infos.UnilateralExitDelay < 512 {
+		unilateralExitDelayType = common.LocktimeTypeBlock
+	}
+
+	ptx, checkpointsPtx, err := tree.BuildOffchainTx(
 		[]common.VtxoInput{
 			{
 				Outpoint: &wire.OutPoint{
@@ -1141,7 +1186,6 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 					Index: bobOutputIndex,
 				},
 				Tapscript:          tapscript,
-				WitnessSize:        closure.WitnessSize(),
 				Amount:             bobOutput.Value,
 				RevealedTapscripts: tapscripts,
 			},
@@ -1152,18 +1196,39 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 				PkScript: alicePkScript,
 			},
 		},
+		&tree.CSVMultisigClosure{
+			Locktime: common.RelativeLocktime{
+				Type:  unilateralExitDelayType,
+				Value: uint32(infos.UnilateralExitDelay),
+			},
+			MultisigClosure: tree.MultisigClosure{
+				PubKeys: []*secp256k1.PublicKey{aliceAddr.Server},
+			},
+		},
 	)
+	require.NoError(t, err)
+
+	explorer := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+
+	encodedVirtualTx, err := ptx.B64Encode()
 	require.NoError(t, err)
 
 	signedTx, err := bobWallet.SignTransaction(
 		ctx,
-		explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest),
-		ptx,
+		explorer,
+		encodedVirtualTx,
 	)
 	require.NoError(t, err)
 
+	checkpoints := make([]string, 0, len(checkpointsPtx))
+	for _, ptx := range checkpointsPtx {
+		encoded, err := ptx.B64Encode()
+		require.NoError(t, err)
+		checkpoints = append(checkpoints, encoded)
+	}
+
 	// should fail because the tx is not yet valid
-	_, _, err = grpcAlice.SubmitRedeemTx(ctx, signedTx)
+	_, _, _, err = grpcAlice.SubmitOffchainTx(ctx, signedTx, checkpoints)
 	require.Error(t, err)
 
 	// Generate blocks to pass the timelock
@@ -1172,7 +1237,18 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	_, _, err = grpcAlice.SubmitRedeemTx(ctx, signedTx)
+	// should succeed now
+	signedCheckpoints, _, txid, err := grpcAlice.SubmitOffchainTx(ctx, signedTx, checkpoints)
+	require.NoError(t, err)
+
+	finalCheckpoints := make([]string, 0, len(signedCheckpoints))
+	for _, checkpoint := range signedCheckpoints {
+		finalCheckpoint, err := bobWallet.SignTransaction(ctx, explorer, checkpoint)
+		require.NoError(t, err)
+		finalCheckpoints = append(finalCheckpoints, finalCheckpoint)
+	}
+
+	err = grpcAlice.FinalizeOffchainTx(ctx, txid, finalCheckpoints)
 	require.NoError(t, err)
 }
 
@@ -1338,7 +1414,15 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 		tapscripts = append(tapscripts, hex.EncodeToString(script))
 	}
 
-	ptx, err := tree.BuildRedeemTx(
+	infos, err := grpcAlice.GetInfo(ctx)
+	require.NoError(t, err)
+
+	unilateralExitDelayType := common.LocktimeTypeSecond
+	if infos.UnilateralExitDelay < 512 {
+		unilateralExitDelayType = common.LocktimeTypeBlock
+	}
+
+	ptx, checkpointsPtx, err := tree.BuildOffchainTx(
 		[]common.VtxoInput{
 			{
 				Outpoint: &wire.OutPoint{
@@ -1346,7 +1430,6 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 					Index: bobOutputIndex,
 				},
 				Tapscript:          tapscript,
-				WitnessSize:        closure.WitnessSize(),
 				Amount:             bobOutput.Value,
 				RevealedTapscripts: tapscripts,
 			},
@@ -1357,26 +1440,60 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 				PkScript: alicePkScript,
 			},
 		},
+		&tree.CSVMultisigClosure{
+			Locktime: common.RelativeLocktime{
+				Type:  unilateralExitDelayType,
+				Value: uint32(infos.UnilateralExitDelay),
+			},
+			MultisigClosure: tree.MultisigClosure{
+				PubKeys: []*secp256k1.PublicKey{aliceAddr.Server},
+			},
+		},
 	)
 	require.NoError(t, err)
 
-	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(ptx), true)
+	explorer := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+
+	err = tree.AddConditionWitness(0, ptx, wire.TxWitness{preimage[:]})
 	require.NoError(t, err)
 
-	err = tree.AddConditionWitness(0, partialTx, wire.TxWitness{preimage[:]})
-	require.NoError(t, err)
-
-	ptx, err = partialTx.B64Encode()
+	encodedVirtualTx, err := ptx.B64Encode()
 	require.NoError(t, err)
 
 	signedTx, err := bobWallet.SignTransaction(
 		ctx,
-		explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest),
-		ptx,
+		explorer,
+		encodedVirtualTx,
 	)
 	require.NoError(t, err)
 
-	_, _, err = grpcAlice.SubmitRedeemTx(ctx, signedTx)
+	checkpoints := make([]string, 0, len(checkpointsPtx))
+	for _, ptx := range checkpointsPtx {
+		encoded, err := ptx.B64Encode()
+		require.NoError(t, err)
+		checkpoints = append(checkpoints, encoded)
+	}
+
+	signedCheckpoints, _, bobTxid, err := grpcAlice.SubmitOffchainTx(ctx, signedTx, checkpoints)
+	require.NoError(t, err)
+
+	finalCheckpoints := make([]string, 0, len(signedCheckpoints))
+	for _, checkpoint := range signedCheckpoints {
+		ptx, err := psbt.NewFromRawBytes(strings.NewReader(checkpoint), true)
+		require.NoError(t, err)
+
+		err = tree.AddConditionWitness(0, ptx, wire.TxWitness{preimage[:]})
+		require.NoError(t, err)
+
+		encoded, err := ptx.B64Encode()
+		require.NoError(t, err)
+
+		finalCheckpoint, err := bobWallet.SignTransaction(ctx, explorer, encoded)
+		require.NoError(t, err)
+		finalCheckpoints = append(finalCheckpoints, finalCheckpoint)
+	}
+
+	err = grpcAlice.FinalizeOffchainTx(ctx, bobTxid, finalCheckpoints)
 	require.NoError(t, err)
 }
 

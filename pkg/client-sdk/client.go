@@ -617,23 +617,44 @@ func (a *covenantlessArkClient) SendOffChain(
 		})
 	}
 
-	feeRate := chainfee.FeePerKwFloor
-	redeemTx, err := buildRedeemTx(inputs, receivers, feeRate.FeePerVByte(), nil, withZeroFees)
+	checkpointExitScript := &tree.CSVMultisigClosure{
+		Locktime: a.UnilateralExitDelay,
+		MultisigClosure: tree.MultisigClosure{
+			PubKeys: []*secp256k1.PublicKey{a.ServerPubKey},
+		},
+	}
+
+	virtualTx, checkpointsTxs, err := buildOffchainTx(inputs, receivers, nil, checkpointExitScript)
 	if err != nil {
 		return "", err
 	}
 
-	signedRedeemTx, err := a.wallet.SignTransaction(ctx, a.explorer, redeemTx)
+	signedVirtualTx, err := a.wallet.SignTransaction(ctx, a.explorer, virtualTx)
 	if err != nil {
 		return "", err
 	}
 
-	_, redeemTxid, err := a.client.SubmitRedeemTx(ctx, signedRedeemTx)
+	// TODO store signed virtual tx client side ?
+	signedCheckpoints, _, virtualTxid, err := a.client.SubmitOffchainTx(ctx, signedVirtualTx, checkpointsTxs)
 	if err != nil {
 		return "", err
 	}
 
-	return redeemTxid, nil
+	finalCheckpoints := make([]string, 0, len(signedCheckpoints))
+
+	for _, checkpoint := range signedCheckpoints {
+		signedTx, err := a.wallet.SignTransaction(ctx, a.explorer, checkpoint)
+		if err != nil {
+			return "", nil
+		}
+		finalCheckpoints = append(finalCheckpoints, signedTx)
+	}
+
+	if err = a.client.FinalizeOffchainTx(ctx, virtualTxid, finalCheckpoints); err != nil {
+		return "", err
+	}
+
+	return virtualTxid, nil
 }
 
 func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string, opts ...Option) (string, error) {
@@ -3457,27 +3478,26 @@ type redeemTxInput struct {
 	ForfeitLeafHash chainhash.Hash
 }
 
-func buildRedeemTx(
+func buildOffchainTx(
 	vtxos []redeemTxInput,
 	receivers []Receiver,
-	feeRate chainfee.SatPerVByte,
 	extraWitnessSizes map[client.Outpoint]int,
-	withZeroFees bool,
-) (string, error) {
+	serverExitScript *tree.CSVMultisigClosure,
+) (string, []string, error) {
 	if len(vtxos) <= 0 {
-		return "", fmt.Errorf("missing vtxos")
+		return "", nil, fmt.Errorf("missing vtxos")
 	}
 
 	ins := make([]common.VtxoInput, 0, len(vtxos))
 
 	for _, vtxo := range vtxos {
 		if len(vtxo.Tapscripts) <= 0 {
-			return "", fmt.Errorf("missing tapscripts for vtxo %s", vtxo.Txid)
+			return "", nil, fmt.Errorf("missing tapscripts for vtxo %s", vtxo.Txid)
 		}
 
 		vtxoTxID, err := chainhash.NewHashFromStr(vtxo.Txid)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		vtxoOutpoint := &wire.OutPoint{
@@ -3487,27 +3507,22 @@ func buildRedeemTx(
 
 		vtxoScript, err := tree.ParseVtxoScript(vtxo.Tapscripts)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		_, vtxoTree, err := vtxoScript.TapTree()
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		leafProof, err := vtxoTree.GetTaprootMerkleProof(vtxo.ForfeitLeafHash)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
 		if err != nil {
-			return "", err
-		}
-
-		closure, err := tree.DecodeClosure(leafProof.Script)
-		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		tapscript := &waddrmgr.Tapscript{
@@ -3515,16 +3530,10 @@ func buildRedeemTx(
 			ControlBlock:   ctrlBlock,
 		}
 
-		extraWitnessSize := 0
-		if size, ok := extraWitnessSizes[client.Outpoint{Txid: vtxo.Txid, VOut: vtxo.VOut}]; ok {
-			extraWitnessSize = size
-		}
-
 		ins = append(ins, common.VtxoInput{
 			Outpoint:           vtxoOutpoint,
 			Tapscript:          tapscript,
 			Amount:             int64(vtxo.Amount),
-			WitnessSize:        closure.WitnessSize(extraWitnessSize),
 			RevealedTapscripts: vtxo.Tapscripts,
 		})
 	}
@@ -3533,17 +3542,17 @@ func buildRedeemTx(
 
 	for i, receiver := range receivers {
 		if receiver.IsOnchain() {
-			return "", fmt.Errorf("receiver %d is onchain", i)
+			return "", nil, fmt.Errorf("receiver %d is onchain", i)
 		}
 
 		addr, err := common.DecodeAddress(receiver.To())
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		newVtxoScript, err := common.P2TRScript(addr.VtxoTapKey)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		outs = append(outs, &wire.TxOut{
@@ -3552,7 +3561,26 @@ func buildRedeemTx(
 		})
 	}
 
-	return tree.BuildRedeemTx(ins, outs)
+	virtualTx, checkpointsTxs, err := tree.BuildOffchainTx(ins, outs, serverExitScript)
+	if err != nil {
+		return "", nil, err
+	}
+
+	virtualTxB64, err := virtualTx.B64Encode()
+	if err != nil {
+		return "", nil, err
+	}
+
+	checkpoints := make([]string, 0, len(checkpointsTxs))
+	for _, tx := range checkpointsTxs {
+		txB64, err := tx.B64Encode()
+		if err != nil {
+			return "", nil, err
+		}
+		checkpoints = append(checkpoints, txB64)
+	}
+
+	return virtualTxB64, checkpoints, nil
 }
 
 func inputsToDerivationPath(inputs []client.Outpoint, notesInputs []string) string {

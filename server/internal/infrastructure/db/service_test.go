@@ -123,9 +123,8 @@ var (
 			Tx:   f4,
 		}
 	}
-	now             = time.Now()
-	endTimestamp    = now.Add(3 * time.Second).Unix()
-	expiryTimestamp = now.Add(1 * time.Hour).Unix()
+	now          = time.Now()
+	endTimestamp = now.Add(3 * time.Second).Unix()
 )
 
 func TestMain(m *testing.M) {
@@ -627,7 +626,6 @@ func testOffchainTxRepository(t *testing.T, svc ports.RepoManager) {
 				Id:                 virtualTxid,
 				FinalCheckpointTxs: nil,
 				Timestamp:          endTimestamp,
-				ExpiryTimestamp:    expiryTimestamp,
 			},
 		}
 		events = append(events, newEvents...)

@@ -113,6 +113,30 @@ func deserializeEvent(buf []byte) (domain.Event, error) {
 			return event, nil
 		}
 	}
+	{
+		var event = domain.OffchainTxRequested{}
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.Id) > 0 {
+			return event, nil
+		}
+	}
+	{
+		var event = domain.OffchainTxAccepted{}
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.Id) > 0 {
+			return event, nil
+		}
+	}
+	{
+		var event = domain.OffchainTxFinalized{}
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.Id) > 0 {
+			return event, nil
+		}
+	}
+	{
+		var event = domain.OffchainTxFailed{}
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.Id) > 0 {
+			return event, nil
+		}
+	}
 
 	return nil, fmt.Errorf("unknown event")
 }
