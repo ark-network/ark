@@ -1321,7 +1321,18 @@ func (a *covenantlessArkClient) completeUnilateralExit(
 		}
 	}
 
-	return ptx.B64Encode()
+	tx, err := psbt.Extract(ptx)
+	if err != nil {
+		return "", err
+	}
+
+	buf := bytes.NewBuffer(nil)
+	if err := tx.Serialize(buf); err != nil {
+		return "", err
+	}
+
+	txHex := hex.EncodeToString(buf.Bytes())
+	return a.explorer.Broadcast(txHex)
 }
 
 func (a *covenantlessArkClient) selectFunds(
