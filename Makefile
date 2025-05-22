@@ -1,4 +1,4 @@
-.PHONY: build-server build-all-server proto proto-lint build build-all
+\.PHONY: build-server build-client build-all-server build-all-client proto proto-lint build build-all
 
 build-server:
 	@echo "Building arkd binary..."
@@ -7,9 +7,6 @@ build-server:
 build-client:
 	@echo "Building ark binary..."
 	@bash ./client/scripts/build
-
-# Client and WASM builds are no longer actively maintained in this repository
-# Kept for reference but not used in the main build targets
 
 build-all-server:
 	@echo "Building arkd binary for all archs..."
@@ -23,8 +20,8 @@ build-wasm:
 	@echo "Building wasm..."
 	@$(MAKE) -C pkg/client-sdk build-wasm
 
-build: build-server
-build-all: build-all-server
+build: build-server build-client build-wasm
+build-all: build-all-server build-all-client build-wasm
 
 proto: proto-lint
 	@echo "Compiling stubs..."
