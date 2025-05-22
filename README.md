@@ -163,6 +163,11 @@ export ARK_NEUTRINO_PEER=yourhost:p2p_port_bitcoin
    arkd wallet balance
    ```
 
+For a complete list of available commands and options:
+   ```sh
+   arkd help
+   ```
+
 ## Repository Structure
 
 - [`api-spec`](./api-spec/): Ark Protocol Buffer API specification
