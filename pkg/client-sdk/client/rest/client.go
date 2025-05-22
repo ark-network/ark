@@ -24,7 +24,6 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 // restClient implements the TransportClient interface for REST communication
@@ -358,18 +357,11 @@ func (c *restClient) GetEventStream(
 					vtxoTree := treeFromProto{e.VtxoTree}.parse()
 					connectorTree := treeFromProto{e.Connectors}.parse()
 
-					minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
-					if err != nil {
-						_err = err
-						break
-					}
-
 					event = client.RoundFinalizationEvent{
 						ID:              e.ID,
 						Tx:              e.RoundTx,
 						Tree:            vtxoTree,
 						Connectors:      connectorTree,
-						MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
 						ConnectorsIndex: connectorsIndexFromProto{e.ConnectorsIndex}.parse(),
 					}
 				case resp.Result.RoundFinalized != nil:

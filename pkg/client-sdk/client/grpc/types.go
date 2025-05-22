@@ -9,7 +9,6 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 type out client.Output
@@ -61,7 +60,6 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 			Tx:              ee.GetRoundTx(),
 			Tree:            vtxoTree,
 			Connectors:      connectorTree,
-			MinRelayFeeRate: chainfee.SatPerKVByte(ee.MinRelayFeeRate),
 			ConnectorsIndex: connectorsIndex,
 		}, nil
 	}

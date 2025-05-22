@@ -786,10 +786,6 @@
         "connectors": {
           "$ref": "#/definitions/v1Tree"
         },
-        "minRelayFeeRate": {
-          "type": "string",
-          "format": "int64"
-        },
         "connectorsIndex": {
           "type": "object",
           "additionalProperties": {

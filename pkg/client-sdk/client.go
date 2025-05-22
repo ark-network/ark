@@ -37,7 +37,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lntypes"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
 )
@@ -2234,7 +2233,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 		signedForfeits, err := a.createAndSignForfeits(
 			ctx,
 			vtxos, event.Connectors.Leaves(),
-			event.ConnectorsIndex, event.MinRelayFeeRate,
+			event.ConnectorsIndex,
 		)
 		if err != nil {
 			return nil, "", err
@@ -2479,7 +2478,6 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 	vtxosToSign []client.TapscriptsVtxo,
 	connectorsTxs []tree.Node,
 	connectorsIndex map[string]client.Outpoint,
-	feeRate chainfee.SatPerKVByte,
 ) ([]string, error) {
 	parsedForfeitAddr, err := btcutil.DecodeAddress(a.ForfeitAddress, nil)
 	if err != nil {
@@ -2487,11 +2485,6 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 	}
 
 	forfeitPkScript, err := txscript.PayToAddrScript(parsedForfeitAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	parsedScript, err := txscript.ParsePkScript(forfeitPkScript)
 	if err != nil {
 		return nil, err
 	}
@@ -2569,24 +2562,6 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			LeafVersion:  txscript.BaseLeafVersion,
 		}
 
-		ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
-		if err != nil {
-			return nil, err
-		}
-
-		feeAmount, err := common.ComputeForfeitTxFee(
-			feeRate,
-			&waddrmgr.Tapscript{
-				RevealedScript: leafProof.Script,
-				ControlBlock:   ctrlBlock,
-			},
-			forfeitClosure.WitnessSize(),
-			parsedScript.Class(),
-		)
-		if err != nil {
-			return nil, err
-		}
-
 		vtxoLocktime := common.AbsoluteLocktime(0)
 		if cltv, ok := forfeitClosure.(*tree.CLTVMultisigClosure); ok {
 			vtxoLocktime = cltv.Locktime
@@ -2605,7 +2580,6 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			vtxoInput,
 			vtxo.Amount,
 			uint64(connector.Value),
-			feeAmount,
 			vtxoOutputScript,
 			connector.PkScript,
 			forfeitPkScript,

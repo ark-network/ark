@@ -13,7 +13,6 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 const (
@@ -234,7 +233,6 @@ type RoundFinalizationEvent struct {
 	Tx              string
 	Tree            tree.TxTree
 	Connectors      tree.TxTree
-	MinRelayFeeRate chainfee.SatPerKVByte
 	ConnectorsIndex map[string]Outpoint // <txid:vout> -> outpoint
 }
 

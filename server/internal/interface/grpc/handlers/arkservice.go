@@ -562,7 +562,6 @@ func (h *handler) listenToEvents() {
 						RoundTx:         e.RoundTx,
 						VtxoTree:        vtxoTree(e.VtxoTree).toProto(),
 						Connectors:      vtxoTree(e.Connectors).toProto(),
-						MinRelayFeeRate: e.MinRelayFeeRate,
 						ConnectorsIndex: connectorsIndex(e.ConnectorsIndex).toProto(),
 					},
 				},

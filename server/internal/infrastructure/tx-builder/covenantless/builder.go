@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"math"
 	"strings"
 
 	"github.com/ark-network/ark/common"
@@ -19,7 +18,6 @@ import (
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
-	"github.com/btcsuite/btcwallet/waddrmgr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
@@ -309,8 +307,6 @@ func (b *txBuilder) VerifyForfeitTxs(
 		return nil, err
 	}
 
-	minRate := b.wallet.MinRelayFeeRate(context.Background())
-
 	blocktimestamp, err := b.wallet.GetCurrentBlockTime(context.Background())
 	if err != nil {
 		return nil, err
@@ -392,21 +388,12 @@ func (b *txBuilder) VerifyForfeitTxs(
 		}
 
 		inputAmount := vtxo.Amount + uint64(connectorOutput.Value)
-		feeAmount := inputAmount - outputAmount
 
 		if len(tx.Inputs[1].TaprootLeafScript) <= 0 {
 			return nil, fmt.Errorf("missing taproot leaf script for vtxo input, invalid forfeit tx")
 		}
 
 		vtxoTapscript := tx.Inputs[1].TaprootLeafScript[0]
-		conditionWitness, err := tree.GetConditionWitness(tx.Inputs[1])
-		if err != nil {
-			return nil, err
-		}
-		conditionWitnessSize := 0
-		for _, witness := range conditionWitness {
-			conditionWitnessSize += len(witness)
-		}
 
 		// verify the forfeit closure script
 		closure, err := tree.DecodeClosure(vtxoTapscript.Script)
@@ -436,36 +423,8 @@ func (b *txBuilder) VerifyForfeitTxs(
 			}
 		}
 
-		ctrlBlock, err := txscript.ParseControlBlock(vtxoTapscript.ControlBlock)
-		if err != nil {
-			return nil, err
-		}
-
-		minFee, err := common.ComputeForfeitTxFee(
-			minRate,
-			&waddrmgr.Tapscript{
-				RevealedScript: vtxoTapscript.Script,
-				ControlBlock:   ctrlBlock,
-			},
-			closure.WitnessSize(conditionWitnessSize),
-			txscript.GetScriptClass(forfeitScript),
-		)
-		if err != nil {
-			return nil, err
-		}
-
-		if inputAmount-feeAmount < dustAmount {
-			return nil, fmt.Errorf("forfeit tx output amount is dust, %d < %d", inputAmount-feeAmount, dustAmount)
-		}
-
-		if feeAmount < uint64(minFee) {
-			return nil, fmt.Errorf("forfeit tx fee is lower than the min relay fee, %d < %d", feeAmount, minFee)
-		}
-
-		feeThreshold := uint64(math.Ceil(float64(minFee) * 1.05))
-
-		if feeAmount > feeThreshold {
-			return nil, fmt.Errorf("forfeit tx fee is higher than 5%% of the min relay fee, %d > %d", feeAmount, feeThreshold)
+		if inputAmount < dustAmount {
+			return nil, fmt.Errorf("forfeit tx output amount is dust, %d < %d", inputAmount, dustAmount)
 		}
 
 		vtxoTapKey, err := vtxo.TapKey()
@@ -489,7 +448,6 @@ func (b *txBuilder) VerifyForfeitTxs(
 			},
 			vtxo.Amount,
 			uint64(connectorOutput.Value),
-			feeAmount,
 			vtxoScript,
 			connectorOutput.PkScript,
 			forfeitScript,

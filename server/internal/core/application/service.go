@@ -2198,21 +2198,7 @@ func (s *covenantlessService) listenToScannerNotifications() {
 
 func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	lastEvent := round.Events()[len(round.Events())-1]
-	switch e := lastEvent.(type) {
-	case domain.RoundFinalizationStarted:
-		ev := domain.RoundFinalizationStarted{
-			Id:               e.Id,
-			VtxoTree:         e.VtxoTree,
-			Connectors:       e.Connectors,
-			RoundTx:          e.RoundTx,
-			MinRelayFeeRate:  int64(s.wallet.MinRelayFeeRate(context.Background())),
-			ConnectorAddress: e.ConnectorAddress,
-			ConnectorsIndex:  e.ConnectorsIndex,
-		}
-		s.eventsCh <- ev
-	default:
-		s.eventsCh <- e
-	}
+	s.eventsCh <- lastEvent
 }
 
 func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
