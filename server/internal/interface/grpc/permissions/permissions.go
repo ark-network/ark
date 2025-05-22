@@ -138,7 +138,11 @@ func Whitelist() map[string][]bakery.Op {
 			Entity: EntityArk,
 			Action: "read",
 		}},
-		fmt.Sprintf("/%s/SubmitRedeemTx", arkv1.ArkService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/SubmitOffchainTx", arkv1.ArkService_ServiceDesc.ServiceName): {{
+			Entity: EntityArk,
+			Action: "write",
+		}},
+		fmt.Sprintf("/%s/FinalizeOffchainTx", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
 		}},
