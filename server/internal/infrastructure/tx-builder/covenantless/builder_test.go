@@ -37,7 +37,7 @@ func TestMain(m *testing.M) {
 	wallet = &mockedWallet{}
 	wallet.On("EstimateFees", mock.Anything, mock.Anything).
 		Return(uint64(100), nil)
-	wallet.On("SelectUtxos", mock.Anything, mock.Anything, mock.Anything).
+	wallet.On("SelectUtxos", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(randomInput, uint64(1000), nil)
 	wallet.On("DeriveAddresses", mock.Anything, mock.Anything).
 		Return([]string{changeAddress}, nil)
