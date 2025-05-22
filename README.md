@@ -14,7 +14,7 @@
 
 ## What is arkd?
 
-`arkd` is the server implementation of Arkade instance that builds on top of the Ark protocol, a layer-2 solution for Bitcoin that enables fast, low-cost off-chain transactions while maintaining Bitcoin's security guarantees. As an Ark Operator, the server:
+`arkd` is the server implementation of Arkade instance that builds on top of the Ark protocol, a Bitcoin scaling solution that enables fast, low-cost off-chain transactions while maintaining Bitcoin's security guarantees. As an Arkade Operator, the server:
 
 - Creates and manages Batch Outputs through on-chain Bitcoin transactions
 - Facilitates off-chain transactions between users
