@@ -783,7 +783,7 @@ func (a *covenantlessArkClient) StartUnilateralExit(ctx context.Context) error {
 // bumpAnchorTx is crafting and signing a transaction bumping the fees for a given tx with P2A output
 // it is using the onchain P2TR account to select UTXOs
 func (a *covenantlessArkClient) bumpAnchorTx(ctx context.Context, parent *wire.MsgTx) (string, error) {
-	anchor, err := findAnchorOutpoint(parent)
+	anchor, err := tree.FindAnchorOutpoint(parent)
 	if err != nil {
 		return "", err
 	}
@@ -3839,25 +3839,6 @@ func computeVSize(tx *wire.MsgTx) lntypes.VByte {
 	totalSize := tx.SerializeSize() // including witness
 	weight := totalSize + baseSize*3
 	return lntypes.WeightUnit(uint64(weight)).ToVB()
-}
-
-func findAnchorOutpoint(tx *wire.MsgTx) (*wire.OutPoint, error) {
-	anchorIndex := -1
-	for outIndex, out := range tx.TxOut {
-		if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
-			anchorIndex = outIndex
-			break
-		}
-	}
-
-	if anchorIndex == -1 {
-		return nil, fmt.Errorf("anchor not found")
-	}
-
-	return &wire.OutPoint{
-		Hash:  tx.TxHash(),
-		Index: uint32(anchorIndex),
-	}, nil
 }
 
 // custom BIP322 finalizer function handling note vtxo inputs

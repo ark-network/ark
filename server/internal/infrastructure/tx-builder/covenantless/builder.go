@@ -912,7 +912,7 @@ func (b *txBuilder) createRoundTx(
 		}
 
 		// change is not enough to cover the remaining fees, let's re-select utxos
-		newUtxos, newChange, err := b.wallet.SelectUtxos(ctx, "", feeAmount-exceedingValue)
+		newUtxos, newChange, err := b.wallet.SelectUtxos(ctx, "", feeAmount-exceedingValue, false)
 		if err != nil {
 			return nil, err
 		}
@@ -1097,7 +1097,7 @@ func (b *txBuilder) selectUtxos(
 		return selectedConnectorsUtxos, selectedConnectorsAmount - amount, nil
 	}
 
-	utxos, change, err := b.wallet.SelectUtxos(ctx, "", amount-selectedConnectorsAmount)
+	utxos, change, err := b.wallet.SelectUtxos(ctx, "", amount-selectedConnectorsAmount, false)
 	if err != nil {
 		return nil, 0, err
 	}

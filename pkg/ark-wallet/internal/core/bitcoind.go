@@ -3,6 +3,7 @@ package application
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"strings"
 
 	"github.com/btcsuite/btcd/chaincfg/chainhash"
@@ -14,23 +15,28 @@ type bitcoindRPCClient struct {
 	chainClient *chain.BitcoindClient
 }
 
-func (b *bitcoindRPCClient) broadcast(txhex string) error {
-	var tx wire.MsgTx
+// TODO support submitpackage, need btcwallet update ?
+func (b *bitcoindRPCClient) broadcast(txs ...string) error {
+	if len(txs) == 1 {
+		var tx wire.MsgTx
 
-	err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txhex)))
-	if err != nil {
-		return err
-	}
-
-	_, err = b.chainClient.SendRawTransaction(&tx, true)
-	if err != nil {
-		if errors.Is(err, chain.ErrNonBIP68Final) {
-			return ErrNonFinalBIP68
+		err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txs[0])))
+		if err != nil {
+			return err
 		}
-		return err
+
+		_, err = b.chainClient.SendRawTransaction(&tx, true)
+		if err != nil {
+			if errors.Is(err, chain.ErrNonBIP68Final) {
+				return ErrNonFinalBIP68
+			}
+			return err
+		}
+
+		return nil
 	}
 
-	return nil
+	return fmt.Errorf("package relay not supported")
 }
 
 func (b *bitcoindRPCClient) getTxStatus(txid string) (isConfirmed bool, height, blocktime int64, err error) {

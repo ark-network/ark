@@ -310,9 +310,6 @@ func TestCollaborativeExit(t *testing.T) {
 }
 
 func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
-	// TODO remove when checkpoint is implemented
-	t.Skip()
-
 	ctx := context.Background()
 	client, grpcClient := setupArkSDK(t)
 	defer client.Stop()
@@ -369,12 +366,21 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	require.NoError(t, err)
 
 	for _, tx := range txs {
-		_, err := expl.Broadcast(tx)
+		var transaction wire.MsgTx
+		err := transaction.Deserialize(hex.NewDecoder(strings.NewReader(tx)))
 		require.NoError(t, err)
+
+		childTx := utils.BumpAnchorTx(t, &transaction, expl)
+
+		_, err = expl.Broadcast(tx, childTx)
+		require.NoError(t, err)
+
+		time.Sleep(1 * time.Second)
+		utils.GenerateBlock()
 	}
 
 	// give time for the server to detect and process the fraud
-	time.Sleep(20 * time.Second)
+	utils.GenerateBlocks(30)
 
 	balance, err := client.Balance(ctx, false)
 	require.NoError(t, err)
@@ -383,9 +389,6 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 }
 
 func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
-	// TODO remove when checkpoint is implemented
-	t.Skip()
-
 	t.Run("default vtxo script", func(t *testing.T) {
 		ctx := context.Background()
 		sdkClient, grpcClient := setupArkSDK(t)
@@ -468,13 +471,21 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, tx := range txs {
-			_, err := expl.Broadcast(tx)
+			var transaction wire.MsgTx
+			err := transaction.Deserialize(hex.NewDecoder(strings.NewReader(tx)))
 			require.NoError(t, err)
+
+			childTx := utils.BumpAnchorTx(t, &transaction, expl)
+
+			_, err = expl.Broadcast(tx, childTx)
+			require.NoError(t, err)
+
+			time.Sleep(1 * time.Second)
+			utils.GenerateBlock()
 		}
 
 		// give time for the server to detect and process the fraud
-		time.Sleep(30 * time.Second)
-
+		utils.GenerateBlocks(30)
 		balance, err := sdkClient.Balance(ctx, false)
 		require.NoError(t, err)
 
@@ -753,16 +764,27 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, tx := range txs {
-			_, err := explorer.Broadcast(tx)
+			var transaction wire.MsgTx
+			err := transaction.Deserialize(hex.NewDecoder(strings.NewReader(tx)))
 			require.NoError(t, err)
+
+			childTx := utils.BumpAnchorTx(t, &transaction, explorer)
+
+			_, err = explorer.Broadcast(tx, childTx)
+			require.NoError(t, err)
+
+			time.Sleep(1 * time.Second)
+			utils.GenerateBlock()
 		}
 
 		// give time for the server to detect and process the fraud
-		time.Sleep(20 * time.Second)
+		utils.GenerateBlocks(30)
 
+		// make sure the vtxo of bob is not redeemed
+		// the checkpoint is not the bob's virtual tx
 		_, bobSpentVtxos, err := grpcTransportClient.ListVtxos(ctx, bobAddrStr)
 		require.NoError(t, err)
-		require.Len(t, bobSpentVtxos, 0)
+		require.Len(t, bobSpentVtxos, 1)
 
 		// make sure the vtxo of alice is not spendable
 		aliceVtxos, _, err = alice.ListVtxos(ctx)

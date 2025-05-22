@@ -2373,111 +2373,6 @@ func (s *covenantlessService) chainParams() *chaincfg.Params {
 	}
 }
 
-func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo, mutx *sync.Mutex) error {
-	mutx.Lock()
-	defer mutx.Unlock()
-	roundRepo := s.repoManager.Rounds()
-
-	round, err := roundRepo.GetRoundWithTxid(ctx, vtxo.SpentBy)
-	if err != nil {
-		vtxosRepo := s.repoManager.Vtxos()
-
-		// If the round is not found, the utxo may be spent by an out of round tx
-		vtxos, err := vtxosRepo.GetVtxos(ctx, []domain.VtxoKey{
-			{Txid: vtxo.SpentBy, VOut: 0},
-		})
-		if err != nil || len(vtxos) <= 0 {
-			return fmt.Errorf("failed to retrieve round: %s", err)
-		}
-
-		storedVtxo := vtxos[0]
-		if storedVtxo.Redeemed { // redeem tx is already onchain
-			return nil
-		}
-
-		log.Debugf("vtxo %s:%d has been spent by out of round transaction", vtxo.Txid, vtxo.VOut)
-
-		redeemTxHex, err := s.builder.FinalizeAndExtract(storedVtxo.RedeemTx)
-		if err != nil {
-			return fmt.Errorf("failed to finalize redeem tx: %s", err)
-		}
-
-		redeemTxid, err := s.wallet.BroadcastTransaction(ctx, redeemTxHex)
-		if err != nil {
-			return fmt.Errorf("failed to broadcast redeem tx: %s", err)
-		}
-
-		log.Debugf("broadcasted redeem tx %s", redeemTxid)
-		return nil
-	}
-
-	// Find the forfeit tx of the VTXO
-	forfeitTx, err := findForfeitTxBitcoin(round.ForfeitTxs, vtxo.VtxoKey)
-	if err != nil {
-		return fmt.Errorf("failed to find forfeit tx: %s", err)
-	}
-
-	if len(forfeitTx.UnsignedTx.TxIn) <= 0 {
-		return fmt.Errorf("invalid forfeit tx: %s", forfeitTx.UnsignedTx.TxHash().String())
-	}
-
-	connector := forfeitTx.UnsignedTx.TxIn[0]
-	connectorOutpoint := txOutpoint{
-		connector.PreviousOutPoint.Hash.String(),
-		connector.PreviousOutPoint.Index,
-	}
-
-	// compute, sign and broadcast the branch txs until the connector outpoint is created
-	branch, err := round.Connectors.Branch(connectorOutpoint.txid)
-	if err != nil {
-		return fmt.Errorf("failed to get branch of connector: %s", err)
-	}
-
-	for _, node := range branch {
-		_, err := s.wallet.GetTransaction(ctx, node.Txid)
-		// if err, it means the tx is offchain
-		if err != nil {
-			signedTx, err := s.wallet.SignTransaction(ctx, node.Tx, true)
-			if err != nil {
-				return fmt.Errorf("failed to sign tx: %s", err)
-			}
-
-			txid, err := s.wallet.BroadcastTransaction(ctx, signedTx)
-			if err != nil {
-				return fmt.Errorf("failed to broadcast transaction: %s", err)
-			}
-			log.Debugf("broadcasted transaction %s", txid)
-		}
-	}
-
-	if err := s.wallet.LockConnectorUtxos(ctx, []ports.TxOutpoint{connectorOutpoint}); err != nil {
-		return fmt.Errorf("failed to lock connector utxos: %s", err)
-	}
-
-	forfeitTxB64, err := forfeitTx.B64Encode()
-	if err != nil {
-		return fmt.Errorf("failed to encode forfeit tx: %s", err)
-	}
-
-	signedForfeitTx, err := s.wallet.SignTransactionTapscript(ctx, forfeitTxB64, nil)
-	if err != nil {
-		return fmt.Errorf("failed to sign forfeit tx: %s", err)
-	}
-
-	forfeitTxHex, err := s.builder.FinalizeAndExtract(signedForfeitTx)
-	if err != nil {
-		return fmt.Errorf("failed to finalize forfeit tx: %s", err)
-	}
-
-	forfeitTxid, err := s.wallet.BroadcastTransaction(ctx, forfeitTxHex)
-	if err != nil {
-		return fmt.Errorf("failed to broadcast forfeit tx: %s", err)
-	}
-
-	log.Debugf("broadcasted forfeit tx %s", forfeitTxid)
-	return nil
-}
-
 func (s *covenantlessService) markAsRedeemed(ctx context.Context, vtxo domain.Vtxo) error {
 	if err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
 		return err
@@ -2531,26 +2426,6 @@ func (s *covenantlessService) verifyForfeitTxsSigs(txs []string) error {
 		close(errChan)
 		return nil
 	}
-}
-
-func findForfeitTxBitcoin(
-	forfeits []domain.ForfeitTx, vtxo domain.VtxoKey,
-) (*psbt.Packet, error) {
-	for _, forfeit := range forfeits {
-		forfeitTx, err := psbt.NewFromRawBytes(strings.NewReader(forfeit.Tx), true)
-		if err != nil {
-			return nil, err
-		}
-
-		vtxoInput := forfeitTx.UnsignedTx.TxIn[1]
-
-		if vtxoInput.PreviousOutPoint.Hash.String() == vtxo.Txid &&
-			vtxoInput.PreviousOutPoint.Index == vtxo.VOut {
-			return forfeitTx, nil
-		}
-	}
-
-	return nil, fmt.Errorf("forfeit tx not found")
 }
 
 // musigSigningSession holds the state of ephemeral nonces and signatures in order to coordinate the signing of the tree

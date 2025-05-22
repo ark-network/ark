@@ -43,8 +43,6 @@ func TestMain(m *testing.M) {
 		Return([]string{changeAddress}, nil)
 	wallet.On("DeriveConnectorAddress", mock.Anything).
 		Return(connectorAddress, nil)
-	wallet.On("MinRelayFee", mock.Anything, mock.Anything).
-		Return(uint64(30), nil)
 	wallet.On("GetDustAmount", mock.Anything).
 		Return(uint64(1000), nil)
 	wallet.On("GetForfeitAddress", mock.Anything).
