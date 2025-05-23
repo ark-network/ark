@@ -717,7 +717,6 @@ func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid strin
 
 func getSmallestExpiryRound(vtxos []domain.Vtxo) (expiration int64, roundTxid string) {
 	for i, vtxo := range vtxos {
-		fmt.Println("vtxo", vtxo.ExpireAt)
 		if i == 0 || vtxo.ExpireAt < expiration {
 			roundTxid = vtxo.RoundTxid
 			expiration = vtxo.ExpireAt

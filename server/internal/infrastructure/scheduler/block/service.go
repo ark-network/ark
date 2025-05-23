@@ -48,7 +48,7 @@ func (s *service) Start() {
 				time.Sleep(10 * time.Second)
 				taskes, err := s.popTaskes()
 				if err != nil {
-					fmt.Println("error fetching tasks:", err)
+					logrus.Errorf("error fetching tasks: %s", err)
 					continue
 				}
 
