@@ -15,10 +15,10 @@ const (
 	cltvSequence = wire.MaxTxInSequenceNum - 1
 )
 
-// buildRedeemTx builds a redeem tx for the given vtxos and outputs.
-// The redeem tx is spending VTXOs using collaborative taproot path.
+// buildVirtualTx builds a virtual tx for the given vtxos and outputs.
+// The virtual tx is spending VTXOs using collaborative taproot path.
 // An anchor output is added to the transaction
-func buildRedeemTx(
+func buildVirtualTx(
 	vtxos []common.VtxoInput,
 	outputs []*wire.TxOut,
 ) (*psbt.Packet, error) {
@@ -98,25 +98,25 @@ func buildRedeemTx(
 		}
 	}
 
-	redeemPtx, err := psbt.New(
+	virtualPtx, err := psbt.New(
 		ins, append(outputs, AnchorOutput()), 3, uint32(txLocktime), sequences,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	for i := range redeemPtx.Inputs {
-		redeemPtx.Inputs[i].WitnessUtxo = witnessUtxos[i]
-		redeemPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{signingTapLeaves[i]}
-		if err := AddTaprootTree(i, redeemPtx, tapscripts[i]); err != nil {
+	for i := range virtualPtx.Inputs {
+		virtualPtx.Inputs[i].WitnessUtxo = witnessUtxos[i]
+		virtualPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{signingTapLeaves[i]}
+		if err := AddTaprootTree(i, virtualPtx, tapscripts[i]); err != nil {
 			return nil, err
 		}
 	}
 
-	return redeemPtx, nil
+	return virtualPtx, nil
 }
 
-// buildCheckpoint creates a redeem tx sending to a "checkpoint" vtxo script composed of
+// buildCheckpoint creates a virtual tx sending to a "checkpoint" vtxo script composed of
 // the server exit script + the owner's spending closure.
 func buildCheckpoint(vtxo common.VtxoInput, serverExitScript *CSVMultisigClosure) (*psbt.Packet, common.VtxoInput, error) {
 	// create the checkpoint vtxo script from spending closure
@@ -139,8 +139,8 @@ func buildCheckpoint(vtxo common.VtxoInput, serverExitScript *CSVMultisigClosure
 		return nil, common.VtxoInput{}, err
 	}
 
-	// build the checkpoint redeem tx
-	checkpointPtx, err := buildRedeemTx(
+	// build the checkpoint virtual tx
+	checkpointPtx, err := buildVirtualTx(
 		[]common.VtxoInput{vtxo},
 		[]*wire.TxOut{{Value: vtxo.Amount, PkScript: checkpointPkScript}},
 	)
@@ -181,7 +181,7 @@ func buildCheckpoint(vtxo common.VtxoInput, serverExitScript *CSVMultisigClosure
 }
 
 // BuildOffchainTx builds an offchain tx for the given vtxos and outputs.
-// it also builds the checkpoint redeem txs for each input vtxo.
+// it also builds the checkpoint txs for each input vtxo.
 func BuildOffchainTx(
 	vtxos []common.VtxoInput, outputs []*wire.TxOut,
 	serverExitScript *CSVMultisigClosure,
@@ -199,10 +199,10 @@ func BuildOffchainTx(
 		checkpointsTxs = append(checkpointsTxs, checkpointPtx)
 	}
 
-	redeemPtx, err := buildRedeemTx(checkpointsInputs, outputs)
+	virtualPtx, err := buildVirtualTx(checkpointsInputs, outputs)
 	if err != nil {
 		return nil, nil, err
 	}
 
-	return redeemPtx, checkpointsTxs, nil
+	return virtualPtx, checkpointsTxs, nil
 }

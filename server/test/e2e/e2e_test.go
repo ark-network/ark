@@ -625,22 +625,22 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, spendable)
 
-		var redeemTx string
+		var virtualTx string
 		for _, vtxo := range spendable {
 			if vtxo.Txid == txid {
-				redeemTx = vtxo.RedeemTx
+				virtualTx = vtxo.RedeemTx
 				break
 			}
 		}
-		require.NotEmpty(t, redeemTx)
+		require.NotEmpty(t, virtualTx)
 
-		redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+		virtualPtx, err := psbt.NewFromRawBytes(strings.NewReader(virtualTx), true)
 		require.NoError(t, err)
-		require.NotNil(t, redeemPtx)
+		require.NotNil(t, virtualPtx)
 
 		var bobOutput *wire.TxOut
 		var bobOutputIndex uint32
-		for i, out := range redeemPtx.UnsignedTx.TxOut {
+		for i, out := range virtualPtx.UnsignedTx.TxOut {
 			if bytes.Equal(out.PkScript[2:], schnorr.SerializePubKey(bobAddr.VtxoTapKey)) {
 				bobOutput = out
 				bobOutputIndex = uint32(i)
@@ -672,7 +672,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			[]common.VtxoInput{
 				{
 					Outpoint: &wire.OutPoint{
-						Hash:  redeemPtx.UnsignedTx.TxHash(),
+						Hash:  virtualPtx.UnsignedTx.TxHash(),
 						Index: bobOutputIndex,
 					},
 					Tapscript:          tapscript,
@@ -1166,21 +1166,21 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, spendable)
 
-	var redeemTx string
+	var virtualTx string
 	for _, vtxo := range spendable {
 		if vtxo.Txid == txid {
-			redeemTx = vtxo.RedeemTx
+			virtualTx = vtxo.RedeemTx
 			break
 		}
 	}
-	require.NotEmpty(t, redeemTx)
+	require.NotEmpty(t, virtualTx)
 
-	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+	virtualPtx, err := psbt.NewFromRawBytes(strings.NewReader(virtualTx), true)
 	require.NoError(t, err)
 
 	var bobOutput *wire.TxOut
 	var bobOutputIndex uint32
-	for i, out := range redeemPtx.UnsignedTx.TxOut {
+	for i, out := range virtualPtx.UnsignedTx.TxOut {
 		if bytes.Equal(out.PkScript[2:], schnorr.SerializePubKey(bobAddr.VtxoTapKey)) {
 			bobOutput = out
 			bobOutputIndex = uint32(i)
@@ -1212,7 +1212,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 		[]common.VtxoInput{
 			{
 				Outpoint: &wire.OutPoint{
-					Hash:  redeemPtx.UnsignedTx.TxHash(),
+					Hash:  virtualPtx.UnsignedTx.TxHash(),
 					Index: bobOutputIndex,
 				},
 				Tapscript:          tapscript,
@@ -1410,21 +1410,21 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, spendable)
 
-	var redeemTx string
+	var virtualTx string
 	for _, vtxo := range spendable {
 		if vtxo.Txid == txid {
-			redeemTx = vtxo.RedeemTx
+			virtualTx = vtxo.RedeemTx
 			break
 		}
 	}
-	require.NotEmpty(t, redeemTx)
+	require.NotEmpty(t, virtualTx)
 
-	redeemPtx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
+	virtualPtx, err := psbt.NewFromRawBytes(strings.NewReader(virtualTx), true)
 	require.NoError(t, err)
 
 	var bobOutput *wire.TxOut
 	var bobOutputIndex uint32
-	for i, out := range redeemPtx.UnsignedTx.TxOut {
+	for i, out := range virtualPtx.UnsignedTx.TxOut {
 		if bytes.Equal(out.PkScript[2:], schnorr.SerializePubKey(bobAddr.VtxoTapKey)) {
 			bobOutput = out
 			bobOutputIndex = uint32(i)
@@ -1456,7 +1456,7 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 		[]common.VtxoInput{
 			{
 				Outpoint: &wire.OutPoint{
-					Hash:  redeemPtx.UnsignedTx.TxHash(),
+					Hash:  virtualPtx.UnsignedTx.TxHash(),
 					Index: bobOutputIndex,
 				},
 				Tapscript:          tapscript,

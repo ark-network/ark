@@ -43,10 +43,10 @@ type covenantlessService struct {
 	scanner     ports.BlockchainScanner
 	sweeper     *sweeper
 
-	txRequests     *txRequestsQueue
-	forfeitTxs     *forfeitTxsMap
-	redeemTxInputs *outpointMap
-	roundInputs    *outpointMap
+	txRequests       *txRequestsQueue
+	forfeitTxs       *forfeitTxsMap
+	offchainTxInputs *outpointMap
+	roundInputs      *outpointMap
 
 	eventsCh            chan domain.Event
 	transactionEventsCh chan TransactionEvent
@@ -135,7 +135,7 @@ func NewService(
 		sweeper:                   newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
 		txRequests:                newTxRequestsQueue(),
 		forfeitTxs:                newForfeitTxsMap(builder),
-		redeemTxInputs:            newOutpointMap(),
+		offchainTxInputs:          newOutpointMap(),
 		roundInputs:               newOutpointMap(),
 		eventsCh:                  make(chan domain.Event),
 		transactionEventsCh:       make(chan TransactionEvent),
@@ -371,8 +371,8 @@ func (s *covenantlessService) SubmitOffchainTx(
 		return nil, "", "", fmt.Errorf("vtxo %s is already registered for next round", vtxo)
 	}
 
-	s.redeemTxInputs.add(spentVtxoKeys)
-	defer s.redeemTxInputs.remove(spentVtxoKeys)
+	s.offchainTxInputs.add(spentVtxoKeys)
+	defer s.offchainTxInputs.remove(spentVtxoKeys)
 
 	indexedSpentVtxos := make(map[domain.VtxoKey]domain.Vtxo)
 	indexedCommitmentTxids := make(map[string]struct{}, 0)
@@ -803,7 +803,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			VOut: outpoint.Index,
 		}
 
-		if s.redeemTxInputs.includes(vtxoKey) {
+		if s.offchainTxInputs.includes(vtxoKey) {
 			return "", fmt.Errorf("vtxo %s is currently being spent", vtxoKey.String())
 		}
 
@@ -1064,7 +1064,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
 
 	for _, input := range inputs {
-		if s.redeemTxInputs.includes(input.VtxoKey) {
+		if s.offchainTxInputs.includes(input.VtxoKey) {
 			return "", fmt.Errorf("vtxo %s is currently being spent", input.String())
 		}
 
