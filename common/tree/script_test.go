@@ -500,14 +500,6 @@ func TestMultisigClosure(t *testing.T) {
 		require.False(t, valid)
 	})
 
-	t.Run("witness size", func(t *testing.T) {
-		closure := &tree.MultisigClosure{
-			PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
-		}
-
-		require.Equal(t, 128, closure.WitnessSize()) // 64 * 2 bytes
-	})
-
 	t.Run("valid 12-of-12 multisig", func(t *testing.T) {
 		// Generate 12 keys
 		pubkeys := make([]*secp256k1.PublicKey, 12)
@@ -539,9 +531,6 @@ func TestMultisigClosure(t *testing.T) {
 				schnorr.SerializePubKey(decodedClosure.PubKeys[i]),
 			)
 		}
-
-		// Verify witness size is correct for 12 signatures
-		require.Equal(t, 64*12, closure.WitnessSize())
 	})
 }
 
@@ -624,17 +613,6 @@ func TestCSVMultisigClosure(t *testing.T) {
 		valid, err := csvSig.Decode(script)
 		require.NoError(t, err)
 		require.False(t, valid)
-	})
-
-	t.Run("witness size", func(t *testing.T) {
-		csvSig := &tree.CSVMultisigClosure{
-			MultisigClosure: tree.MultisigClosure{
-				PubKeys: []*secp256k1.PublicKey{pubkey1, pubkey2},
-			},
-			Locktime: common.RelativeLocktime{Type: common.LocktimeTypeSecond, Value: 1024},
-		}
-		// Should be same as multisig witness size (64 bytes per signature)
-		require.Equal(t, 128, csvSig.WitnessSize())
 	})
 
 	t.Run("max timelock", func(t *testing.T) {

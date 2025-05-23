@@ -1,6 +1,7 @@
 package application
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -523,21 +524,29 @@ func getSpentVtxos(requests map[string]domain.TxRequest) []domain.VtxoKey {
 }
 
 func decodeTx(offchainTx domain.OffchainTx) (string, []domain.VtxoKey, []domain.Vtxo, error) {
+	ins := make([]domain.VtxoKey, 0, len(offchainTx.CheckpointTxs))
+	for _, checkpointTx := range offchainTx.CheckpointTxs {
+		checkpointPtx, err := psbt.NewFromRawBytes(strings.NewReader(checkpointTx), true)
+		if err != nil {
+			return "", nil, nil, fmt.Errorf("failed to parse checkpoint tx: %s", err)
+		}
+		ins = append(ins, domain.VtxoKey{
+			Txid: checkpointPtx.UnsignedTx.TxIn[0].PreviousOutPoint.Hash.String(),
+			VOut: checkpointPtx.UnsignedTx.TxIn[0].PreviousOutPoint.Index,
+		})
+	}
+
 	ptx, err := psbt.NewFromRawBytes(strings.NewReader(offchainTx.VirtualTx), true)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("failed to parse partial tx: %s", err)
 	}
-
 	txid := ptx.UnsignedTx.TxHash().String()
-	ins := make([]domain.VtxoKey, 0, len(ptx.UnsignedTx.TxIn))
-	for _, input := range ptx.UnsignedTx.TxIn {
-		ins = append(ins, domain.VtxoKey{
-			Txid: input.PreviousOutPoint.Hash.String(),
-			VOut: input.PreviousOutPoint.Index,
-		})
-	}
+
 	outs := make([]domain.Vtxo, 0, len(ptx.UnsignedTx.TxOut))
 	for outIndex, out := range ptx.UnsignedTx.TxOut {
+		if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
+			continue
+		}
 		outs = append(outs, domain.Vtxo{
 			VtxoKey: domain.VtxoKey{
 				Txid: txid,
@@ -551,5 +560,6 @@ func decodeTx(offchainTx domain.OffchainTx) (string, []domain.VtxoKey, []domain.
 			CreatedAt: offchainTx.EndingTimestamp,
 		})
 	}
+
 	return txid, ins, outs, nil
 }

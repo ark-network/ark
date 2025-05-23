@@ -1,6 +1,7 @@
 package application
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -25,13 +26,48 @@ type esploraTx struct {
 	} `json:"status"`
 }
 
-func (f *esploraClient) broadcast(txhex string) error {
-	endpoint, err := url.JoinPath(f.url, "tx")
+func (f *esploraClient) broadcast(txs ...string) error {
+	if len(txs) == 1 {
+		endpoint, err := url.JoinPath(f.url, "tx")
+		if err != nil {
+			return err
+		}
+
+		resp, err := http.Post(endpoint, "text/plain", strings.NewReader(txs[0]))
+		if err != nil {
+			return err
+		}
+
+		// nolint:all
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			content, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return err
+			}
+
+			if strings.Contains(strings.ToLower(string(content)), "non-bip68-final") {
+				return ErrNonFinalBIP68
+			}
+
+			return fmt.Errorf("failed to broadcast transaction: %s (%s, %s)", txs[0], resp.Status, content)
+		}
+
+		return nil
+	}
+
+	endpoint, err := url.JoinPath(f.url, "txs", "package")
 	if err != nil {
 		return err
 	}
 
-	resp, err := http.Post(endpoint, "text/plain", strings.NewReader(txhex))
+	body := bytes.NewBuffer(nil)
+	if err := json.NewEncoder(body).Encode(txs); err != nil {
+		return err
+	}
+
+	resp, err := http.Post(endpoint, "application/json", body)
 	if err != nil {
 		return err
 	}
@@ -40,16 +76,7 @@ func (f *esploraClient) broadcast(txhex string) error {
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		content, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-
-		if strings.Contains(strings.ToLower(string(content)), "non-bip68-final") {
-			return ErrNonFinalBIP68
-		}
-
-		return fmt.Errorf("failed to broadcast transaction: %s (%s, %s)", txhex, resp.Status, content)
+		return fmt.Errorf("failed to broadcast package: %s", resp.Status)
 	}
 
 	return nil

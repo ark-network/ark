@@ -464,46 +464,22 @@ func local_request_WalletService_EstimateFees_0(ctx context.Context, marshaler r
 	return msg, metadata, err
 }
 
-func request_WalletService_MinRelayFee_0(ctx context.Context, marshaler runtime.Marshaler, client WalletServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_WalletService_FeeRate_0(ctx context.Context, marshaler runtime.Marshaler, client WalletServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq MinRelayFeeRequest
-		metadata runtime.ServerMetadata
-	)
-	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	msg, err := client.MinRelayFee(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
-	return msg, metadata, err
-}
-
-func local_request_WalletService_MinRelayFee_0(ctx context.Context, marshaler runtime.Marshaler, server WalletServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var (
-		protoReq MinRelayFeeRequest
-		metadata runtime.ServerMetadata
-	)
-	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
-	}
-	msg, err := server.MinRelayFee(ctx, &protoReq)
-	return msg, metadata, err
-}
-
-func request_WalletService_MinRelayFeeRate_0(ctx context.Context, marshaler runtime.Marshaler, client WalletServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var (
-		protoReq MinRelayFeeRateRequest
+		protoReq FeeRateRequest
 		metadata runtime.ServerMetadata
 	)
 	io.Copy(io.Discard, req.Body)
-	msg, err := client.MinRelayFeeRate(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.FeeRate(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
 
-func local_request_WalletService_MinRelayFeeRate_0(ctx context.Context, marshaler runtime.Marshaler, server WalletServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_WalletService_FeeRate_0(ctx context.Context, marshaler runtime.Marshaler, server WalletServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq MinRelayFeeRateRequest
+		protoReq FeeRateRequest
 		metadata runtime.ServerMetadata
 	)
-	msg, err := server.MinRelayFeeRate(ctx, &protoReq)
+	msg, err := server.FeeRate(ctx, &protoReq)
 	return msg, metadata, err
 }
 
@@ -1184,45 +1160,25 @@ func RegisterWalletServiceHandlerServer(ctx context.Context, mux *runtime.ServeM
 		}
 		forward_WalletService_EstimateFees_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_WalletService_MinRelayFee_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_WalletService_FeeRate_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/arkwallet.v1.WalletService/MinRelayFee", runtime.WithHTTPPathPattern("/v1/wallet/min-relay-fee"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/arkwallet.v1.WalletService/FeeRate", runtime.WithHTTPPathPattern("/v1/wallet/fee-rate"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_WalletService_MinRelayFee_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_WalletService_FeeRate_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_WalletService_MinRelayFee_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-	})
-	mux.Handle(http.MethodGet, pattern_WalletService_MinRelayFeeRate_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
-		ctx, cancel := context.WithCancel(req.Context())
-		defer cancel()
-		var stream runtime.ServerTransportStream
-		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
-		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/arkwallet.v1.WalletService/MinRelayFeeRate", runtime.WithHTTPPathPattern("/v1/wallet/min-relay-fee-rate"))
-		if err != nil {
-			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
-			return
-		}
-		resp, md, err := local_request_WalletService_MinRelayFeeRate_0(annotatedContext, inboundMarshaler, server, req, pathParams)
-		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
-		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
-		if err != nil {
-			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
-			return
-		}
-		forward_WalletService_MinRelayFeeRate_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_WalletService_FeeRate_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodGet, pattern_WalletService_ListConnectorUtxos_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -1834,39 +1790,22 @@ func RegisterWalletServiceHandlerClient(ctx context.Context, mux *runtime.ServeM
 		}
 		forward_WalletService_EstimateFees_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_WalletService_MinRelayFee_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodGet, pattern_WalletService_FeeRate_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/arkwallet.v1.WalletService/MinRelayFee", runtime.WithHTTPPathPattern("/v1/wallet/min-relay-fee"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/arkwallet.v1.WalletService/FeeRate", runtime.WithHTTPPathPattern("/v1/wallet/fee-rate"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_WalletService_MinRelayFee_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_WalletService_FeeRate_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_WalletService_MinRelayFee_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
-	})
-	mux.Handle(http.MethodGet, pattern_WalletService_MinRelayFeeRate_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
-		ctx, cancel := context.WithCancel(req.Context())
-		defer cancel()
-		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/arkwallet.v1.WalletService/MinRelayFeeRate", runtime.WithHTTPPathPattern("/v1/wallet/min-relay-fee-rate"))
-		if err != nil {
-			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
-			return
-		}
-		resp, md, err := request_WalletService_MinRelayFeeRate_0(annotatedContext, inboundMarshaler, client, req, pathParams)
-		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
-		if err != nil {
-			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
-			return
-		}
-		forward_WalletService_MinRelayFeeRate_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_WalletService_FeeRate_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodGet, pattern_WalletService_ListConnectorUtxos_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -2112,8 +2051,7 @@ var (
 	pattern_WalletService_GetReadyUpdate_0           = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "ready-update"}, ""))
 	pattern_WalletService_IsTransactionConfirmed_0   = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "transaction-confirmed"}, ""))
 	pattern_WalletService_EstimateFees_0             = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "estimate-fees"}, ""))
-	pattern_WalletService_MinRelayFee_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "min-relay-fee"}, ""))
-	pattern_WalletService_MinRelayFeeRate_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "min-relay-fee-rate"}, ""))
+	pattern_WalletService_FeeRate_0                  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "fee-rate"}, ""))
 	pattern_WalletService_ListConnectorUtxos_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "connector-utxos"}, ""))
 	pattern_WalletService_MainAccountBalance_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "main-account-balance"}, ""))
 	pattern_WalletService_ConnectorsAccountBalance_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "wallet", "connectors-account-balance"}, ""))
@@ -2149,8 +2087,7 @@ var (
 	forward_WalletService_GetReadyUpdate_0           = runtime.ForwardResponseStream
 	forward_WalletService_IsTransactionConfirmed_0   = runtime.ForwardResponseMessage
 	forward_WalletService_EstimateFees_0             = runtime.ForwardResponseMessage
-	forward_WalletService_MinRelayFee_0              = runtime.ForwardResponseMessage
-	forward_WalletService_MinRelayFeeRate_0          = runtime.ForwardResponseMessage
+	forward_WalletService_FeeRate_0                  = runtime.ForwardResponseMessage
 	forward_WalletService_ListConnectorUtxos_0       = runtime.ForwardResponseMessage
 	forward_WalletService_MainAccountBalance_0       = runtime.ForwardResponseMessage
 	forward_WalletService_ConnectorsAccountBalance_0 = runtime.ForwardResponseMessage

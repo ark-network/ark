@@ -32,7 +32,7 @@ type eventRepository struct {
 	done          chan struct{}
 }
 
-func NewRoundEventRepository(config ...interface{}) (domain.EventRepository, error) {
+func NewEventRepository(config ...interface{}) (domain.EventRepository, error) {
 	if len(config) != 2 {
 		return nil, fmt.Errorf("invalid config")
 	}

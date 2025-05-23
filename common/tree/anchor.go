@@ -2,6 +2,7 @@ package tree
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
@@ -63,4 +64,23 @@ func ExtractWithAnchors(p *psbt.Packet) (*wire.MsgTx, error) {
 	}
 
 	return finalTx, nil
+}
+
+func FindAnchorOutpoint(tx *wire.MsgTx) (*wire.OutPoint, error) {
+	anchorIndex := -1
+	for outIndex, out := range tx.TxOut {
+		if bytes.Equal(out.PkScript, ANCHOR_PKSCRIPT) {
+			anchorIndex = outIndex
+			break
+		}
+	}
+
+	if anchorIndex == -1 {
+		return nil, fmt.Errorf("anchor not found")
+	}
+
+	return &wire.OutPoint{
+		Hash:  tx.TxHash(),
+		Index: uint32(anchorIndex),
+	}, nil
 }

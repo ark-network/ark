@@ -45,10 +45,6 @@ var forbiddenOpcodes = []byte{
 type Closure interface {
 	Script() ([]byte, error)
 	Decode(script []byte) (bool, error)
-	// WitnessSize returns the size of the witness excluding the script and control block
-	// extraWitnessSize is here to count the condition witness size
-	// or any other witness size that can't be computed from the script
-	WitnessSize(extraWitnessSize ...int) int
 	Witness(controlBlock []byte, opts map[string][]byte) (wire.TxWitness, error)
 }
 
@@ -130,10 +126,6 @@ func DecodeClosure(script []byte) (Closure, error) {
 
 	return nil, fmt.Errorf("script does not match any known closure type: %s",
 		hex.EncodeToString(script))
-}
-
-func (f *MultisigClosure) WitnessSize(_ ...int) int {
-	return 64 * len(f.PubKeys)
 }
 
 func (f *MultisigClosure) Script() ([]byte, error) {
@@ -365,10 +357,6 @@ func (f *CSVMultisigClosure) Witness(controlBlock []byte, signatures map[string]
 	return multisigWitness, nil
 }
 
-func (f *CSVMultisigClosure) WitnessSize(extraWitnessSizes ...int) int {
-	return f.MultisigClosure.WitnessSize(extraWitnessSizes...)
-}
-
 func (d *CSVMultisigClosure) Script() ([]byte, error) {
 	sequence, err := common.BIP68Sequence(d.Locktime)
 	if err != nil {
@@ -460,10 +448,6 @@ func (f *CLTVMultisigClosure) Witness(controlBlock []byte, signatures map[string
 	multisigWitness[len(multisigWitness)-2] = script
 
 	return multisigWitness, nil
-}
-
-func (f *CLTVMultisigClosure) WitnessSize(extraWitnessSizes ...int) int {
-	return f.MultisigClosure.WitnessSize(extraWitnessSizes...)
 }
 
 func (d *CLTVMultisigClosure) Script() ([]byte, error) {
@@ -617,14 +601,6 @@ func ReadTxWitness(witnessSerialized []byte) (wire.TxWitness, error) {
 
 	return witness, nil
 }
-func (f *ConditionMultisigClosure) WitnessSize(conditionWitnessSizes ...int) int {
-	var sum int
-	for _, size := range conditionWitnessSizes {
-		sum += size
-	}
-
-	return f.MultisigClosure.WitnessSize() + sum
-}
 
 func (f *ConditionMultisigClosure) Script() ([]byte, error) {
 	scriptBuilder := txscript.NewScriptBuilder()
@@ -712,15 +688,6 @@ func (f *ConditionMultisigClosure) Witness(controlBlock []byte, args map[string]
 	witness = append(witness, controlBlock)
 
 	return witness, nil
-}
-
-func (f *ConditionCSVMultisigClosure) WitnessSize(conditionWitnessSizes ...int) int {
-	var sum int
-	for _, size := range conditionWitnessSizes {
-		sum += size
-	}
-
-	return f.CSVMultisigClosure.WitnessSize() + sum
 }
 
 func (f *ConditionCSVMultisigClosure) Script() ([]byte, error) {

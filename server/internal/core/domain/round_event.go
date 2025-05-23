@@ -23,7 +23,6 @@ type RoundFinalizationStarted struct {
 	Connectors         tree.TxTree
 	ConnectorAddress   string
 	RoundTx            string
-	MinRelayFeeRate    int64
 	ConnectorsIndex    map[string]Outpoint
 	VtxoTreeExpiration int64
 }

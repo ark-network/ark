@@ -19,13 +19,13 @@ type OffchainTxAccepted struct {
 	CommitmentTxids     []string
 	FinalVirtualTx      string
 	SignedCheckpointTxs map[string]string
+	ExpiryTimestamp     int64
 }
 
 type OffchainTxFinalized struct {
 	Id                 string
 	FinalCheckpointTxs map[string]string
 	Timestamp          int64
-	ExpiryTimestamp    int64
 }
 
 type OffchainTxFailed struct {

@@ -37,14 +37,12 @@ func TestMain(m *testing.M) {
 	wallet = &mockedWallet{}
 	wallet.On("EstimateFees", mock.Anything, mock.Anything).
 		Return(uint64(100), nil)
-	wallet.On("SelectUtxos", mock.Anything, mock.Anything, mock.Anything).
+	wallet.On("SelectUtxos", mock.Anything, mock.Anything, mock.Anything, mock.Anything).
 		Return(randomInput, uint64(1000), nil)
 	wallet.On("DeriveAddresses", mock.Anything, mock.Anything).
 		Return([]string{changeAddress}, nil)
 	wallet.On("DeriveConnectorAddress", mock.Anything).
 		Return(connectorAddress, nil)
-	wallet.On("MinRelayFee", mock.Anything, mock.Anything).
-		Return(uint64(30), nil)
 	wallet.On("GetDustAmount", mock.Anything).
 		Return(uint64(1000), nil)
 	wallet.On("GetForfeitAddress", mock.Anything).

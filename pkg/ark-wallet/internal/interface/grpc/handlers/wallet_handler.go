@@ -151,7 +151,7 @@ func (h *WalletServiceHandler) SignTransactionTapscript(
 func (h *WalletServiceHandler) SelectUtxos(
 	ctx context.Context, req *arkwalletv1.SelectUtxosRequest,
 ) (*arkwalletv1.SelectUtxosResponse, error) {
-	utxos, total, err := h.walletSvc.SelectUtxos(ctx, req.Asset, req.Amount)
+	utxos, total, err := h.walletSvc.SelectUtxos(ctx, req.GetAsset(), req.GetAmount(), req.GetConfirmedOnly())
 	if err != nil {
 		return nil, err
 	}
@@ -170,7 +170,7 @@ func (h *WalletServiceHandler) SelectUtxos(
 func (h *WalletServiceHandler) BroadcastTransaction(
 	ctx context.Context, req *arkwalletv1.BroadcastTransactionRequest,
 ) (*arkwalletv1.BroadcastTransactionResponse, error) {
-	txid, err := h.walletSvc.BroadcastTransaction(ctx, req.GetTxHex())
+	txid, err := h.walletSvc.BroadcastTransaction(ctx, req.GetTxs()...)
 	if err != nil {
 		return nil, err
 	}
@@ -196,21 +196,14 @@ func (h *WalletServiceHandler) EstimateFees(
 	return &arkwalletv1.EstimateFeesResponse{Fee: fee}, nil
 }
 
-func (h *WalletServiceHandler) MinRelayFee(
-	ctx context.Context, req *arkwalletv1.MinRelayFeeRequest,
-) (*arkwalletv1.MinRelayFeeResponse, error) {
-	fee, err := h.walletSvc.MinRelayFee(ctx, req.GetVbytes())
+func (h *WalletServiceHandler) FeeRate(
+	ctx context.Context, _ *arkwalletv1.FeeRateRequest,
+) (*arkwalletv1.FeeRateResponse, error) {
+	feeRate, err := h.walletSvc.FeeRate(ctx)
 	if err != nil {
 		return nil, err
 	}
-	return &arkwalletv1.MinRelayFeeResponse{Fee: fee}, nil
-}
-
-func (h *WalletServiceHandler) MinRelayFeeRate(
-	ctx context.Context, _ *arkwalletv1.MinRelayFeeRateRequest,
-) (*arkwalletv1.MinRelayFeeRateResponse, error) {
-	feeRate := h.walletSvc.MinRelayFeeRate(ctx)
-	return &arkwalletv1.MinRelayFeeRateResponse{SatPerKvbyte: uint64(feeRate)}, nil
+	return &arkwalletv1.FeeRateResponse{SatPerKvbyte: uint64(feeRate)}, nil
 }
 
 func (h *WalletServiceHandler) ListConnectorUtxos(
@@ -271,10 +264,7 @@ func (h *WalletServiceHandler) LockConnectorUtxos(
 func (h *WalletServiceHandler) GetDustAmount(
 	ctx context.Context, _ *arkwalletv1.GetDustAmountRequest,
 ) (*arkwalletv1.GetDustAmountResponse, error) {
-	dust, err := h.walletSvc.GetDustAmount(ctx)
-	if err != nil {
-		return nil, err
-	}
+	dust := h.walletSvc.GetDustAmount(ctx)
 	return &arkwalletv1.GetDustAmountResponse{DustAmount: dust}, nil
 }
 

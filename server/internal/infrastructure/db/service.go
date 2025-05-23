@@ -1,6 +1,7 @@
 package db
 
 import (
+	"bytes"
 	"context"
 	"embed"
 	"encoding/hex"
@@ -10,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	badgerdb "github.com/ark-network/ark/server/internal/infrastructure/db/badger"
@@ -28,7 +30,7 @@ var migrations embed.FS
 
 var (
 	eventStoreTypes = map[string]func(...interface{}) (domain.EventRepository, error){
-		"badger": badgerdb.NewRoundEventRepository,
+		"badger": badgerdb.NewEventRepository,
 	}
 	roundStoreTypes = map[string]func(...interface{}) (domain.RoundRepository, error){
 		"badger": badgerdb.NewRoundRepository,
@@ -271,53 +273,82 @@ func (s *service) updateProjectionsAfterRoundEvents(events []domain.Event) {
 
 func (s *service) updateProjectionsAfterOffchainTxEvents(events []domain.Event) {
 	ctx := context.Background()
-	offchainTx := domain.NewOffchainTxFromEvents(events)
+	replayedPartialOffchainTx := domain.NewOffchainTxFromEvents(events)
 
-	if err := s.offchainTxStore.AddOrUpdateOffchainTx(ctx, offchainTx); err != nil {
-		log.WithError(err).Fatalf("failed to add or update offchain tx %s", offchainTx.VirtualTxid)
+	if err := s.offchainTxStore.AddOrUpdateOffchainTx(
+		ctx, replayedPartialOffchainTx,
+	); err != nil {
+		log.WithError(err).Fatalf("failed to add or update offchain tx %s", replayedPartialOffchainTx.VirtualTxid)
 	}
-	log.Debugf("added or updated offchain tx %s", offchainTx.VirtualTxid)
+	log.Debugf("added or updated offchain tx %s", replayedPartialOffchainTx.VirtualTxid)
 
-	if !offchainTx.IsFinalized() {
+	if len(events) == 0 {
 		return
 	}
+	lastEvent := events[len(events)-1]
 
-	repo := s.vtxoStore
+	switch event := lastEvent.(type) {
+	case domain.OffchainTxAccepted:
+		spentVtxos := make([]domain.VtxoKey, 0)
 
-	txid, spentVtxos, outs, err := s.txDecoder.DecodeTx(offchainTx.VirtualTx)
-	if err != nil {
-		log.WithError(err).Warn("failed to decode virtual tx")
-		return
+		for _, tx := range event.SignedCheckpointTxs {
+			_, ins, _, err := s.txDecoder.DecodeTx(tx)
+			if err != nil {
+				log.WithError(err).Warn("failed to decode checkpoint tx")
+				continue
+			}
+			spentVtxos = append(spentVtxos, ins...)
+		}
+
+		// as soon as the checkpoint txs are signed by the server,
+		// we must mark the vtxos as spent to prevent double spending.
+		if err := s.vtxoStore.SpendVtxos(ctx, spentVtxos, event.Id); err != nil {
+			log.WithError(err).Warn("failed to spend vtxos")
+			return
+		}
+		log.Debugf("spent %d vtxos", len(spentVtxos))
+	case domain.OffchainTxFinalized:
+		offchainTx, err := s.offchainTxStore.GetOffchainTx(ctx, event.Id)
+		if err != nil {
+			log.WithError(err).Warn("failed to get offchain tx")
+			return
+		}
+
+		txid, _, outs, err := s.txDecoder.DecodeTx(offchainTx.VirtualTx)
+		if err != nil {
+			log.WithError(err).Warn("failed to decode virtual tx")
+			return
+		}
+
+		// once the offchain tx is finalized, the user signed the checkpoint txs
+		// thus, we can create the new vtxos in the db.
+		newVtxos := make([]domain.Vtxo, 0, len(outs))
+		for outIndex, out := range outs {
+			// ignore anchors
+			if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
+				continue
+			}
+
+			newVtxos = append(newVtxos, domain.Vtxo{
+				VtxoKey: domain.VtxoKey{
+					Txid: txid,
+					VOut: uint32(outIndex),
+				},
+				PubKey:    hex.EncodeToString(out.PkScript[2:]),
+				Amount:    uint64(out.Amount),
+				ExpireAt:  offchainTx.ExpiryTimestamp,
+				RoundTxid: offchainTx.RootCommitmentTxid(),
+				RedeemTx:  offchainTx.VirtualTx,
+				CreatedAt: offchainTx.EndingTimestamp,
+			})
+		}
+
+		if err := s.vtxoStore.AddVtxos(ctx, newVtxos); err != nil {
+			log.WithError(err).Warn("failed to add vtxos")
+			return
+		}
+		log.Debugf("added %d vtxos", len(newVtxos))
 	}
-
-	// Create new vtxos, update spent vtxos state
-	newVtxos := make([]domain.Vtxo, 0, len(outs))
-	for outIndex, out := range outs {
-		newVtxos = append(newVtxos, domain.Vtxo{
-			VtxoKey: domain.VtxoKey{
-				Txid: txid,
-				VOut: uint32(outIndex),
-			},
-			PubKey:    hex.EncodeToString(out.PkScript[2:]),
-			Amount:    uint64(out.Amount),
-			ExpireAt:  offchainTx.ExpiryTimestamp,
-			RoundTxid: offchainTx.RootCommitmentTxid(),
-			RedeemTx:  offchainTx.VirtualTx,
-			CreatedAt: offchainTx.EndingTimestamp,
-		})
-	}
-
-	if err := repo.AddVtxos(ctx, newVtxos); err != nil {
-		log.WithError(err).Warn("failed to add vtxos")
-		return
-	}
-	log.Debugf("added %d vtxos", len(newVtxos))
-
-	if err := repo.SpendVtxos(ctx, spentVtxos, txid); err != nil {
-		log.WithError(err).Warn("failed to spend vtxos")
-		return
-	}
-	log.Debugf("spent %d vtxos", len(spentVtxos))
 }
 
 func getSpentVtxoKeysFromRound(requests map[string]domain.TxRequest) []domain.VtxoKey {
@@ -344,6 +375,11 @@ func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
 			continue
 		}
 		for i, out := range tx.UnsignedTx.TxOut {
+			// ignore anchors
+			if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
+				continue
+			}
+
 			vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
 			if err != nil {
 				log.WithError(err).Warn("failed to parse vtxo tap key")

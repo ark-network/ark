@@ -12,7 +12,6 @@ import (
 	arkwalletv1 "github.com/ark-network/ark/api-spec/protobuf/gen/arkwallet/v1"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -262,10 +261,11 @@ func (w *walletDaemonClient) SignTransactionTapscript(ctx context.Context, parti
 	return resp.GetSignedTx(), nil
 }
 
-func (w *walletDaemonClient) SelectUtxos(ctx context.Context, asset string, amount uint64) ([]ports.TxInput, uint64, error) {
+func (w *walletDaemonClient) SelectUtxos(ctx context.Context, asset string, amount uint64, confirmedOnly bool) ([]ports.TxInput, uint64, error) {
 	resp, err := w.client.SelectUtxos(ctx, &arkwalletv1.SelectUtxosRequest{
-		Asset:  asset,
-		Amount: amount,
+		Asset:         asset,
+		Amount:        amount,
+		ConfirmedOnly: confirmedOnly,
 	})
 	if err != nil {
 		return nil, 0, err
@@ -282,8 +282,8 @@ func (w *walletDaemonClient) SelectUtxos(ctx context.Context, asset string, amou
 	return inputs, resp.GetTotalAmount(), nil
 }
 
-func (w *walletDaemonClient) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
-	resp, err := w.client.BroadcastTransaction(ctx, &arkwalletv1.BroadcastTransactionRequest{TxHex: txHex})
+func (w *walletDaemonClient) BroadcastTransaction(ctx context.Context, txs ...string) (string, error) {
+	resp, err := w.client.BroadcastTransaction(ctx, &arkwalletv1.BroadcastTransactionRequest{Txs: txs})
 	if err != nil {
 		return "", err
 	}
@@ -303,22 +303,12 @@ func (w *walletDaemonClient) EstimateFees(ctx context.Context, psbt string) (uin
 	return resp.GetFee(), nil
 }
 
-func (w *walletDaemonClient) MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error) {
-	resp, err := w.client.MinRelayFee(ctx, &arkwalletv1.MinRelayFeeRequest{Vbytes: vbytes})
+func (w *walletDaemonClient) FeeRate(ctx context.Context) (uint64, error) {
+	resp, err := w.client.FeeRate(ctx, &arkwalletv1.FeeRateRequest{})
 	if err != nil {
 		return 0, err
 	}
-	return resp.GetFee(), nil
-}
-
-func (w *walletDaemonClient) MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte {
-	resp, err := w.client.MinRelayFeeRate(ctx, &arkwalletv1.MinRelayFeeRateRequest{})
-	if err != nil {
-		//TODO should we update MinRelayFeeRate with returning error
-		log.Errorf("failed to get min relay fee rate: %s", err)
-		return 0
-	}
-	return chainfee.SatPerKVByte(resp.GetSatPerKvbyte())
+	return resp.GetSatPerKvbyte(), nil
 }
 
 func (w *walletDaemonClient) ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]ports.TxInput, error) {

@@ -6,7 +6,6 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	"github.com/stretchr/testify/mock"
 )
 
@@ -54,8 +53,8 @@ func (m *mockedWallet) Lock(ctx context.Context) error {
 	return args.Error(0)
 }
 
-func (m *mockedWallet) BroadcastTransaction(ctx context.Context, txHex string) (string, error) {
-	args := m.Called(ctx, txHex)
+func (m *mockedWallet) BroadcastTransaction(ctx context.Context, txs ...string) (string, error) {
+	args := m.Called(ctx, txs)
 
 	var res string
 	if a := args.Get(0); a != nil {
@@ -128,8 +127,8 @@ func (m *mockedWallet) Status(ctx context.Context) (ports.WalletStatus, error) {
 	return res, args.Error(1)
 }
 
-func (m *mockedWallet) SelectUtxos(ctx context.Context, asset string, amount uint64) ([]ports.TxInput, uint64, error) {
-	args := m.Called(ctx, asset, amount)
+func (m *mockedWallet) SelectUtxos(ctx context.Context, asset string, amount uint64, confirmedOnly bool) ([]ports.TxInput, uint64, error) {
+	args := m.Called(ctx, asset, amount, confirmedOnly)
 
 	var res0 func() []ports.TxInput
 	if a := args.Get(0); a != nil {
@@ -152,25 +151,15 @@ func (m *mockedWallet) EstimateFees(ctx context.Context, pset string) (uint64, e
 	return res, args.Error(1)
 }
 
-func (m *mockedWallet) MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error) {
-	args := m.Called(ctx, vbytes)
+func (m *mockedWallet) FeeRate(ctx context.Context) (uint64, error) {
+	args := m.Called(ctx)
 
 	var res uint64
 	if a := args.Get(0); a != nil {
 		res = a.(uint64)
 	}
-	return res, args.Error(1)
-}
 
-func (m *mockedWallet) MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte {
-	args := m.Called(ctx)
-
-	var res chainfee.SatPerKVByte
-	if a := args.Get(0); a != nil {
-		res = a.(chainfee.SatPerKVByte)
-	}
-
-	return res
+	return res, nil
 }
 
 func (m *mockedWallet) GetForfeitAddress(ctx context.Context) (string, error) {

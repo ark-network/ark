@@ -133,9 +133,8 @@ message RoundFinalizationEvent {
   string round_tx = 2;
   Tree vtxo_tree = 3;
   Tree connectors = 4;
-  int64 min_relay_fee_rate = 5;
   // vtxo outpoint encoded as string -> connector outpoint
-  map<string, Outpoint> connectors_index = 6;
+  map<string, Outpoint> connectors_index = 5;
 }
 
 message RoundFinalizedEvent {

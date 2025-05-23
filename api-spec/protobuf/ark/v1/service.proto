@@ -69,9 +69,16 @@ service ArkService {
 
   /* Out-of-Round Transaction APIs */
 
-  rpc SubmitRedeemTx(SubmitRedeemTxRequest) returns (SubmitRedeemTxResponse) {
+  rpc SubmitOffchainTx(SubmitOffchainTxRequest) returns (SubmitOffchainTxResponse) {
     option (google.api.http) = {
-      post: "/v1/redeem-tx"
+      post: "/v1/offchain-tx/submit"
+      body: "*"
+    };
+  }
+
+  rpc FinalizeOffchainTx(FinalizeOffchainTxRequest) returns (FinalizeOffchainTxResponse) {
+    option (google.api.http) = {
+      post: "/v1/offchain-tx/finalize"
       body: "*"
     };
   }
@@ -180,13 +187,21 @@ message PingResponse {}
 
 /* Out-of-Round Transaction API messages */
 
-message SubmitRedeemTxRequest {
-  string redeem_tx = 1;
+message SubmitOffchainTxRequest {
+  string virtual_tx = 1;
+  repeated string checkpoint_txs = 2;
 }
-message SubmitRedeemTxResponse {
-  string signed_redeem_tx = 1;
+message SubmitOffchainTxResponse {
+  string signed_virtual_tx = 1;
   string txid = 2;
+  repeated string signed_checkpoint_txs = 3;
 }
+
+message FinalizeOffchainTxRequest {
+  string txid = 1;
+  repeated string checkpoint_txs = 2;
+}
+message FinalizeOffchainTxResponse {}
 
 message GetTransactionsStreamRequest {}
 message GetTransactionsStreamResponse {
