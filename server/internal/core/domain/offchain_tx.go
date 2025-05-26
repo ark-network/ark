@@ -84,7 +84,7 @@ func (s *OffchainTx) Request(
 		Id:                    virtualTxid,
 		VirtualTx:             virtualTx,
 		UnsignedCheckpointTxs: unsignedCheckpointTxs,
-		Timestamp:             time.Now().Unix(),
+		StartingTimestamp:     time.Now().Unix(),
 	}
 	s.raise(event)
 	return event, nil
@@ -189,7 +189,7 @@ func (s *OffchainTx) on(event Event, replayed bool) {
 		s.VirtualTxid = e.Id
 		s.VirtualTx = e.VirtualTx
 		s.CheckpointTxs = e.UnsignedCheckpointTxs
-		s.StartingTimestamp = e.Timestamp
+		s.StartingTimestamp = e.StartingTimestamp
 	case OffchainTxAccepted:
 		s.Stage.Code = int(OffchainTxAcceptedStage)
 		s.VirtualTx = e.FinalVirtualTx

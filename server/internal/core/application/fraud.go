@@ -94,6 +94,10 @@ func (s *covenantlessService) broadcastCheckpointTx(ctx context.Context, vtxo do
 		}
 	}
 
+	if len(checkpointPsbt) == 0 {
+		return fmt.Errorf("checkpoint tx not found for vtxo %s", vtxo.String())
+	}
+
 	parent, err := s.builder.FinalizeAndExtract(checkpointPsbt)
 	if err != nil {
 		return fmt.Errorf("failed to finalize checkpoint tx: %s", err)
@@ -110,7 +114,7 @@ func (s *covenantlessService) broadcastCheckpointTx(ctx context.Context, vtxo do
 	}
 
 	if _, err := s.wallet.BroadcastTransaction(ctx, parent, child); err != nil {
-		return fmt.Errorf("failed to broadcast checkpoint tx: %s", err)
+		return fmt.Errorf("failed to broadcast checkpoint package: %s", err)
 	}
 
 	log.Debugf("broadcasted checkpoint tx %s", checkpointTx.TxHash().String())

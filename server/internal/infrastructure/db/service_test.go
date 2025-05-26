@@ -602,7 +602,7 @@ func testOffchainTxRepository(t *testing.T, svc ports.RepoManager) {
 				Id:                    virtualTxid,
 				VirtualTx:             "",
 				UnsignedCheckpointTxs: nil,
-				Timestamp:             now.Unix(),
+				StartingTimestamp:     now.Unix(),
 			},
 			domain.OffchainTxAccepted{
 				Id:                  virtualTxid,

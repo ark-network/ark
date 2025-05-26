@@ -11,7 +11,7 @@ type OffchainTxRequested struct {
 	Id                    string
 	VirtualTx             string
 	UnsignedCheckpointTxs map[string]string
-	Timestamp             int64
+	StartingTimestamp     int64
 }
 
 type OffchainTxAccepted struct {

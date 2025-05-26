@@ -304,7 +304,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 	var changes []domain.Event
 
 	defer func() {
-		if err != nil && virtualTxid != "" {
+		if err != nil {
 			change := offchainTx.Fail(err)
 			changes = append(changes, change)
 		}
