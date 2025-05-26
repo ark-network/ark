@@ -534,13 +534,13 @@ func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver, withZeroFee
 		return printJSON(map[string]string{"txid": txid})
 	}
 
-	redeemTxid, err := arkSdkClient.SendOffChain(
+	arkTxid, err := arkSdkClient.SendOffChain(
 		ctx.Context, computeExpiration, offchainReceivers, withZeroFees,
 	)
 	if err != nil {
 		return err
 	}
-	return printJSON(map[string]string{"txid": redeemTxid})
+	return printJSON(map[string]string{"txid": arkTxid})
 }
 
 func readPassword(ctx *cli.Context) ([]byte, error) {
