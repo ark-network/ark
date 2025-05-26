@@ -144,7 +144,7 @@ func newCommand(name string, arg ...string) *exec.Cmd {
 	return cmd
 }
 
-// bumpAnchorTx is crafting and signing a transaction bumping the fees for a given tx with P2A output
+// BumpAnchorTx is crafting and signing a transaction bumping the fees for a given tx with P2A output
 // it is using the onchain P2TR account to select UTXOs
 func BumpAnchorTx(t *testing.T, parent *wire.MsgTx, explorerSvc explorer.Explorer) string {
 	randomPrivKey, err := btcec.NewPrivateKey()
