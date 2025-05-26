@@ -212,19 +212,6 @@ func testAcceptOffchainTx(t *testing.T) {
 				{
 					offchainTx: &domain.OffchainTx{
 						Stage: domain.Stage{
-							Code: int(domain.OffchainTxAcceptedStage),
-						},
-						CheckpointTxs: signedCheckpointTxs,
-					},
-					finalVirtualTx:      finalVirtualTx,
-					signedCheckpointTxs: signedCheckpointTxs,
-					commitmentTxids:     commitmentTxids,
-					expectedErr:         "not in a valid stage to accept offchain tx",
-					expiryTimestamp:     expiryTimestamp,
-				},
-				{
-					offchainTx: &domain.OffchainTx{
-						Stage: domain.Stage{
 							Code: int(domain.OffchainTxRequestedStage),
 						},
 						CheckpointTxs: signedCheckpointTxs,
@@ -234,6 +221,19 @@ func testAcceptOffchainTx(t *testing.T) {
 					commitmentTxids:     commitmentTxids,
 					expectedErr:         "missing expiry timestamp",
 					expiryTimestamp:     0,
+				},
+				{
+					offchainTx: &domain.OffchainTx{
+						Stage: domain.Stage{
+							Code: int(domain.OffchainTxAcceptedStage),
+						},
+						CheckpointTxs: signedCheckpointTxs,
+					},
+					finalVirtualTx:      finalVirtualTx,
+					signedCheckpointTxs: signedCheckpointTxs,
+					commitmentTxids:     commitmentTxids,
+					expectedErr:         "not in a valid stage to accept offchain tx",
+					expiryTimestamp:     expiryTimestamp,
 				},
 			}
 

@@ -273,25 +273,18 @@ func (s *service) updateProjectionsAfterRoundEvents(events []domain.Event) {
 
 func (s *service) updateProjectionsAfterOffchainTxEvents(events []domain.Event) {
 	ctx := context.Background()
-	replayedPartialOffchainTx := domain.NewOffchainTxFromEvents(events)
+	offchainTx := domain.NewOffchainTxFromEvents(events)
 
-	if err := s.offchainTxStore.AddOrUpdateOffchainTx(
-		ctx, replayedPartialOffchainTx,
-	); err != nil {
-		log.WithError(err).Fatalf("failed to add or update offchain tx %s", replayedPartialOffchainTx.VirtualTxid)
+	if err := s.offchainTxStore.AddOrUpdateOffchainTx(ctx, offchainTx); err != nil {
+		log.WithError(err).Fatalf("failed to add or update offchain tx %s", offchainTx.VirtualTxid)
 	}
-	log.Debugf("added or updated offchain tx %s", replayedPartialOffchainTx.VirtualTxid)
+	log.Debugf("added or updated offchain tx %s", offchainTx.VirtualTxid)
 
-	if len(events) == 0 {
-		return
-	}
-	lastEvent := events[len(events)-1]
-
-	switch event := lastEvent.(type) {
-	case domain.OffchainTxAccepted:
+	switch {
+	case offchainTx.IsAccepted():
 		spentVtxos := make([]domain.VtxoKey, 0)
 
-		for _, tx := range event.SignedCheckpointTxs {
+		for _, tx := range offchainTx.CheckpointTxs {
 			_, ins, _, err := s.txDecoder.DecodeTx(tx)
 			if err != nil {
 				log.WithError(err).Warn("failed to decode checkpoint tx")
@@ -302,18 +295,12 @@ func (s *service) updateProjectionsAfterOffchainTxEvents(events []domain.Event) 
 
 		// as soon as the checkpoint txs are signed by the server,
 		// we must mark the vtxos as spent to prevent double spending.
-		if err := s.vtxoStore.SpendVtxos(ctx, spentVtxos, event.Id); err != nil {
+		if err := s.vtxoStore.SpendVtxos(ctx, spentVtxos, offchainTx.VirtualTxid); err != nil {
 			log.WithError(err).Warn("failed to spend vtxos")
 			return
 		}
 		log.Debugf("spent %d vtxos", len(spentVtxos))
-	case domain.OffchainTxFinalized:
-		offchainTx, err := s.offchainTxStore.GetOffchainTx(ctx, event.Id)
-		if err != nil {
-			log.WithError(err).Warn("failed to get offchain tx")
-			return
-		}
-
+	case offchainTx.IsFinalized():
 		txid, _, outs, err := s.txDecoder.DecodeTx(offchainTx.VirtualTx)
 		if err != nil {
 			log.WithError(err).Warn("failed to decode virtual tx")

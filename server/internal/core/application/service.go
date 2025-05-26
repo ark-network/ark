@@ -207,58 +207,49 @@ func NewService(
 
 	repoManager.Events().RegisterEventsHandler(
 		domain.OffchainTxTopic, func(events []domain.Event) {
-			if len(events) == 0 {
+			offchainTx := domain.NewOffchainTxFromEvents(events)
+
+			if !offchainTx.IsFinalized() {
 				return
 			}
 
-			lastEvent := events[len(events)-1]
+			txid, spentVtxoKeys, newVtxos, err := decodeTx(*offchainTx)
+			if err != nil {
+				log.WithError(err).Warn("failed to decode virtual tx")
+				return
+			}
 
-			switch event := lastEvent.(type) {
-			case domain.OffchainTxFinalized:
-				offchainTx, err := svc.repoManager.OffchainTxs().GetOffchainTx(context.Background(), event.Id)
-				if err != nil {
-					log.WithError(err).Warn("failed to get offchain tx")
-					return
-				}
+			spentVtxos, err := svc.repoManager.Vtxos().GetVtxos(context.Background(), spentVtxoKeys)
+			if err != nil {
+				log.WithError(err).Warn("failed to get spent vtxos")
+				return
+			}
 
-				txid, spentVtxoKeys, newVtxos, err := decodeTx(*offchainTx)
-				if err != nil {
-					log.WithError(err).Warn("failed to decode virtual tx")
-					return
-				}
-
-				spentVtxos, err := svc.repoManager.Vtxos().GetVtxos(context.Background(), spentVtxoKeys)
-				if err != nil {
-					log.WithError(err).Warn("failed to get spent vtxos")
-					return
-				}
-
-				go func() {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Errorf("recovered from panic in sendTxEvent: %v", r)
-						}
-					}()
-
-					svc.transactionEventsCh <- RedeemTransactionEvent{
-						RedeemTxid:     txid,
-						SpentVtxos:     spentVtxos,
-						SpendableVtxos: newVtxos,
-						TxHex:          offchainTx.VirtualTx,
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("recovered from panic in sendTxEvent: %v", r)
 					}
 				}()
 
-				go func() {
-					defer func() {
-						if r := recover(); r != nil {
-							log.Errorf("recovered from panic in startWatchingVtxos: %v", r)
-						}
-					}()
+				svc.transactionEventsCh <- RedeemTransactionEvent{
+					RedeemTxid:     txid,
+					SpentVtxos:     spentVtxos,
+					SpendableVtxos: newVtxos,
+					TxHex:          offchainTx.VirtualTx,
+				}
+			}()
 
-					// nolint
-					svc.startWatchingVtxos(newVtxos)
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("recovered from panic in startWatchingVtxos: %v", r)
+					}
 				}()
-			}
+
+				// nolint
+				svc.startWatchingVtxos(newVtxos)
+			}()
 		},
 	)
 
@@ -713,17 +704,6 @@ func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid strin
 	changes = []domain.Event{event}
 
 	return nil
-}
-
-func findFirstRoundToExpire(vtxos []domain.Vtxo) (expiration int64, roundTxid string) {
-	for i, vtxo := range vtxos {
-		if i == 0 || vtxo.ExpireAt < expiration {
-			roundTxid = vtxo.RoundTxid
-			expiration = vtxo.ExpireAt
-		}
-	}
-
-	return
 }
 
 func (s *covenantlessService) GetBoardingAddress(

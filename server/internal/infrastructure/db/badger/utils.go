@@ -115,25 +115,25 @@ func deserializeEvent(buf []byte) (domain.Event, error) {
 	}
 	{
 		var event = domain.OffchainTxRequested{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.Id) > 0 {
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.VirtualTx) > 0 {
 			return event, nil
 		}
 	}
 	{
 		var event = domain.OffchainTxAccepted{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.Id) > 0 {
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.CommitmentTxids) > 0 {
 			return event, nil
 		}
 	}
 	{
 		var event = domain.OffchainTxFinalized{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.Id) > 0 {
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.FinalCheckpointTxs) > 0 {
 			return event, nil
 		}
 	}
 	{
 		var event = domain.OffchainTxFailed{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.Id) > 0 {
+		if err := json.Unmarshal(buf, &event); err == nil && len(event.Reason) > 0 {
 			return event, nil
 		}
 	}

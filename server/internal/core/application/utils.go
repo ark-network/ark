@@ -563,3 +563,14 @@ func decodeTx(offchainTx domain.OffchainTx) (string, []domain.VtxoKey, []domain.
 
 	return txid, ins, outs, nil
 }
+
+func findFirstRoundToExpire(vtxos []domain.Vtxo) (expiration int64, roundTxid string) {
+	for i, vtxo := range vtxos {
+		if i == 0 || vtxo.ExpireAt < expiration {
+			roundTxid = vtxo.RoundTxid
+			expiration = vtxo.ExpireAt
+		}
+	}
+
+	return
+}
