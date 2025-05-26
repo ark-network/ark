@@ -58,12 +58,17 @@ func LoadConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to create db dir: %s", err)
 	}
 
+	esploraURL := viper.GetString(EsploraURL)
+	if len(esploraURL) == 0 {
+		return nil, fmt.Errorf("missing esplora url, covenant-less ark requires ARK_ESPLORA_URL to be set")
+	}
+
 	cfg := &Config{
 		Port:             viper.GetUint32(Port),
 		DbDir:            dbPath,
 		LogLevel:         viper.GetInt(LogLevel),
 		Network:          net,
-		EsploraURL:       viper.GetString(EsploraURL),
+		EsploraURL:       esploraURL,
 		NeutrinoPeer:     viper.GetString(NeutrinoPeer),
 		BitcoindRpcUser:  viper.GetString(BitcoindRpcUser),
 		BitcoindRpcPass:  viper.GetString(BitcoindRpcPass),
