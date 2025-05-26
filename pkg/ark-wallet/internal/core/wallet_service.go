@@ -50,9 +50,6 @@ const (
 	// https://github.com/bitcoin/bitcoin/blob/439e58c4d8194ca37f70346727d31f52e69592ec/src/policy/policy.cpp#L23C8-L23C11
 	// biggest input size to compute the maximum dust amount
 	biggestInputSize = 148 + 182 // = 330 vbytes
-
-	withConfirmedOnly = true
-	withUnconfirmed   = !withConfirmedOnly
 )
 
 var (
@@ -229,6 +226,8 @@ func (s *service) ConnectorsAccountBalance(_ context.Context) (uint64, uint64, e
 		return 0, 0, err
 	}
 
+	withConfirmedOnly := true
+	withUnconfirmed := !withConfirmedOnly
 	utxos, err := s.listUtxos(p2trKeyScope, withUnconfirmed)
 	if err != nil {
 		return 0, 0, err
@@ -247,6 +246,8 @@ func (s *service) MainAccountBalance(_ context.Context) (uint64, uint64, error) 
 		return 0, 0, err
 	}
 
+	withConfirmedOnly := true
+	withUnconfirmed := !withConfirmedOnly
 	utxos, err := s.listUtxos(p2wpkhKeyScope, withUnconfirmed)
 	if err != nil {
 		return 0, 0, err
@@ -331,6 +332,8 @@ func (s *service) ListConnectorUtxos(_ context.Context, connectorAddress string)
 		return nil, err
 	}
 
+	withConfirmedOnly := true
+	withUnconfirmed := !withConfirmedOnly
 	utxos, err := s.listUtxos(p2trKeyScope, withUnconfirmed)
 	if err != nil {
 		return nil, err

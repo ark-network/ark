@@ -60,7 +60,7 @@ func LoadConfig() (*Config, error) {
 
 	esploraURL := viper.GetString(EsploraURL)
 	if len(esploraURL) == 0 {
-		return nil, fmt.Errorf("missing esplora url, covenant-less ark requires ARK_ESPLORA_URL to be set")
+		return nil, fmt.Errorf("missing esplora url, ark requires ARK_ESPLORA_URL to be set")
 	}
 
 	cfg := &Config{
