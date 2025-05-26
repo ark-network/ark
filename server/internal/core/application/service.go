@@ -674,7 +674,7 @@ func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid strin
 	}
 
 	defer func() {
-		if err != nil && offchainTx != nil {
+		if err != nil {
 			change := offchainTx.Fail(err)
 			changes = append(changes, change)
 		}
