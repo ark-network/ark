@@ -473,18 +473,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, tx := range txs {
-			var transaction wire.MsgTx
-			err := transaction.Deserialize(hex.NewDecoder(strings.NewReader(tx)))
-			require.NoError(t, err)
-
-			childTx := utils.BumpAnchorTx(t, &transaction, expl)
-
-			_, err = expl.Broadcast(tx, childTx)
-			require.NoError(t, err)
-
-			time.Sleep(1 * time.Second)
-			err = utils.GenerateBlock()
-			require.NoError(t, err)
+			utils.BumpAndBroadcast(t, tx, expl)
 		}
 
 		// give time for the server to detect and process the fraud
@@ -770,18 +759,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		require.NoError(t, err)
 
 		for _, tx := range txs {
-			var transaction wire.MsgTx
-			err := transaction.Deserialize(hex.NewDecoder(strings.NewReader(tx)))
-			require.NoError(t, err)
-
-			childTx := utils.BumpAnchorTx(t, &transaction, explorer)
-
-			_, err = explorer.Broadcast(tx, childTx)
-			require.NoError(t, err)
-
-			time.Sleep(1 * time.Second)
-			err = utils.GenerateBlock()
-			require.NoError(t, err)
+			utils.BumpAndBroadcast(t, tx, explorer)
 		}
 
 		// give time for the server to detect and process the fraud

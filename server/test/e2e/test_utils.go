@@ -144,6 +144,20 @@ func newCommand(name string, arg ...string) *exec.Cmd {
 	return cmd
 }
 
+func BumpAndBroadcast(t *testing.T, tx string, explorer explorer.Explorer) {
+	var transaction wire.MsgTx
+	err := transaction.Deserialize(hex.NewDecoder(strings.NewReader(tx)))
+	require.NoError(t, err)
+
+	childTx := BumpAnchorTx(t, &transaction, explorer)
+
+	_, err = explorer.Broadcast(tx, childTx)
+	require.NoError(t, err)
+
+	err = GenerateBlocks(1)
+	require.NoError(t, err)
+}
+
 // BumpAnchorTx is crafting and signing a transaction bumping the fees for a given tx with P2A output
 // it is using the onchain P2TR account to select UTXOs
 func BumpAnchorTx(t *testing.T, parent *wire.MsgTx, explorerSvc explorer.Explorer) string {
