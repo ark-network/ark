@@ -670,7 +670,7 @@ func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid strin
 
 	offchainTx, err := s.repoManager.OffchainTxs().GetOffchainTx(ctx, txid)
 	if err != nil {
-		return fmt.Errorf("failed to get offchain tx: %s", err)
+		return fmt.Errorf("offchain tx %s not found", err)
 	}
 
 	defer func() {
