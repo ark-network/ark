@@ -24,6 +24,11 @@ import (
 	log "github.com/sirupsen/logrus"
 )
 
+var (
+	regtestTickerInterval = time.Second
+	mainnetTickerInterval = time.Minute
+)
+
 func (s *covenantlessService) reactToFraud(ctx context.Context, vtxo domain.Vtxo, mutx *sync.Mutex) error {
 	mutx.Lock()
 	defer mutx.Unlock()
@@ -330,9 +335,9 @@ func (s *covenantlessService) bumpAnchorTx(ctx context.Context, parent *wire.Msg
 }
 
 func (s *covenantlessService) waitForConfirmation(ctx context.Context, txid string) {
-	tickerInterval := 1 * time.Minute
+	tickerInterval := mainnetTickerInterval
 	if s.network.Name == common.BitcoinRegTest.Name {
-		tickerInterval = 1 * time.Second
+		tickerInterval = regtestTickerInterval
 	}
 	ticker := time.NewTicker(tickerInterval)
 	defer ticker.Stop()
