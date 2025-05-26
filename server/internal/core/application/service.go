@@ -648,7 +648,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 		signedCheckpointTxs[rebuiltCheckpointTx.UnsignedTx.TxID()] = signedCheckpointTx
 	}
 
-	expiration, roundTxid := getSmallestExpiryRound(spentVtxos)
+	expiration, roundTxid := findFirstRoundToExpire(spentVtxos)
 	if expiration == 0 {
 		return nil, "", "", fmt.Errorf("invalid expiry")
 	}
@@ -715,7 +715,7 @@ func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid strin
 	return nil
 }
 
-func getSmallestExpiryRound(vtxos []domain.Vtxo) (expiration int64, roundTxid string) {
+func findFirstRoundToExpire(vtxos []domain.Vtxo) (expiration int64, roundTxid string) {
 	for i, vtxo := range vtxos {
 		if i == 0 || vtxo.ExpireAt < expiration {
 			roundTxid = vtxo.RoundTxid
