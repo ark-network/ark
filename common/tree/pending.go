@@ -27,7 +27,7 @@ func BuildOffchainTx(
 	inputAmount := int64(0)
 
 	for _, vtxo := range vtxos {
-		checkpointPtx, checkpointInput, err := buildCheckpoint(vtxo, serverUnrollScript)
+		checkpointPtx, checkpointInput, err := buildCheckpointTx(vtxo, serverUnrollScript)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -155,9 +155,9 @@ func buildVirtualTx(
 	return virtualPtx, nil
 }
 
-// buildCheckpoint creates a virtual tx sending to a "checkpoint" vtxo script composed of
+// buildCheckpointTx creates a virtual tx sending to a "checkpoint" vtxo script composed of
 // the server unroll script + the owner's collaborative closure.
-func buildCheckpoint(vtxo common.VtxoInput, serverUnrollScript *CSVMultisigClosure) (*psbt.Packet, common.VtxoInput, error) {
+func buildCheckpointTx(vtxo common.VtxoInput, serverUnrollScript *CSVMultisigClosure) (*psbt.Packet, common.VtxoInput, error) {
 	// create the checkpoint vtxo script from collaborative closure
 	collaborativeClosure, err := DecodeClosure(vtxo.Tapscript.RevealedScript)
 	if err != nil {
