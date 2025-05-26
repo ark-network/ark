@@ -19,13 +19,13 @@ const (
 // it also builds the checkpoint txs for each input vtxo.
 func BuildOffchainTx(
 	vtxos []common.VtxoInput, outputs []*wire.TxOut,
-	serverExitScript *CSVMultisigClosure,
+	serverUnrollScript *CSVMultisigClosure,
 ) (*psbt.Packet, []*psbt.Packet, error) {
 	checkpointsInputs := make([]common.VtxoInput, 0, len(vtxos))
 	checkpointsTxs := make([]*psbt.Packet, 0, len(vtxos))
 
 	for _, vtxo := range vtxos {
-		checkpointPtx, checkpointInput, err := buildCheckpoint(vtxo, serverExitScript)
+		checkpointPtx, checkpointInput, err := buildCheckpoint(vtxo, serverUnrollScript)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -144,16 +144,16 @@ func buildVirtualTx(
 }
 
 // buildCheckpoint creates a virtual tx sending to a "checkpoint" vtxo script composed of
-// the server exit script + the owner's spending closure.
-func buildCheckpoint(vtxo common.VtxoInput, serverExitScript *CSVMultisigClosure) (*psbt.Packet, common.VtxoInput, error) {
-	// create the checkpoint vtxo script from spending closure
-	spendingClosure, err := DecodeClosure(vtxo.Tapscript.RevealedScript)
+// the server exit script + the owner's collaborative closure.
+func buildCheckpoint(vtxo common.VtxoInput, serverUnrollScript *CSVMultisigClosure) (*psbt.Packet, common.VtxoInput, error) {
+	// create the checkpoint vtxo script from collaborative closure
+	collaborativeClosure, err := DecodeClosure(vtxo.Tapscript.RevealedScript)
 	if err != nil {
 		return nil, common.VtxoInput{}, err
 	}
 
 	checkpointVtxoScript := TapscriptsVtxoScript{
-		[]Closure{serverExitScript, spendingClosure},
+		[]Closure{serverUnrollScript, collaborativeClosure},
 	}
 
 	tapKey, tapTree, err := checkpointVtxoScript.TapTree()
@@ -175,13 +175,13 @@ func buildCheckpoint(vtxo common.VtxoInput, serverExitScript *CSVMultisigClosure
 		return nil, common.VtxoInput{}, err
 	}
 
-	// get the proof of the output created by the checkpoint tx
-	spendingLeafProof, err := tapTree.GetTaprootMerkleProof(txscript.NewBaseTapLeaf(vtxo.Tapscript.RevealedScript).TapHash())
+	// now that we have the checkpoint tx, we need to return the corresponding output that wille be used as input for the virtual tx
+	collaborativeLeafProof, err := tapTree.GetTaprootMerkleProof(txscript.NewBaseTapLeaf(vtxo.Tapscript.RevealedScript).TapHash())
 	if err != nil {
 		return nil, common.VtxoInput{}, err
 	}
 
-	ctrlBlock, err := txscript.ParseControlBlock(spendingLeafProof.ControlBlock)
+	ctrlBlock, err := txscript.ParseControlBlock(collaborativeLeafProof.ControlBlock)
 	if err != nil {
 		return nil, common.VtxoInput{}, err
 	}
@@ -199,7 +199,7 @@ func buildCheckpoint(vtxo common.VtxoInput, serverExitScript *CSVMultisigClosure
 		Amount: vtxo.Amount,
 		Tapscript: &waddrmgr.Tapscript{
 			ControlBlock:   ctrlBlock,
-			RevealedScript: spendingLeafProof.Script,
+			RevealedScript: collaborativeLeafProof.Script,
 		},
 		RevealedTapscripts: revealedTapscripts,
 	}

@@ -623,7 +623,7 @@ func (a *covenantlessArkClient) SendOffChain(
 		},
 	}
 
-	virtualTx, checkpointsTxs, err := buildOffchainTx(inputs, receivers, nil, checkpointExitScript)
+	virtualTx, checkpointsTxs, err := buildOffchainTx(inputs, receivers, checkpointExitScript)
 	if err != nil {
 		return "", err
 	}
@@ -3455,8 +3455,7 @@ type redeemTxInput struct {
 func buildOffchainTx(
 	vtxos []redeemTxInput,
 	receivers []Receiver,
-	extraWitnessSizes map[client.Outpoint]int,
-	serverExitScript *tree.CSVMultisigClosure,
+	serverUnrollScript *tree.CSVMultisigClosure,
 ) (string, []string, error) {
 	if len(vtxos) <= 0 {
 		return "", nil, fmt.Errorf("missing vtxos")
@@ -3535,7 +3534,7 @@ func buildOffchainTx(
 		})
 	}
 
-	virtualTx, checkpointsTxs, err := tree.BuildOffchainTx(ins, outs, serverExitScript)
+	virtualTx, checkpointsTxs, err := tree.BuildOffchainTx(ins, outs, serverUnrollScript)
 	if err != nil {
 		return "", nil, err
 	}
