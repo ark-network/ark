@@ -15,6 +15,33 @@ const (
 	cltvSequence = wire.MaxTxInSequenceNum - 1
 )
 
+// BuildOffchainTx builds an offchain tx for the given vtxos and outputs.
+// it also builds the checkpoint txs for each input vtxo.
+func BuildOffchainTx(
+	vtxos []common.VtxoInput, outputs []*wire.TxOut,
+	serverExitScript *CSVMultisigClosure,
+) (*psbt.Packet, []*psbt.Packet, error) {
+	checkpointsInputs := make([]common.VtxoInput, 0, len(vtxos))
+	checkpointsTxs := make([]*psbt.Packet, 0, len(vtxos))
+
+	for _, vtxo := range vtxos {
+		checkpointPtx, checkpointInput, err := buildCheckpoint(vtxo, serverExitScript)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		checkpointsInputs = append(checkpointsInputs, checkpointInput)
+		checkpointsTxs = append(checkpointsTxs, checkpointPtx)
+	}
+
+	virtualPtx, err := buildVirtualTx(checkpointsInputs, outputs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return virtualPtx, checkpointsTxs, nil
+}
+
 // buildVirtualTx builds a virtual tx for the given vtxos and outputs.
 // The virtual tx is spending VTXOs using collaborative taproot path.
 // An anchor output is added to the transaction
@@ -178,31 +205,4 @@ func buildCheckpoint(vtxo common.VtxoInput, serverExitScript *CSVMultisigClosure
 	}
 
 	return checkpointPtx, checkpointInput, nil
-}
-
-// BuildOffchainTx builds an offchain tx for the given vtxos and outputs.
-// it also builds the checkpoint txs for each input vtxo.
-func BuildOffchainTx(
-	vtxos []common.VtxoInput, outputs []*wire.TxOut,
-	serverExitScript *CSVMultisigClosure,
-) (*psbt.Packet, []*psbt.Packet, error) {
-	checkpointsInputs := make([]common.VtxoInput, 0, len(vtxos))
-	checkpointsTxs := make([]*psbt.Packet, 0, len(vtxos))
-
-	for _, vtxo := range vtxos {
-		checkpointPtx, checkpointInput, err := buildCheckpoint(vtxo, serverExitScript)
-		if err != nil {
-			return nil, nil, err
-		}
-
-		checkpointsInputs = append(checkpointsInputs, checkpointInput)
-		checkpointsTxs = append(checkpointsTxs, checkpointPtx)
-	}
-
-	virtualPtx, err := buildVirtualTx(checkpointsInputs, outputs)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return virtualPtx, checkpointsTxs, nil
 }
