@@ -24,6 +24,8 @@ func BuildOffchainTx(
 	checkpointsInputs := make([]common.VtxoInput, 0, len(vtxos))
 	checkpointsTxs := make([]*psbt.Packet, 0, len(vtxos))
 
+	inputAmount := int64(0)
+
 	for _, vtxo := range vtxos {
 		checkpointPtx, checkpointInput, err := buildCheckpoint(vtxo, serverUnrollScript)
 		if err != nil {
@@ -32,6 +34,16 @@ func BuildOffchainTx(
 
 		checkpointsInputs = append(checkpointsInputs, checkpointInput)
 		checkpointsTxs = append(checkpointsTxs, checkpointPtx)
+		inputAmount += vtxo.Amount
+	}
+
+	outputAmount := int64(0)
+	for _, output := range outputs {
+		outputAmount += output.Value
+	}
+
+	if inputAmount != outputAmount {
+		return nil, nil, fmt.Errorf("input amount is not equal to output amount")
 	}
 
 	virtualPtx, err := buildVirtualTx(checkpointsInputs, outputs)
