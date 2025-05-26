@@ -53,6 +53,7 @@ type Service interface {
 	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
 	GetTxRequestQueue(ctx context.Context, requestIds ...string) ([]TxRequestInfo, error)
 	DeleteTxRequests(ctx context.Context, requestIds ...string) error
+	DeleteTxRequestsByProof(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) error
 }
 
 type ServiceInfo struct {
