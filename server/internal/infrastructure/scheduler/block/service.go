@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/sirupsen/logrus"
+	log "github.com/sirupsen/logrus"
 )
 
 const tipHeightEndpoint = "/blocks/tip/height"
@@ -48,11 +48,11 @@ func (s *service) Start() {
 				time.Sleep(10 * time.Second)
 				taskes, err := s.popTaskes()
 				if err != nil {
-					fmt.Println("error fetching tasks:", err)
+					log.Errorf("error fetching tasks: %s", err)
 					continue
 				}
 
-				logrus.Debugf("fetched %d tasks", len(taskes))
+				log.Debugf("fetched %d tasks", len(taskes))
 				for _, task := range taskes {
 					go task()
 				}
@@ -142,7 +142,7 @@ func (s *service) fetchTipHeight() (int64, error) {
 		return 0, err
 	}
 
-	logrus.Debugf("fetching tip height from %s, got %d", s.tipURL, tip)
+	log.Debugf("fetching tip height from %s, got %d", s.tipURL, tip)
 
 	return tip, nil
 }

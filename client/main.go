@@ -7,14 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"syscall"
 
 	"github.com/ark-network/ark/common"
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
-	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/urfave/cli/v2"
 	"golang.org/x/term"
 )
@@ -536,18 +534,13 @@ func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver, withZeroFee
 		return printJSON(map[string]string{"txid": txid})
 	}
 
-	redeemTx, err := arkSdkClient.SendOffChain(
+	arkTxid, err := arkSdkClient.SendOffChain(
 		ctx.Context, computeExpiration, offchainReceivers, withZeroFees,
 	)
 	if err != nil {
 		return err
 	}
-	ptx, err := psbt.NewFromRawBytes(strings.NewReader(redeemTx), true)
-	if err != nil {
-		fmt.Println("WARN: failed to parse the redeem tx, returning the full psbt")
-		return printJSON(map[string]string{"redeem_tx": redeemTx})
-	}
-	return printJSON(map[string]string{"txid": ptx.UnsignedTx.TxHash().String()})
+	return printJSON(map[string]string{"txid": arkTxid})
 }
 
 func readPassword(ctx *cli.Context) ([]byte, error) {

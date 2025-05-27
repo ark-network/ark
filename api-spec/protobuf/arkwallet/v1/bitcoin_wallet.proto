@@ -113,15 +113,9 @@ service WalletService {
       body: "*"
     };
   }
-  rpc MinRelayFee(MinRelayFeeRequest) returns (MinRelayFeeResponse) {
+  rpc FeeRate(FeeRateRequest) returns (FeeRateResponse) {
     option (google.api.http) = {
-      post: "/v1/wallet/min-relay-fee"
-      body: "*"
-    };
-  }
-  rpc MinRelayFeeRate(MinRelayFeeRateRequest) returns (MinRelayFeeRateResponse) {
-    option (google.api.http) = {
-      get: "/v1/wallet/min-relay-fee-rate"
+      get: "/v1/wallet/fee-rate"
     };
   }
   rpc ListConnectorUtxos(ListConnectorUtxosRequest) returns (ListConnectorUtxosResponse) {
@@ -311,6 +305,7 @@ message SignTransactionTapscriptResponse {
 message SelectUtxosRequest {
   string asset = 1;
   uint64 amount = 2;
+  bool confirmed_only = 3;
 }
 message SelectUtxosResponse {
   repeated TxInput utxos = 1;
@@ -318,7 +313,7 @@ message SelectUtxosResponse {
 }
 
 message BroadcastTransactionRequest {
-  string tx_hex = 1;
+  repeated string txs = 1;
 }
 message BroadcastTransactionResponse {
   string txid = 1;
@@ -336,15 +331,8 @@ message EstimateFeesResponse {
   uint64 fee = 1;
 }
 
-message MinRelayFeeRequest {
-  uint64 vbytes = 1;
-}
-message MinRelayFeeResponse {
-  uint64 fee = 1;
-}
-
-message MinRelayFeeRateRequest {}
-message MinRelayFeeRateResponse {
+message FeeRateRequest {}
+message FeeRateResponse {
   uint64 sat_per_kvbyte = 1;
 }
 

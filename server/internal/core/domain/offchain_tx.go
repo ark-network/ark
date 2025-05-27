@@ -76,16 +76,15 @@ func (s *OffchainTx) Request(
 	if virtualTx == "" {
 		return nil, fmt.Errorf("missing virtual tx")
 	}
-	// TODO: uncomment this when adding support for checkpoint txs
-	// if len(unsignedCheckpointTxs) == 0 {
-	// 	return nil, fmt.Errorf("missing unsigned checkpoint txs")
-	// }
+	if len(unsignedCheckpointTxs) == 0 {
+		return nil, fmt.Errorf("missing unsigned checkpoint txs")
+	}
 
 	event := OffchainTxRequested{
 		Id:                    virtualTxid,
 		VirtualTx:             virtualTx,
 		UnsignedCheckpointTxs: unsignedCheckpointTxs,
-		Timestamp:             time.Now().Unix(),
+		StartingTimestamp:     time.Now().Unix(),
 	}
 	s.raise(event)
 	return event, nil
@@ -93,40 +92,45 @@ func (s *OffchainTx) Request(
 
 func (s *OffchainTx) Accept(
 	finalVirtualTx string, signedCheckpointTxs map[string]string,
-	commitmentTxids []string,
+	commitmentTxids []string, expiryTimestamp int64,
 ) (Event, error) {
 	if finalVirtualTx == "" {
 		return nil, fmt.Errorf("missing final virtual tx")
 	}
-	// TODO: uncomment this when adding support for checkpoint txs
-	// if len(signedCheckpointTxs) == 0 {
-	// 	return nil, fmt.Errorf("missing signed checkpoint txs")
-	// }
+	if len(signedCheckpointTxs) == 0 {
+		return nil, fmt.Errorf("missing signed checkpoint txs")
+	}
+	if len(signedCheckpointTxs) != len(s.CheckpointTxs) {
+		return nil, fmt.Errorf("invalid number of signed checkpoint txs, expected %d, got %d", len(s.CheckpointTxs), len(signedCheckpointTxs))
+	}
 	if len(commitmentTxids) == 0 {
 		return nil, fmt.Errorf("missing commitment txids")
 	}
 	if !s.IsRequested() {
 		return nil, fmt.Errorf("not in a valid stage to accept offchain tx")
 	}
+	if expiryTimestamp <= 0 {
+		return nil, fmt.Errorf("missing expiry timestamp")
+	}
 	event := OffchainTxAccepted{
 		Id:                  s.VirtualTxid,
 		FinalVirtualTx:      finalVirtualTx,
 		SignedCheckpointTxs: signedCheckpointTxs,
 		CommitmentTxids:     commitmentTxids,
+		ExpiryTimestamp:     expiryTimestamp,
 	}
 	s.raise(event)
 	return event, nil
 }
 
 func (s *OffchainTx) Finalize(
-	finalCheckpointTxs map[string]string, expiryTimestamp int64,
+	finalCheckpointTxs map[string]string,
 ) (Event, error) {
-	// TODO: uncomment this when adding support for checkpoint txs
-	// if finalCheckpointTxs == nil {
-	// 	return nil, fmt.Errorf("missing final checkpoint txs")
-	// }
-	if expiryTimestamp <= 0 {
-		return nil, fmt.Errorf("missing expiry timestamp")
+	if len(finalCheckpointTxs) == 0 {
+		return nil, fmt.Errorf("missing final checkpoint txs")
+	}
+	if len(finalCheckpointTxs) != len(s.CheckpointTxs) {
+		return nil, fmt.Errorf("invalid number of final checkpoint txs, expected %d, got %d", len(s.CheckpointTxs), len(finalCheckpointTxs))
 	}
 	if !s.IsAccepted() {
 		return nil, fmt.Errorf("not in a valid stage to finalize offchain tx")
@@ -136,7 +140,6 @@ func (s *OffchainTx) Finalize(
 		Id:                 s.VirtualTxid,
 		FinalCheckpointTxs: finalCheckpointTxs,
 		Timestamp:          time.Now().Unix(),
-		ExpiryTimestamp:    expiryTimestamp,
 	}
 	s.raise(event)
 	return event, nil
@@ -186,17 +189,17 @@ func (s *OffchainTx) on(event Event, replayed bool) {
 		s.VirtualTxid = e.Id
 		s.VirtualTx = e.VirtualTx
 		s.CheckpointTxs = e.UnsignedCheckpointTxs
-		s.StartingTimestamp = e.Timestamp
+		s.StartingTimestamp = e.StartingTimestamp
 	case OffchainTxAccepted:
 		s.Stage.Code = int(OffchainTxAcceptedStage)
 		s.VirtualTx = e.FinalVirtualTx
 		s.CheckpointTxs = e.SignedCheckpointTxs
 		s.CommitmentTxids = e.CommitmentTxids
+		s.ExpiryTimestamp = e.ExpiryTimestamp
 	case OffchainTxFinalized:
 		s.Stage.Code = int(OffchainTxFinalizedStage)
 		s.CheckpointTxs = e.FinalCheckpointTxs
 		s.EndingTimestamp = e.Timestamp
-		s.ExpiryTimestamp = e.ExpiryTimestamp
 	case OffchainTxFailed:
 		s.Stage.Failed = true
 		s.FailReason = e.Reason

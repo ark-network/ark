@@ -7,6 +7,7 @@ import (
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
+	"github.com/btcsuite/btcwallet/waddrmgr"
 )
 
 const (
@@ -14,15 +15,54 @@ const (
 	cltvSequence = wire.MaxTxInSequenceNum - 1
 )
 
-// BuildRedeemTx builds a redeem tx for the given vtxos and outputs.
-// The redeem tx is spending VTXOs using collaborative taproot path.
+// BuildOffchainTx builds an offchain tx for the given vtxos and outputs.
+// it also builds the checkpoint txs for each input vtxo.
+func BuildOffchainTx(
+	vtxos []common.VtxoInput, outputs []*wire.TxOut,
+	serverUnrollScript *CSVMultisigClosure,
+) (*psbt.Packet, []*psbt.Packet, error) {
+	checkpointsInputs := make([]common.VtxoInput, 0, len(vtxos))
+	checkpointsTxs := make([]*psbt.Packet, 0, len(vtxos))
+
+	inputAmount := int64(0)
+
+	for _, vtxo := range vtxos {
+		checkpointPtx, checkpointInput, err := buildCheckpointTx(vtxo, serverUnrollScript)
+		if err != nil {
+			return nil, nil, err
+		}
+
+		checkpointsInputs = append(checkpointsInputs, checkpointInput)
+		checkpointsTxs = append(checkpointsTxs, checkpointPtx)
+		inputAmount += vtxo.Amount
+	}
+
+	outputAmount := int64(0)
+	for _, output := range outputs {
+		outputAmount += output.Value
+	}
+
+	if inputAmount != outputAmount {
+		return nil, nil, fmt.Errorf("input amount is not equal to output amount")
+	}
+
+	virtualPtx, err := buildVirtualTx(checkpointsInputs, outputs)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return virtualPtx, checkpointsTxs, nil
+}
+
+// buildVirtualTx builds a virtual tx for the given vtxos and outputs.
+// The virtual tx is spending VTXOs using collaborative taproot path.
 // An anchor output is added to the transaction
-func BuildRedeemTx(
+func buildVirtualTx(
 	vtxos []common.VtxoInput,
 	outputs []*wire.TxOut,
-) (string, error) {
+) (*psbt.Packet, error) {
 	if len(vtxos) <= 0 {
-		return "", fmt.Errorf("missing vtxos")
+		return nil, fmt.Errorf("missing vtxos")
 	}
 
 	ins := make([]*wire.OutPoint, 0, len(vtxos))
@@ -35,7 +75,7 @@ func BuildRedeemTx(
 
 	for index, vtxo := range vtxos {
 		if len(vtxo.RevealedTapscripts) == 0 {
-			return "", fmt.Errorf("missing tapscripts for input %d", index)
+			return nil, fmt.Errorf("missing tapscripts for input %d", index)
 		}
 
 		tapscripts[index] = vtxo.RevealedTapscripts
@@ -45,7 +85,7 @@ func BuildRedeemTx(
 
 		vtxoOutputScript, err := common.P2TRScript(taprootKey)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		witnessUtxos[index] = &wire.TxOut{
@@ -55,7 +95,7 @@ func BuildRedeemTx(
 
 		ctrlBlockBytes, err := vtxo.Tapscript.ControlBlock.ToBytes()
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		signingTapLeaves[index] = &psbt.TaprootTapLeafScript{
@@ -66,7 +106,7 @@ func BuildRedeemTx(
 
 		closure, err := DecodeClosure(vtxo.Tapscript.RevealedScript)
 		if err != nil {
-			return "", err
+			return nil, err
 		}
 
 		// check if the closure is a CLTV multisig closure,
@@ -76,11 +116,11 @@ func BuildRedeemTx(
 			locktime = &cltv.Locktime
 			if locktime.IsSeconds() {
 				if txLocktime != 0 && !txLocktime.IsSeconds() {
-					return "", fmt.Errorf("mixed absolute locktime types")
+					return nil, fmt.Errorf("mixed absolute locktime types")
 				}
 			} else {
 				if txLocktime != 0 && txLocktime.IsSeconds() {
-					return "", fmt.Errorf("mixed absolute locktime types")
+					return nil, fmt.Errorf("mixed absolute locktime types")
 				}
 			}
 
@@ -97,25 +137,84 @@ func BuildRedeemTx(
 		}
 	}
 
-	redeemPtx, err := psbt.New(
+	virtualPtx, err := psbt.New(
 		ins, append(outputs, AnchorOutput()), 3, uint32(txLocktime), sequences,
 	)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	for i := range redeemPtx.Inputs {
-		redeemPtx.Inputs[i].WitnessUtxo = witnessUtxos[i]
-		redeemPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{signingTapLeaves[i]}
-		if err := AddTaprootTree(i, redeemPtx, tapscripts[i]); err != nil {
-			return "", err
+	for i := range virtualPtx.Inputs {
+		virtualPtx.Inputs[i].WitnessUtxo = witnessUtxos[i]
+		virtualPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{signingTapLeaves[i]}
+		if err := AddTaprootTree(i, virtualPtx, tapscripts[i]); err != nil {
+			return nil, err
 		}
 	}
 
-	redeemTx, err := redeemPtx.B64Encode()
+	return virtualPtx, nil
+}
+
+// buildCheckpointTx creates a virtual tx sending to a "checkpoint" vtxo script composed of
+// the server unroll script + the owner's collaborative closure.
+func buildCheckpointTx(vtxo common.VtxoInput, serverUnrollScript *CSVMultisigClosure) (*psbt.Packet, common.VtxoInput, error) {
+	// create the checkpoint vtxo script from collaborative closure
+	collaborativeClosure, err := DecodeClosure(vtxo.Tapscript.RevealedScript)
 	if err != nil {
-		return "", err
+		return nil, common.VtxoInput{}, err
 	}
 
-	return redeemTx, nil
+	checkpointVtxoScript := TapscriptsVtxoScript{
+		[]Closure{serverUnrollScript, collaborativeClosure},
+	}
+
+	tapKey, tapTree, err := checkpointVtxoScript.TapTree()
+	if err != nil {
+		return nil, common.VtxoInput{}, err
+	}
+
+	checkpointPkScript, err := common.P2TRScript(tapKey)
+	if err != nil {
+		return nil, common.VtxoInput{}, err
+	}
+
+	// build the checkpoint virtual tx
+	checkpointPtx, err := buildVirtualTx(
+		[]common.VtxoInput{vtxo},
+		[]*wire.TxOut{{Value: vtxo.Amount, PkScript: checkpointPkScript}},
+	)
+	if err != nil {
+		return nil, common.VtxoInput{}, err
+	}
+
+	// now that we have the checkpoint tx, we need to return the corresponding output that will be used as input for the virtual tx
+	collaborativeLeafProof, err := tapTree.GetTaprootMerkleProof(txscript.NewBaseTapLeaf(vtxo.Tapscript.RevealedScript).TapHash())
+	if err != nil {
+		return nil, common.VtxoInput{}, err
+	}
+
+	ctrlBlock, err := txscript.ParseControlBlock(collaborativeLeafProof.ControlBlock)
+	if err != nil {
+		return nil, common.VtxoInput{}, err
+	}
+
+	revealedTapscripts, err := checkpointVtxoScript.Encode()
+	if err != nil {
+		return nil, common.VtxoInput{}, err
+	}
+
+	checkpointInput := common.VtxoInput{
+		Outpoint: &wire.OutPoint{
+			Hash:  checkpointPtx.UnsignedTx.TxHash(),
+			Index: 0,
+		},
+		Amount: vtxo.Amount,
+		Tapscript: &waddrmgr.Tapscript{
+			ControlBlock:   ctrlBlock,
+			RevealedScript: collaborativeLeafProof.Script,
+		},
+		RevealedTapscripts: revealedTapscripts,
+	}
+
+	return checkpointPtx, checkpointInput, nil
 }

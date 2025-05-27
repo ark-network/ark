@@ -86,13 +86,12 @@ func testRequestOffchainTx(t *testing.T) {
 					unsignedCheckpointTxs: unsignedCheckpointTxs,
 					expectedErr:           "missing virtual tx",
 				},
-				// TODO: uncomment this when adding support for checkpoint txs
-				// {
-				// 	offchainTx:  domain.NewOffchainTx(),
-				// 	txid:        txid,
-				// 	virtualTx:   virtualTx,
-				// 	expectedErr: "missing unsigned checkpoint txs",
-				// },
+				{
+					offchainTx:  domain.NewOffchainTx(),
+					txid:        txid,
+					virtualTx:   virtualTx,
+					expectedErr: "missing unsigned checkpoint txs",
+				},
 				{
 					offchainTx: &domain.OffchainTx{
 						Stage: domain.Stage{
@@ -136,7 +135,7 @@ func testAcceptOffchainTx(t *testing.T) {
 			require.NotNil(t, event)
 			require.Empty(t, offchainTx.RootCommitmentTxid())
 
-			event, err = offchainTx.Accept(finalVirtualTx, signedCheckpointTxs, commitmentTxids)
+			event, err = offchainTx.Accept(finalVirtualTx, signedCheckpointTxs, commitmentTxids, expiryTimestamp)
 			require.NoError(t, err)
 			require.NotNil(t, event)
 			require.False(t, offchainTx.IsRequested())
@@ -159,6 +158,7 @@ func testAcceptOffchainTx(t *testing.T) {
 				finalVirtualTx      string
 				signedCheckpointTxs map[string]string
 				commitmentTxids     []string
+				expiryTimestamp     int64
 				expectedErr         string
 			}{
 				{
@@ -170,27 +170,30 @@ func testAcceptOffchainTx(t *testing.T) {
 					signedCheckpointTxs: signedCheckpointTxs,
 					commitmentTxids:     commitmentTxids,
 					expectedErr:         "missing final virtual tx",
+					expiryTimestamp:     expiryTimestamp,
 				},
-				// TODO: uncomment this when adding support for checkpoint txs
-				// {
-				// 	offchainTx: &domain.OffchainTx{
-				// 		Stage: domain.Stage{
-				// 			Code: int(domain.OffchainTxRequestedStage),
-				// 		},
-				// 	},
-				// 	finalVirtualTx:  finalVirtualTx,
-				// 	commitmentTxids: commitmentTxids,
-				// 	expectedErr:     "missing signed checkpoint txs",
-				// },
 				{
 					offchainTx: &domain.OffchainTx{
 						Stage: domain.Stage{
 							Code: int(domain.OffchainTxRequestedStage),
 						},
 					},
+					finalVirtualTx:  finalVirtualTx,
+					commitmentTxids: commitmentTxids,
+					expectedErr:     "missing signed checkpoint txs",
+					expiryTimestamp: expiryTimestamp,
+				},
+				{
+					offchainTx: &domain.OffchainTx{
+						Stage: domain.Stage{
+							Code: int(domain.OffchainTxRequestedStage),
+						},
+						CheckpointTxs: signedCheckpointTxs,
+					},
 					finalVirtualTx:      finalVirtualTx,
 					signedCheckpointTxs: signedCheckpointTxs,
 					expectedErr:         "missing commitment txids",
+					expiryTimestamp:     expiryTimestamp,
 				},
 				{
 					offchainTx: &domain.OffchainTx{
@@ -198,28 +201,45 @@ func testAcceptOffchainTx(t *testing.T) {
 							Code:   int(domain.OffchainTxRequestedStage),
 							Failed: true,
 						},
+						CheckpointTxs: signedCheckpointTxs,
 					},
 					finalVirtualTx:      finalVirtualTx,
 					signedCheckpointTxs: signedCheckpointTxs,
 					commitmentTxids:     commitmentTxids,
 					expectedErr:         "not in a valid stage to accept offchain tx",
+					expiryTimestamp:     expiryTimestamp,
+				},
+				{
+					offchainTx: &domain.OffchainTx{
+						Stage: domain.Stage{
+							Code: int(domain.OffchainTxRequestedStage),
+						},
+						CheckpointTxs: signedCheckpointTxs,
+					},
+					finalVirtualTx:      finalVirtualTx,
+					signedCheckpointTxs: signedCheckpointTxs,
+					commitmentTxids:     commitmentTxids,
+					expectedErr:         "missing expiry timestamp",
+					expiryTimestamp:     0,
 				},
 				{
 					offchainTx: &domain.OffchainTx{
 						Stage: domain.Stage{
 							Code: int(domain.OffchainTxAcceptedStage),
 						},
+						CheckpointTxs: signedCheckpointTxs,
 					},
 					finalVirtualTx:      finalVirtualTx,
 					signedCheckpointTxs: signedCheckpointTxs,
 					commitmentTxids:     commitmentTxids,
 					expectedErr:         "not in a valid stage to accept offchain tx",
+					expiryTimestamp:     expiryTimestamp,
 				},
 			}
 
 			for _, f := range fixtures {
 				event, err := f.offchainTx.Accept(
-					f.finalVirtualTx, f.signedCheckpointTxs, f.commitmentTxids,
+					f.finalVirtualTx, f.signedCheckpointTxs, f.commitmentTxids, f.expiryTimestamp,
 				)
 				require.EqualError(t, err, f.expectedErr)
 				require.Nil(t, event)
@@ -237,12 +257,12 @@ func testFinalizeOffchainTx(t *testing.T) {
 			require.NotNil(t, event)
 
 			event, err = offchainTx.Accept(
-				finalVirtualTx, signedCheckpointTxs, commitmentTxids,
+				finalVirtualTx, signedCheckpointTxs, commitmentTxids, expiryTimestamp,
 			)
 			require.NoError(t, err)
 			require.NotNil(t, event)
 
-			event, err = offchainTx.Finalize(finalCheckpointTxs, expiryTimestamp)
+			event, err = offchainTx.Finalize(finalCheckpointTxs)
 			require.NoError(t, err)
 			require.NotNil(t, event)
 			require.False(t, offchainTx.IsRequested())
@@ -262,27 +282,15 @@ func testFinalizeOffchainTx(t *testing.T) {
 			fixtures := []struct {
 				offchainTx         *domain.OffchainTx
 				finalCheckpointTxs map[string]string
-				expiryTimestamp    int64
 				expectedErr        string
 			}{
-				// TODO: uncomment this when adding support for checkpoint txs
-				// {
-				// 	offchainTx: &domain.OffchainTx{
-				// 		Stage: domain.Stage{
-				// 			Code: int(domain.OffchainTxAcceptedStage),
-				// 		},
-				// 	},
-				// 	expiryTimestamp: expiryTimestamp,
-				// 	expectedErr:     "missing final checkpoint txs",
-				// },
 				{
 					offchainTx: &domain.OffchainTx{
 						Stage: domain.Stage{
 							Code: int(domain.OffchainTxAcceptedStage),
 						},
 					},
-					finalCheckpointTxs: finalCheckpointTxs,
-					expectedErr:        "missing expiry timestamp",
+					expectedErr: "missing final checkpoint txs",
 				},
 				{
 					offchainTx: &domain.OffchainTx{
@@ -290,9 +298,9 @@ func testFinalizeOffchainTx(t *testing.T) {
 							Code:   int(domain.OffchainTxAcceptedStage),
 							Failed: true,
 						},
+						CheckpointTxs: finalCheckpointTxs,
 					},
 					finalCheckpointTxs: finalCheckpointTxs,
-					expiryTimestamp:    expiryTimestamp,
 					expectedErr:        "not in a valid stage to finalize offchain tx",
 				},
 				{
@@ -300,15 +308,15 @@ func testFinalizeOffchainTx(t *testing.T) {
 						Stage: domain.Stage{
 							Code: int(domain.OffchainTxFinalizedStage),
 						},
+						CheckpointTxs: finalCheckpointTxs,
 					},
 					finalCheckpointTxs: finalCheckpointTxs,
-					expiryTimestamp:    expiryTimestamp,
 					expectedErr:        "not in a valid stage to finalize offchain tx",
 				},
 			}
 
 			for _, f := range fixtures {
-				event, err := f.offchainTx.Finalize(f.finalCheckpointTxs, f.expiryTimestamp)
+				event, err := f.offchainTx.Finalize(f.finalCheckpointTxs)
 				require.EqualError(t, err, f.expectedErr)
 				require.Nil(t, event)
 			}
@@ -324,7 +332,9 @@ func testFailOffchainTx(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, event)
 
-			event, err = offchainTx.Accept(finalVirtualTx, signedCheckpointTxs, commitmentTxids)
+			event, err = offchainTx.Accept(
+				finalVirtualTx, signedCheckpointTxs, commitmentTxids, expiryTimestamp,
+			)
 			require.NoError(t, err)
 			require.NotNil(t, event)
 

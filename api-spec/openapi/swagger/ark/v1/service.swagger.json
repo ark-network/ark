@@ -101,14 +101,14 @@
         ]
       }
     },
-    "/v1/redeem-tx": {
+    "/v1/offchain-tx/finalize": {
       "post": {
-        "operationId": "ArkService_SubmitRedeemTx",
+        "operationId": "ArkService_FinalizeOffchainTx",
         "responses": {
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/v1SubmitRedeemTxResponse"
+              "$ref": "#/definitions/v1FinalizeOffchainTxResponse"
             }
           },
           "default": {
@@ -124,7 +124,39 @@
             "in": "body",
             "required": true,
             "schema": {
-              "$ref": "#/definitions/v1SubmitRedeemTxRequest"
+              "$ref": "#/definitions/v1FinalizeOffchainTxRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
+    "/v1/offchain-tx/submit": {
+      "post": {
+        "operationId": "ArkService_SubmitOffchainTx",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SubmitOffchainTxResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SubmitOffchainTxRequest"
             }
           }
         ],
@@ -474,6 +506,23 @@
     "v1DeleteIntentResponse": {
       "type": "object"
     },
+    "v1FinalizeOffchainTxRequest": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "checkpointTxs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1FinalizeOffchainTxResponse": {
+      "type": "object"
+    },
     "v1GetBoardingAddressRequest": {
       "type": "object",
       "properties": {
@@ -783,10 +832,6 @@
         "connectors": {
           "$ref": "#/definitions/v1Tree"
         },
-        "minRelayFeeRate": {
-          "type": "string",
-          "format": "int64"
-        },
         "connectorsIndex": {
           "type": "object",
           "additionalProperties": {
@@ -870,22 +915,34 @@
         }
       }
     },
-    "v1SubmitRedeemTxRequest": {
+    "v1SubmitOffchainTxRequest": {
       "type": "object",
       "properties": {
-        "redeemTx": {
+        "virtualTx": {
           "type": "string"
+        },
+        "checkpointTxs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
-    "v1SubmitRedeemTxResponse": {
+    "v1SubmitOffchainTxResponse": {
       "type": "object",
       "properties": {
-        "signedRedeemTx": {
+        "signedVirtualTx": {
           "type": "string"
         },
         "txid": {
           "type": "string"
+        },
+        "signedCheckpointTxs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },

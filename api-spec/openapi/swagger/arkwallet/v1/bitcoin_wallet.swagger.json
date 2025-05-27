@@ -262,6 +262,28 @@
         ]
       }
     },
+    "/v1/wallet/fee-rate": {
+      "get": {
+        "operationId": "WalletService_FeeRate",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1FeeRateResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/googlerpcStatus"
+            }
+          }
+        },
+        "tags": [
+          "WalletService"
+        ]
+      }
+    },
     "/v1/wallet/forfeit-address": {
       "get": {
         "operationId": "WalletService_GetForfeitAddress",
@@ -356,60 +378,6 @@
             "description": "A successful response.",
             "schema": {
               "$ref": "#/definitions/v1MainAccountBalanceResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googlerpcStatus"
-            }
-          }
-        },
-        "tags": [
-          "WalletService"
-        ]
-      }
-    },
-    "/v1/wallet/min-relay-fee": {
-      "post": {
-        "operationId": "WalletService_MinRelayFee",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1MinRelayFeeResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/googlerpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1MinRelayFeeRequest"
-            }
-          }
-        ],
-        "tags": [
-          "WalletService"
-        ]
-      }
-    },
-    "/v1/wallet/min-relay-fee-rate": {
-      "get": {
-        "operationId": "WalletService_MinRelayFeeRate",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1MinRelayFeeRateResponse"
             }
           },
           "default": {
@@ -1032,8 +1000,11 @@
     "v1BroadcastTransactionRequest": {
       "type": "object",
       "properties": {
-        "txHex": {
-          "type": "string"
+        "txs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
@@ -1112,6 +1083,15 @@
       "type": "object",
       "properties": {
         "fee": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
+    "v1FeeRateResponse": {
+      "type": "object",
+      "properties": {
+        "satPerKvbyte": {
           "type": "string",
           "format": "uint64"
         }
@@ -1245,33 +1225,6 @@
         }
       }
     },
-    "v1MinRelayFeeRateResponse": {
-      "type": "object",
-      "properties": {
-        "satPerKvbyte": {
-          "type": "string",
-          "format": "uint64"
-        }
-      }
-    },
-    "v1MinRelayFeeRequest": {
-      "type": "object",
-      "properties": {
-        "vbytes": {
-          "type": "string",
-          "format": "uint64"
-        }
-      }
-    },
-    "v1MinRelayFeeResponse": {
-      "type": "object",
-      "properties": {
-        "fee": {
-          "type": "string",
-          "format": "uint64"
-        }
-      }
-    },
     "v1NotificationStreamResponse": {
       "type": "object",
       "properties": {
@@ -1307,6 +1260,9 @@
         "amount": {
           "type": "string",
           "format": "uint64"
+        },
+        "confirmedOnly": {
+          "type": "boolean"
         }
       }
     },

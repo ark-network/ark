@@ -37,8 +37,7 @@ type WalletServiceClient interface {
 	GetReadyUpdate(ctx context.Context, in *GetReadyUpdateRequest, opts ...grpc.CallOption) (WalletService_GetReadyUpdateClient, error)
 	IsTransactionConfirmed(ctx context.Context, in *IsTransactionConfirmedRequest, opts ...grpc.CallOption) (*IsTransactionConfirmedResponse, error)
 	EstimateFees(ctx context.Context, in *EstimateFeesRequest, opts ...grpc.CallOption) (*EstimateFeesResponse, error)
-	MinRelayFee(ctx context.Context, in *MinRelayFeeRequest, opts ...grpc.CallOption) (*MinRelayFeeResponse, error)
-	MinRelayFeeRate(ctx context.Context, in *MinRelayFeeRateRequest, opts ...grpc.CallOption) (*MinRelayFeeRateResponse, error)
+	FeeRate(ctx context.Context, in *FeeRateRequest, opts ...grpc.CallOption) (*FeeRateResponse, error)
 	ListConnectorUtxos(ctx context.Context, in *ListConnectorUtxosRequest, opts ...grpc.CallOption) (*ListConnectorUtxosResponse, error)
 	MainAccountBalance(ctx context.Context, in *MainAccountBalanceRequest, opts ...grpc.CallOption) (*MainAccountBalanceResponse, error)
 	ConnectorsAccountBalance(ctx context.Context, in *ConnectorsAccountBalanceRequest, opts ...grpc.CallOption) (*ConnectorsAccountBalanceResponse, error)
@@ -256,18 +255,9 @@ func (c *walletServiceClient) EstimateFees(ctx context.Context, in *EstimateFees
 	return out, nil
 }
 
-func (c *walletServiceClient) MinRelayFee(ctx context.Context, in *MinRelayFeeRequest, opts ...grpc.CallOption) (*MinRelayFeeResponse, error) {
-	out := new(MinRelayFeeResponse)
-	err := c.cc.Invoke(ctx, "/arkwallet.v1.WalletService/MinRelayFee", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *walletServiceClient) MinRelayFeeRate(ctx context.Context, in *MinRelayFeeRateRequest, opts ...grpc.CallOption) (*MinRelayFeeRateResponse, error) {
-	out := new(MinRelayFeeRateResponse)
-	err := c.cc.Invoke(ctx, "/arkwallet.v1.WalletService/MinRelayFeeRate", in, out, opts...)
+func (c *walletServiceClient) FeeRate(ctx context.Context, in *FeeRateRequest, opts ...grpc.CallOption) (*FeeRateResponse, error) {
+	out := new(FeeRateResponse)
+	err := c.cc.Invoke(ctx, "/arkwallet.v1.WalletService/FeeRate", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -437,8 +427,7 @@ type WalletServiceServer interface {
 	GetReadyUpdate(*GetReadyUpdateRequest, WalletService_GetReadyUpdateServer) error
 	IsTransactionConfirmed(context.Context, *IsTransactionConfirmedRequest) (*IsTransactionConfirmedResponse, error)
 	EstimateFees(context.Context, *EstimateFeesRequest) (*EstimateFeesResponse, error)
-	MinRelayFee(context.Context, *MinRelayFeeRequest) (*MinRelayFeeResponse, error)
-	MinRelayFeeRate(context.Context, *MinRelayFeeRateRequest) (*MinRelayFeeRateResponse, error)
+	FeeRate(context.Context, *FeeRateRequest) (*FeeRateResponse, error)
 	ListConnectorUtxos(context.Context, *ListConnectorUtxosRequest) (*ListConnectorUtxosResponse, error)
 	MainAccountBalance(context.Context, *MainAccountBalanceRequest) (*MainAccountBalanceResponse, error)
 	ConnectorsAccountBalance(context.Context, *ConnectorsAccountBalanceRequest) (*ConnectorsAccountBalanceResponse, error)
@@ -515,11 +504,8 @@ func (UnimplementedWalletServiceServer) IsTransactionConfirmed(context.Context, 
 func (UnimplementedWalletServiceServer) EstimateFees(context.Context, *EstimateFeesRequest) (*EstimateFeesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method EstimateFees not implemented")
 }
-func (UnimplementedWalletServiceServer) MinRelayFee(context.Context, *MinRelayFeeRequest) (*MinRelayFeeResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method MinRelayFee not implemented")
-}
-func (UnimplementedWalletServiceServer) MinRelayFeeRate(context.Context, *MinRelayFeeRateRequest) (*MinRelayFeeRateResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method MinRelayFeeRate not implemented")
+func (UnimplementedWalletServiceServer) FeeRate(context.Context, *FeeRateRequest) (*FeeRateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FeeRate not implemented")
 }
 func (UnimplementedWalletServiceServer) ListConnectorUtxos(context.Context, *ListConnectorUtxosRequest) (*ListConnectorUtxosResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListConnectorUtxos not implemented")
@@ -917,38 +903,20 @@ func _WalletService_EstimateFees_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
-func _WalletService_MinRelayFee_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MinRelayFeeRequest)
+func _WalletService_FeeRate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FeeRateRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(WalletServiceServer).MinRelayFee(ctx, in)
+		return srv.(WalletServiceServer).FeeRate(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/arkwallet.v1.WalletService/MinRelayFee",
+		FullMethod: "/arkwallet.v1.WalletService/FeeRate",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletServiceServer).MinRelayFee(ctx, req.(*MinRelayFeeRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _WalletService_MinRelayFeeRate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MinRelayFeeRateRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(WalletServiceServer).MinRelayFeeRate(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/arkwallet.v1.WalletService/MinRelayFeeRate",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(WalletServiceServer).MinRelayFeeRate(ctx, req.(*MinRelayFeeRateRequest))
+		return srv.(WalletServiceServer).FeeRate(ctx, req.(*FeeRateRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1270,12 +1238,8 @@ var WalletService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _WalletService_EstimateFees_Handler,
 		},
 		{
-			MethodName: "MinRelayFee",
-			Handler:    _WalletService_MinRelayFee_Handler,
-		},
-		{
-			MethodName: "MinRelayFeeRate",
-			Handler:    _WalletService_MinRelayFeeRate_Handler,
+			MethodName: "FeeRate",
+			Handler:    _WalletService_FeeRate_Handler,
 		},
 		{
 			MethodName: "ListConnectorUtxos",

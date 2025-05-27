@@ -175,11 +175,6 @@ func (n *NoteClosure) Decode(script []byte) (bool, error) {
 	return true, nil
 }
 
-// WitnessSize returns the size of the witness data excluding the control block and script
-func (n *NoteClosure) WitnessSize(_ ...int) int {
-	return preimageSize
-}
-
 // Witness returns the witness stack for spending the fake vtxo note
 func (n *NoteClosure) Witness(controlBlock []byte, opts map[string][]byte) (wire.TxWitness, error) {
 	preimage, ok := opts["preimage"]

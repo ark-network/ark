@@ -8,17 +8,20 @@ import (
 
 func BuildForfeitTx(
 	connectorInput, vtxoInput *wire.OutPoint,
-	vtxoAmount, connectorAmount, feeAmount uint64,
+	vtxoAmount, connectorAmount uint64,
 	vtxoScript, connectorScript, serverScript []byte,
 	txLocktime uint32,
 ) (*psbt.Packet, error) {
-	version := int32(2)
+	version := int32(3)
 
 	ins := []*wire.OutPoint{connectorInput, vtxoInput}
-	outs := []*wire.TxOut{{
-		Value:    int64(vtxoAmount) + int64(connectorAmount) - int64(feeAmount),
-		PkScript: serverScript,
-	}}
+	outs := []*wire.TxOut{
+		{
+			Value:    int64(vtxoAmount) + int64(connectorAmount),
+			PkScript: serverScript,
+		},
+		AnchorOutput(),
+	}
 
 	vtxoSequence := wire.MaxTxInSequenceNum
 	if txLocktime != 0 {

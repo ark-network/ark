@@ -283,19 +283,32 @@ func (a *grpcClient) Ping(
 	return err
 }
 
-func (a *grpcClient) SubmitRedeemTx(
-	ctx context.Context, redeemTx string,
-) (string, string, error) {
-	req := &arkv1.SubmitRedeemTxRequest{
-		RedeemTx: redeemTx,
+func (a *grpcClient) SubmitOffchainTx(
+	ctx context.Context, virtualTx string, checkpointsTxs []string,
+) ([]string, string, string, error) {
+	req := &arkv1.SubmitOffchainTxRequest{
+		VirtualTx:     virtualTx,
+		CheckpointTxs: checkpointsTxs,
 	}
 
-	resp, err := a.svc.SubmitRedeemTx(ctx, req)
+	resp, err := a.svc.SubmitOffchainTx(ctx, req)
 	if err != nil {
-		return "", "", err
+		return nil, "", "", err
 	}
 
-	return resp.GetSignedRedeemTx(), resp.GetTxid(), nil
+	return resp.GetSignedCheckpointTxs(), resp.GetSignedVirtualTx(), resp.GetTxid(), nil
+}
+
+func (a *grpcClient) FinalizeOffchainTx(
+	ctx context.Context, virtualTxid string, checkpointsTxs []string,
+) error {
+	req := &arkv1.FinalizeOffchainTxRequest{
+		Txid:          virtualTxid,
+		CheckpointTxs: checkpointsTxs,
+	}
+
+	_, err := a.svc.FinalizeOffchainTx(ctx, req)
+	return err
 }
 
 func (a *grpcClient) GetRound(
