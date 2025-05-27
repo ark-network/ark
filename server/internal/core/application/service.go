@@ -2047,7 +2047,10 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 
 func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree tree.TxTree, cosignersPubkeys []string) {
 	ev := RoundSigningStarted{
-		Id:               s.currentRound.Id,
+		RoundEvent: domain.RoundEvent{
+			Id:   s.currentRound.Id,
+			Type: domain.EventTypeUndefined,
+		},
 		UnsignedVtxoTree: unsignedVtxoTree,
 		UnsignedRoundTx:  s.currentRound.CommitmentTx,
 		CosignersPubkeys: cosignersPubkeys,
@@ -2058,7 +2061,10 @@ func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree
 
 func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combinedNonces tree.TreeNonces) {
 	ev := RoundSigningNoncesGenerated{
-		Id:     s.currentRound.Id,
+		RoundEvent: domain.RoundEvent{
+			Id:   s.currentRound.Id,
+			Type: domain.EventTypeUndefined,
+		},
 		Nonces: combinedNonces,
 	}
 

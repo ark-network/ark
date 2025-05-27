@@ -2,8 +2,30 @@ package domain
 
 import "context"
 
+type EventType int
+
+const (
+	EventTypeUndefined EventType = iota
+
+	// Round
+	EventTypeTxRequestsRegistered
+	EventTypeRoundStarted
+	EventTypeRoundFinalizationStarted
+	EventTypeRoundFinalized
+	EventTypeRoundFailed
+)
+
+const (
+	// OffchainTx
+	EventTypeOffchainTxRequested EventType = iota + 100
+	EventTypeOffchainTxAccepted
+	EventTypeOffchainTxFinalized
+	EventTypeOffchainTxFailed
+)
+
 type Event interface {
 	GetTopic() string
+	GetType() EventType
 }
 
 type EventRepository interface {

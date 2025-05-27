@@ -6,19 +6,21 @@ import (
 
 const RoundTopic = "round"
 
-func (r RoundStarted) GetTopic() string             { return RoundTopic }
-func (r RoundFinalizationStarted) GetTopic() string { return RoundTopic }
-func (r RoundFinalized) GetTopic() string           { return RoundTopic }
-func (r RoundFailed) GetTopic() string              { return RoundTopic }
-func (r TxRequestsRegistered) GetTopic() string     { return RoundTopic }
+type RoundEvent struct {
+	Id   string
+	Type EventType
+}
+
+func (r RoundEvent) GetTopic() string   { return RoundTopic }
+func (r RoundEvent) GetType() EventType { return r.Type }
 
 type RoundStarted struct {
-	Id        string
+	RoundEvent
 	Timestamp int64
 }
 
 type RoundFinalizationStarted struct {
-	Id                 string
+	RoundEvent
 	VtxoTree           tree.TxTree
 	Connectors         tree.TxTree
 	ConnectorAddress   string
@@ -28,7 +30,7 @@ type RoundFinalizationStarted struct {
 }
 
 type RoundFinalized struct {
-	Id                string
+	RoundEvent
 	Txid              string
 	ForfeitTxs        []ForfeitTx
 	FinalCommitmentTx string
@@ -36,12 +38,12 @@ type RoundFinalized struct {
 }
 
 type RoundFailed struct {
-	Id        string
+	RoundEvent
 	Err       string
 	Timestamp int64
 }
 
 type TxRequestsRegistered struct {
-	Id         string
+	RoundEvent
 	TxRequests []TxRequest
 }
