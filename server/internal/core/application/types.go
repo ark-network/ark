@@ -28,7 +28,14 @@ type Service interface {
 		ctx context.Context, address string,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
-	SubmitRedeemTx(ctx context.Context, redeemTx string) (signedRedeemTx, redeemTxid string, err error)
+	SubmitOffchainTx(ctx context.Context, checkpointTxs []string, signedRedeemTx string) (
+		signedCheckpoints []string,
+		finalRedeemTx string, redeemTxid string,
+		err error,
+	)
+	FinalizeOffchainTx(
+		ctx context.Context, txid string, finalCheckpoints []string,
+	) error
 	GetBoardingAddress(
 		ctx context.Context, userPubkey *secp256k1.PublicKey,
 	) (address string, scripts []string, err error)
@@ -46,6 +53,7 @@ type Service interface {
 	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
 	GetTxRequestQueue(ctx context.Context, requestIds ...string) ([]TxRequestInfo, error)
 	DeleteTxRequests(ctx context.Context, requestIds ...string) error
+	DeleteTxRequestsByProof(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) error
 }
 
 type ServiceInfo struct {

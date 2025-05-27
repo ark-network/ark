@@ -156,6 +156,45 @@ func (h *handler) RegisterIntent(
 	}, nil
 }
 
+func (h *handler) DeleteIntent(
+	ctx context.Context, req *arkv1.DeleteIntentRequest,
+) (*arkv1.DeleteIntentResponse, error) {
+	requestID := req.GetRequestId()
+	bip322Signature := req.GetBip322Signature()
+
+	if requestID != "" {
+		if err := h.svc.DeleteTxRequests(ctx, requestID); err != nil {
+			return nil, err
+		}
+		return &arkv1.DeleteIntentResponse{}, nil
+	}
+
+	if bip322Signature == nil {
+		return nil, status.Error(codes.InvalidArgument, "missing request id or bip322 signature")
+	}
+
+	signature, err := bip322.DecodeSignature(bip322Signature.GetSignature())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 signature")
+	}
+
+	intentMessage := bip322Signature.GetMessage()
+	if len(intentMessage) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing BIP0322 message")
+	}
+
+	var message tree.IntentMessage
+	if err := message.Decode(intentMessage); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 message")
+	}
+
+	if err := h.svc.DeleteTxRequestsByProof(ctx, *signature, message); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.DeleteIntentResponse{}, nil
+}
+
 func (h *handler) RegisterInputsForNextRound(
 	ctx context.Context, req *arkv1.RegisterInputsForNextRoundRequest,
 ) (*arkv1.RegisterInputsForNextRoundResponse, error) {
@@ -344,24 +383,47 @@ func (h *handler) Ping(
 	return &arkv1.PingResponse{}, nil
 }
 
-func (h *handler) SubmitRedeemTx(
-	ctx context.Context, req *arkv1.SubmitRedeemTxRequest,
-) (*arkv1.SubmitRedeemTxResponse, error) {
-	if req.GetRedeemTx() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing redeem tx")
+func (h *handler) SubmitOffchainTx(
+	ctx context.Context, req *arkv1.SubmitOffchainTxRequest,
+) (*arkv1.SubmitOffchainTxResponse, error) {
+	if req.GetVirtualTx() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing virtual tx")
 	}
 
-	signedRedeemTx, redeemTxid, err := h.svc.SubmitRedeemTx(
-		ctx, req.GetRedeemTx(),
+	if len(req.GetCheckpointTxs()) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing checkpoint txs")
+	}
+
+	signedCheckpoints, signedVirtualTx, virtualTxid, err := h.svc.SubmitOffchainTx(
+		ctx, req.GetCheckpointTxs(), req.GetVirtualTx(),
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return &arkv1.SubmitRedeemTxResponse{
-		SignedRedeemTx: signedRedeemTx,
-		Txid:           redeemTxid,
+	return &arkv1.SubmitOffchainTxResponse{
+		SignedVirtualTx:     signedVirtualTx,
+		Txid:                virtualTxid,
+		SignedCheckpointTxs: signedCheckpoints,
 	}, nil
+}
+
+func (h *handler) FinalizeOffchainTx(
+	ctx context.Context, req *arkv1.FinalizeOffchainTxRequest,
+) (*arkv1.FinalizeOffchainTxResponse, error) {
+	if req.GetTxid() == "" {
+		return nil, status.Error(codes.InvalidArgument, "missing txid")
+	}
+
+	if len(req.GetCheckpointTxs()) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing checkpoint txs")
+	}
+
+	if err := h.svc.FinalizeOffchainTx(ctx, req.GetTxid(), req.GetCheckpointTxs()); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.FinalizeOffchainTxResponse{}, nil
 }
 
 func (h *handler) GetRound(
@@ -539,7 +601,6 @@ func (h *handler) listenToEvents() {
 						RoundTx:         e.RoundTx,
 						VtxoTree:        vtxoTree(e.VtxoTree).toProto(),
 						Connectors:      vtxoTree(e.Connectors).toProto(),
-						MinRelayFeeRate: e.MinRelayFeeRate,
 						ConnectorsIndex: connectorsIndex(e.ConnectorsIndex).toProto(),
 					},
 				},

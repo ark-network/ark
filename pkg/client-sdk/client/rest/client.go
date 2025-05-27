@@ -24,7 +24,6 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 // restClient implements the TransportClient interface for REST communication
@@ -203,6 +202,20 @@ func (a *restClient) RegisterIntent(
 	return resp.Payload.RequestID, nil
 }
 
+func (a *restClient) DeleteIntent(_ context.Context, requestID, signature, message string) error {
+	body := &models.V1DeleteIntentRequest{
+		Bip322Signature: &models.V1Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
+		RequestID: requestID,
+	}
+	_, err := a.svc.ArkServiceDeleteIntent(
+		ark_service.NewArkServiceDeleteIntentParams().WithBody(body),
+	)
+	return err
+}
+
 func (a *restClient) RegisterOutputsForNextRound(
 	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {
@@ -358,18 +371,11 @@ func (c *restClient) GetEventStream(
 					vtxoTree := treeFromProto{e.VtxoTree}.parse()
 					connectorTree := treeFromProto{e.Connectors}.parse()
 
-					minRelayFeeRate, err := strconv.Atoi(e.MinRelayFeeRate)
-					if err != nil {
-						_err = err
-						break
-					}
-
 					event = client.RoundFinalizationEvent{
 						ID:              e.ID,
 						Tx:              e.RoundTx,
 						Tree:            vtxoTree,
 						Connectors:      connectorTree,
-						MinRelayFeeRate: chainfee.SatPerKVByte(minRelayFeeRate),
 						ConnectorsIndex: connectorsIndexFromProto{e.ConnectorsIndex}.parse(),
 					}
 				case resp.Result.RoundFinalized != nil:
@@ -420,19 +426,33 @@ func (a *restClient) Ping(
 	return err
 }
 
-func (a *restClient) SubmitRedeemTx(
-	ctx context.Context, redeemTx string,
-) (string, string, error) {
-	req := &models.V1SubmitRedeemTxRequest{
-		RedeemTx: redeemTx,
+func (a *restClient) SubmitOffchainTx(
+	ctx context.Context, virtualTx string, checkpointsTxs []string,
+) ([]string, string, string, error) {
+	req := &models.V1SubmitOffchainTxRequest{
+		VirtualTx:     virtualTx,
+		CheckpointTxs: checkpointsTxs,
 	}
-	resp, err := a.svc.ArkServiceSubmitRedeemTx(
-		ark_service.NewArkServiceSubmitRedeemTxParams().WithBody(req),
+	resp, err := a.svc.ArkServiceSubmitOffchainTx(
+		ark_service.NewArkServiceSubmitOffchainTxParams().WithBody(req),
 	)
 	if err != nil {
-		return "", "", err
+		return nil, "", "", err
 	}
-	return resp.Payload.SignedRedeemTx, resp.Payload.Txid, nil
+	return resp.Payload.SignedCheckpointTxs, resp.Payload.SignedVirtualTx, resp.Payload.Txid, nil
+}
+
+func (a *restClient) FinalizeOffchainTx(
+	ctx context.Context, virtualTxid string, checkpointsTxs []string,
+) error {
+	req := &models.V1FinalizeOffchainTxRequest{
+		Txid:          virtualTxid,
+		CheckpointTxs: checkpointsTxs,
+	}
+	_, err := a.svc.ArkServiceFinalizeOffchainTx(
+		ark_service.NewArkServiceFinalizeOffchainTxParams().WithBody(req),
+	)
+	return err
 }
 
 func (a *restClient) GetRound(

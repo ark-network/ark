@@ -6,7 +6,6 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 var (
@@ -32,12 +31,11 @@ type WalletService interface {
 		ctx context.Context, partialTx string, extractRawTx bool,
 	) (string, error)
 	SignTransactionTapscript(ctx context.Context, partialTx string, inputIndexes []int) (string, error) // inputIndexes == nil means sign all inputs
-	SelectUtxos(ctx context.Context, asset string, amount uint64) ([]TxInput, uint64, error)
-	BroadcastTransaction(ctx context.Context, txHex string) (string, error)
+	SelectUtxos(ctx context.Context, asset string, amount uint64, confirmedOnly bool) ([]TxInput, uint64, error)
+	BroadcastTransaction(ctx context.Context, txs ...string) (string, error)
 	WaitForSync(ctx context.Context, txid string) error
 	EstimateFees(ctx context.Context, psbt string) (uint64, error)
-	MinRelayFee(ctx context.Context, vbytes uint64) (uint64, error)
-	MinRelayFeeRate(ctx context.Context) chainfee.SatPerKVByte
+	FeeRate(ctx context.Context) (uint64, error)
 	ListConnectorUtxos(ctx context.Context, connectorAddress string) ([]TxInput, error)
 	MainAccountBalance(ctx context.Context) (uint64, uint64, error)
 	ConnectorsAccountBalance(ctx context.Context) (uint64, uint64, error)

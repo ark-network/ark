@@ -54,6 +54,10 @@ type ClientOption func(*runtime.ClientOperation)
 
 // ClientService is the interface for Client methods
 type ClientService interface {
+	ArkServiceDeleteIntent(params *ArkServiceDeleteIntentParams, opts ...ClientOption) (*ArkServiceDeleteIntentOK, error)
+
+	ArkServiceFinalizeOffchainTx(params *ArkServiceFinalizeOffchainTxParams, opts ...ClientOption) (*ArkServiceFinalizeOffchainTxOK, error)
+
 	ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error)
 
 	ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams, opts ...ClientOption) (*ArkServiceGetEventStreamOK, error)
@@ -70,7 +74,7 @@ type ClientService interface {
 
 	ArkServiceRegisterOutputsForNextRound(params *ArkServiceRegisterOutputsForNextRoundParams, opts ...ClientOption) (*ArkServiceRegisterOutputsForNextRoundOK, error)
 
-	ArkServiceSubmitRedeemTx(params *ArkServiceSubmitRedeemTxParams, opts ...ClientOption) (*ArkServiceSubmitRedeemTxOK, error)
+	ArkServiceSubmitOffchainTx(params *ArkServiceSubmitOffchainTxParams, opts ...ClientOption) (*ArkServiceSubmitOffchainTxOK, error)
 
 	ArkServiceSubmitSignedForfeitTxs(params *ArkServiceSubmitSignedForfeitTxsParams, opts ...ClientOption) (*ArkServiceSubmitSignedForfeitTxsOK, error)
 
@@ -79,6 +83,80 @@ type ClientService interface {
 	ArkServiceSubmitTreeSignatures(params *ArkServiceSubmitTreeSignaturesParams, opts ...ClientOption) (*ArkServiceSubmitTreeSignaturesOK, error)
 
 	SetTransport(transport runtime.ClientTransport)
+}
+
+/*
+ArkServiceDeleteIntent ark service delete intent API
+*/
+func (a *Client) ArkServiceDeleteIntent(params *ArkServiceDeleteIntentParams, opts ...ClientOption) (*ArkServiceDeleteIntentOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceDeleteIntentParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_DeleteIntent",
+		Method:             "POST",
+		PathPattern:        "/v1/round/deleteIntent",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceDeleteIntentReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceDeleteIntentOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceDeleteIntentDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceFinalizeOffchainTx ark service finalize offchain tx API
+*/
+func (a *Client) ArkServiceFinalizeOffchainTx(params *ArkServiceFinalizeOffchainTxParams, opts ...ClientOption) (*ArkServiceFinalizeOffchainTxOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceFinalizeOffchainTxParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_FinalizeOffchainTx",
+		Method:             "POST",
+		PathPattern:        "/v1/offchain-tx/finalize",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceFinalizeOffchainTxReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceFinalizeOffchainTxOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceFinalizeOffchainTxDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
 /*
@@ -378,22 +456,22 @@ func (a *Client) ArkServiceRegisterOutputsForNextRound(params *ArkServiceRegiste
 }
 
 /*
-ArkServiceSubmitRedeemTx ark service submit redeem tx API
+ArkServiceSubmitOffchainTx ark service submit offchain tx API
 */
-func (a *Client) ArkServiceSubmitRedeemTx(params *ArkServiceSubmitRedeemTxParams, opts ...ClientOption) (*ArkServiceSubmitRedeemTxOK, error) {
+func (a *Client) ArkServiceSubmitOffchainTx(params *ArkServiceSubmitOffchainTxParams, opts ...ClientOption) (*ArkServiceSubmitOffchainTxOK, error) {
 	// TODO: Validate the params before sending
 	if params == nil {
-		params = NewArkServiceSubmitRedeemTxParams()
+		params = NewArkServiceSubmitOffchainTxParams()
 	}
 	op := &runtime.ClientOperation{
-		ID:                 "ArkService_SubmitRedeemTx",
+		ID:                 "ArkService_SubmitOffchainTx",
 		Method:             "POST",
-		PathPattern:        "/v1/redeem-tx",
+		PathPattern:        "/v1/offchain-tx/submit",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
 		Params:             params,
-		Reader:             &ArkServiceSubmitRedeemTxReader{formats: a.formats},
+		Reader:             &ArkServiceSubmitOffchainTxReader{formats: a.formats},
 		Context:            params.Context,
 		Client:             params.HTTPClient,
 	}
@@ -405,12 +483,12 @@ func (a *Client) ArkServiceSubmitRedeemTx(params *ArkServiceSubmitRedeemTxParams
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*ArkServiceSubmitRedeemTxOK)
+	success, ok := result.(*ArkServiceSubmitOffchainTxOK)
 	if ok {
 		return success, nil
 	}
 	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceSubmitRedeemTxDefault)
+	unexpectedSuccess := result.(*ArkServiceSubmitOffchainTxDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

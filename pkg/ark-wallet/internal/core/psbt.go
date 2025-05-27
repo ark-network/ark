@@ -1,6 +1,7 @@
 package application
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 	"time"
@@ -12,6 +13,10 @@ import (
 	"github.com/btcsuite/btcwallet/waddrmgr"
 	log "github.com/sirupsen/logrus"
 )
+
+var ANCHOR_PKSCRIPT = []byte{
+	0x51, 0x02, 0x4e, 0x73,
+}
 
 func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, error) {
 	updater, err := psbt.NewUpdater(packet)
@@ -54,6 +59,11 @@ func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, e
 
 	for idx, input := range packet.Inputs {
 		if input.WitnessUtxo == nil {
+			continue
+		}
+
+		if bytes.Equal(input.WitnessUtxo.PkScript, ANCHOR_PKSCRIPT) {
+			// skip anchor inputs
 			continue
 		}
 

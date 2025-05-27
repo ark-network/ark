@@ -13,7 +13,6 @@ import (
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 )
 
 const (
@@ -37,6 +36,7 @@ type TransportClient interface {
 	RegisterIntent(
 		ctx context.Context, signature, message string,
 	) (string, error)
+	DeleteIntent(ctx context.Context, requestID, signature, message string) error
 	RegisterOutputsForNextRound(
 		ctx context.Context, requestID string, outputs []Output, musig2 *tree.Musig2,
 	) error
@@ -53,9 +53,12 @@ type TransportClient interface {
 		ctx context.Context, requestID string,
 	) (<-chan RoundEventChannel, func(), error)
 	Ping(ctx context.Context, requestID string) error
-	SubmitRedeemTx(
-		ctx context.Context, partialSignedRedeemTx string,
-	) (signedRedeemTx, redeemTxid string, err error)
+	SubmitOffchainTx(
+		ctx context.Context, virtualTx string, checkpointsTxs []string,
+	) (signedCheckpointsTxs []string, signedVirtualTx, virtualTxid string, err error)
+	FinalizeOffchainTx(
+		ctx context.Context, virtualTxid string, checkpointsTxs []string,
+	) error
 	ListVtxos(ctx context.Context, addr string) ([]Vtxo, []Vtxo, error)
 	GetRound(ctx context.Context, txID string) (*Round, error)
 	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
@@ -231,7 +234,6 @@ type RoundFinalizationEvent struct {
 	Tx              string
 	Tree            tree.TxTree
 	Connectors      tree.TxTree
-	MinRelayFeeRate chainfee.SatPerKVByte
 	ConnectorsIndex map[string]Outpoint // <txid:vout> -> outpoint
 }
 

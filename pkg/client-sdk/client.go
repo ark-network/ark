@@ -37,7 +37,6 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/lightningnetwork/lnd/input"
 	"github.com/lightningnetwork/lnd/lntypes"
-	"github.com/lightningnetwork/lnd/lnwallet/chainfee"
 	log "github.com/sirupsen/logrus"
 	"golang.org/x/exp/slices"
 )
@@ -617,23 +616,44 @@ func (a *covenantlessArkClient) SendOffChain(
 		})
 	}
 
-	feeRate := chainfee.FeePerKwFloor
-	redeemTx, err := buildRedeemTx(inputs, receivers, feeRate.FeePerVByte(), nil, withZeroFees)
+	checkpointExitScript := &tree.CSVMultisigClosure{
+		Locktime: a.UnilateralExitDelay,
+		MultisigClosure: tree.MultisigClosure{
+			PubKeys: []*secp256k1.PublicKey{a.ServerPubKey},
+		},
+	}
+
+	virtualTx, checkpointsTxs, err := buildOffchainTx(inputs, receivers, checkpointExitScript)
 	if err != nil {
 		return "", err
 	}
 
-	signedRedeemTx, err := a.wallet.SignTransaction(ctx, a.explorer, redeemTx)
+	signedVirtualTx, err := a.wallet.SignTransaction(ctx, a.explorer, virtualTx)
 	if err != nil {
 		return "", err
 	}
 
-	_, redeemTxid, err := a.client.SubmitRedeemTx(ctx, signedRedeemTx)
+	// TODO store signed virtual tx client side ?
+	signedCheckpoints, _, virtualTxid, err := a.client.SubmitOffchainTx(ctx, signedVirtualTx, checkpointsTxs)
 	if err != nil {
 		return "", err
 	}
 
-	return redeemTxid, nil
+	finalCheckpoints := make([]string, 0, len(signedCheckpoints))
+
+	for _, checkpoint := range signedCheckpoints {
+		signedTx, err := a.wallet.SignTransaction(ctx, a.explorer, checkpoint)
+		if err != nil {
+			return "", nil
+		}
+		finalCheckpoints = append(finalCheckpoints, signedTx)
+	}
+
+	if err = a.client.FinalizeOffchainTx(ctx, virtualTxid, finalCheckpoints); err != nil {
+		return "", err
+	}
+
+	return virtualTxid, nil
 }
 
 func (a *covenantlessArkClient) RedeemNotes(ctx context.Context, notes []string, opts ...Option) (string, error) {
@@ -763,7 +783,7 @@ func (a *covenantlessArkClient) StartUnilateralExit(ctx context.Context) error {
 // bumpAnchorTx is crafting and signing a transaction bumping the fees for a given tx with P2A output
 // it is using the onchain P2TR account to select UTXOs
 func (a *covenantlessArkClient) bumpAnchorTx(ctx context.Context, parent *wire.MsgTx) (string, error) {
-	anchor, err := findAnchorOutpoint(parent)
+	anchor, err := tree.FindAnchorOutpoint(parent)
 	if err != nil {
 		return "", err
 	}
@@ -2213,7 +2233,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 		signedForfeits, err := a.createAndSignForfeits(
 			ctx,
 			vtxos, event.Connectors.Leaves(),
-			event.ConnectorsIndex, event.MinRelayFeeRate,
+			event.ConnectorsIndex,
 		)
 		if err != nil {
 			return nil, "", err
@@ -2458,7 +2478,6 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 	vtxosToSign []client.TapscriptsVtxo,
 	connectorsTxs []tree.Node,
 	connectorsIndex map[string]client.Outpoint,
-	feeRate chainfee.SatPerKVByte,
 ) ([]string, error) {
 	parsedForfeitAddr, err := btcutil.DecodeAddress(a.ForfeitAddress, nil)
 	if err != nil {
@@ -2466,11 +2485,6 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 	}
 
 	forfeitPkScript, err := txscript.PayToAddrScript(parsedForfeitAddr)
-	if err != nil {
-		return nil, err
-	}
-
-	parsedScript, err := txscript.ParsePkScript(forfeitPkScript)
 	if err != nil {
 		return nil, err
 	}
@@ -2548,24 +2562,6 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			LeafVersion:  txscript.BaseLeafVersion,
 		}
 
-		ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
-		if err != nil {
-			return nil, err
-		}
-
-		feeAmount, err := common.ComputeForfeitTxFee(
-			feeRate,
-			&waddrmgr.Tapscript{
-				RevealedScript: leafProof.Script,
-				ControlBlock:   ctrlBlock,
-			},
-			forfeitClosure.WitnessSize(),
-			parsedScript.Class(),
-		)
-		if err != nil {
-			return nil, err
-		}
-
 		vtxoLocktime := common.AbsoluteLocktime(0)
 		if cltv, ok := forfeitClosure.(*tree.CLTVMultisigClosure); ok {
 			vtxoLocktime = cltv.Locktime
@@ -2584,7 +2580,6 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 			vtxoInput,
 			vtxo.Amount,
 			uint64(connector.Value),
-			feeAmount,
 			vtxoOutputScript,
 			connector.PkScript,
 			forfeitPkScript,
@@ -3457,27 +3452,25 @@ type redeemTxInput struct {
 	ForfeitLeafHash chainhash.Hash
 }
 
-func buildRedeemTx(
+func buildOffchainTx(
 	vtxos []redeemTxInput,
 	receivers []Receiver,
-	feeRate chainfee.SatPerVByte,
-	extraWitnessSizes map[client.Outpoint]int,
-	withZeroFees bool,
-) (string, error) {
+	serverUnrollScript *tree.CSVMultisigClosure,
+) (string, []string, error) {
 	if len(vtxos) <= 0 {
-		return "", fmt.Errorf("missing vtxos")
+		return "", nil, fmt.Errorf("missing vtxos")
 	}
 
 	ins := make([]common.VtxoInput, 0, len(vtxos))
 
 	for _, vtxo := range vtxos {
 		if len(vtxo.Tapscripts) <= 0 {
-			return "", fmt.Errorf("missing tapscripts for vtxo %s", vtxo.Txid)
+			return "", nil, fmt.Errorf("missing tapscripts for vtxo %s", vtxo.Txid)
 		}
 
 		vtxoTxID, err := chainhash.NewHashFromStr(vtxo.Txid)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		vtxoOutpoint := &wire.OutPoint{
@@ -3487,27 +3480,22 @@ func buildRedeemTx(
 
 		vtxoScript, err := tree.ParseVtxoScript(vtxo.Tapscripts)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		_, vtxoTree, err := vtxoScript.TapTree()
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		leafProof, err := vtxoTree.GetTaprootMerkleProof(vtxo.ForfeitLeafHash)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		ctrlBlock, err := txscript.ParseControlBlock(leafProof.ControlBlock)
 		if err != nil {
-			return "", err
-		}
-
-		closure, err := tree.DecodeClosure(leafProof.Script)
-		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		tapscript := &waddrmgr.Tapscript{
@@ -3515,16 +3503,10 @@ func buildRedeemTx(
 			ControlBlock:   ctrlBlock,
 		}
 
-		extraWitnessSize := 0
-		if size, ok := extraWitnessSizes[client.Outpoint{Txid: vtxo.Txid, VOut: vtxo.VOut}]; ok {
-			extraWitnessSize = size
-		}
-
 		ins = append(ins, common.VtxoInput{
 			Outpoint:           vtxoOutpoint,
 			Tapscript:          tapscript,
 			Amount:             int64(vtxo.Amount),
-			WitnessSize:        closure.WitnessSize(extraWitnessSize),
 			RevealedTapscripts: vtxo.Tapscripts,
 		})
 	}
@@ -3533,17 +3515,17 @@ func buildRedeemTx(
 
 	for i, receiver := range receivers {
 		if receiver.IsOnchain() {
-			return "", fmt.Errorf("receiver %d is onchain", i)
+			return "", nil, fmt.Errorf("receiver %d is onchain", i)
 		}
 
 		addr, err := common.DecodeAddress(receiver.To())
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		newVtxoScript, err := common.P2TRScript(addr.VtxoTapKey)
 		if err != nil {
-			return "", err
+			return "", nil, err
 		}
 
 		outs = append(outs, &wire.TxOut{
@@ -3552,7 +3534,26 @@ func buildRedeemTx(
 		})
 	}
 
-	return tree.BuildRedeemTx(ins, outs)
+	virtualTx, checkpointsTxs, err := tree.BuildOffchainTx(ins, outs, serverUnrollScript)
+	if err != nil {
+		return "", nil, err
+	}
+
+	virtualTxB64, err := virtualTx.B64Encode()
+	if err != nil {
+		return "", nil, err
+	}
+
+	checkpoints := make([]string, 0, len(checkpointsTxs))
+	for _, tx := range checkpointsTxs {
+		txB64, err := tx.B64Encode()
+		if err != nil {
+			return "", nil, err
+		}
+		checkpoints = append(checkpoints, txB64)
+	}
+
+	return virtualTxB64, checkpoints, nil
 }
 
 func inputsToDerivationPath(inputs []client.Outpoint, notesInputs []string) string {
@@ -3837,25 +3838,6 @@ func computeVSize(tx *wire.MsgTx) lntypes.VByte {
 	totalSize := tx.SerializeSize() // including witness
 	weight := totalSize + baseSize*3
 	return lntypes.WeightUnit(uint64(weight)).ToVB()
-}
-
-func findAnchorOutpoint(tx *wire.MsgTx) (*wire.OutPoint, error) {
-	anchorIndex := -1
-	for outIndex, out := range tx.TxOut {
-		if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
-			anchorIndex = outIndex
-			break
-		}
-	}
-
-	if anchorIndex == -1 {
-		return nil, fmt.Errorf("anchor not found")
-	}
-
-	return &wire.OutPoint{
-		Hash:  tx.TxHash(),
-		Index: uint32(anchorIndex),
-	}, nil
 }
 
 // custom BIP322 finalizer function handling note vtxo inputs

@@ -204,17 +204,21 @@ func (s *service) Lock(_ context.Context) error {
 	return nil
 }
 
-func (s *service) BroadcastTransaction(_ context.Context, txHex string) (string, error) {
-	if err := s.extraAPI.broadcast(txHex); err != nil {
+func (s *service) BroadcastTransaction(_ context.Context, txs ...string) (string, error) {
+	if err := s.extraAPI.broadcast(txs...); err != nil {
 		return "", err
 	}
 
-	var tx wire.MsgTx
-	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txHex))); err != nil {
-		return "", err
+	if len(txs) == 1 {
+		var tx wire.MsgTx
+		if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txs[0]))); err != nil {
+			return "", err
+		}
+
+		return tx.TxHash().String(), nil
 	}
 
-	return tx.TxHash().String(), nil
+	return "", nil
 }
 
 func (s *service) ConnectorsAccountBalance(_ context.Context) (uint64, uint64, error) {
@@ -222,7 +226,9 @@ func (s *service) ConnectorsAccountBalance(_ context.Context) (uint64, uint64, e
 		return 0, 0, err
 	}
 
-	utxos, err := s.listUtxos(p2trKeyScope)
+	withConfirmedOnly := true
+	withUnconfirmed := !withConfirmedOnly
+	utxos, err := s.listUtxos(p2trKeyScope, withUnconfirmed)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -240,7 +246,9 @@ func (s *service) MainAccountBalance(_ context.Context) (uint64, uint64, error) 
 		return 0, 0, err
 	}
 
-	utxos, err := s.listUtxos(p2wpkhKeyScope)
+	withConfirmedOnly := true
+	withUnconfirmed := !withConfirmedOnly
+	utxos, err := s.listUtxos(p2wpkhKeyScope, withUnconfirmed)
 	if err != nil {
 		return 0, 0, err
 	}
@@ -324,7 +332,9 @@ func (s *service) ListConnectorUtxos(_ context.Context, connectorAddress string)
 		return nil, err
 	}
 
-	utxos, err := s.listUtxos(p2trKeyScope)
+	withConfirmedOnly := true
+	withUnconfirmed := !withConfirmedOnly
+	utxos, err := s.listUtxos(p2trKeyScope, withUnconfirmed)
 	if err != nil {
 		return nil, err
 	}
@@ -379,14 +389,14 @@ func (s *service) LockConnectorUtxos(_ context.Context, utxos []TxOutpoint) erro
 	return nil
 }
 
-func (s *service) SelectUtxos(_ context.Context, _ string, amount uint64) ([]TxInput, uint64, error) {
+func (s *service) SelectUtxos(_ context.Context, _ string, amount uint64, confirmedOnly bool) ([]TxInput, uint64, error) {
 	if err := s.safeCheck(); err != nil {
 		return nil, 0, err
 	}
 
 	w := s.wallet.InternalWallet()
 
-	utxos, err := s.listUtxos(p2wpkhKeyScope)
+	utxos, err := s.listUtxos(p2wpkhKeyScope, confirmedOnly)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -617,13 +627,13 @@ func (s *service) WaitForSync(ctx context.Context, txid string) error {
 	}
 }
 
-func (s *service) MinRelayFeeRate(_ context.Context) chainfee.SatPerKVByte {
-	return s.feeEstimator.RelayFeePerKW().FeePerKVByte()
-}
+func (s *service) FeeRate(_ context.Context) (chainfee.SatPerKVByte, error) {
+	feeRate, err := s.feeEstimator.EstimateFeePerKW(1)
+	if err != nil {
+		return 0, err
+	}
 
-func (s *service) MinRelayFee(_ context.Context, vbytes uint64) (uint64, error) {
-	fee := s.feeEstimator.RelayFeePerKW().FeeForVByte(lntypes.VByte(vbytes))
-	return uint64(fee.ToUnit(btcutil.AmountSatoshi)), nil
+	return feeRate.FeePerKVByte(), nil
 }
 
 func (s *service) EstimateFees(_ context.Context, partialTx string) (uint64, error) {
@@ -806,8 +816,9 @@ func (s *service) IsTransactionConfirmed(
 
 func (s *service) GetDustAmount(
 	ctx context.Context,
-) (uint64, error) {
-	return s.MinRelayFee(ctx, biggestInputSize)
+) uint64 {
+	fee := s.feeEstimator.RelayFeePerKW().FeeForVByte(lntypes.VByte(biggestInputSize))
+	return uint64(fee.ToUnit(btcutil.AmountSatoshi))
 }
 
 func (s *service) GetTransaction(_ context.Context, txid string) (string, error) {
@@ -1235,7 +1246,7 @@ func (s *service) isInitialized() bool {
 	return exist
 }
 
-func (s *service) listUtxos(scope waddrmgr.KeyScope) ([]*wallet.TransactionOutput, error) {
+func (s *service) listUtxos(scope waddrmgr.KeyScope, confirmedOnly bool) ([]*wallet.TransactionOutput, error) {
 	w := s.wallet.InternalWallet()
 
 	accountNumber, err := w.AccountNumber(scope, string(mainAccount))
@@ -1243,9 +1254,14 @@ func (s *service) listUtxos(scope waddrmgr.KeyScope) ([]*wallet.TransactionOutpu
 		return nil, err
 	}
 
+	requiredConfirmations := int32(0)
+	if confirmedOnly {
+		requiredConfirmations = 1
+	}
+
 	utxos, err := w.UnspentOutputs(wallet.OutputSelectionPolicy{
 		Account:               accountNumber,
-		RequiredConfirmations: 0,
+		RequiredConfirmations: requiredConfirmations,
 	})
 	if err != nil {
 		return nil, err

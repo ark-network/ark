@@ -1238,9 +1238,21 @@ INSERT INTO offchain_tx (
 ) VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT(txid) DO UPDATE SET
     txid = EXCLUDED.txid,
-    starting_timestamp = EXCLUDED.starting_timestamp,
-    ending_timestamp = EXCLUDED.ending_timestamp,
-    expiry_timestamp = EXCLUDED.expiry_timestamp,
+    starting_timestamp = CASE 
+        WHEN EXCLUDED.starting_timestamp IS NULL OR EXCLUDED.starting_timestamp = 0 
+        THEN offchain_tx.starting_timestamp 
+        ELSE EXCLUDED.starting_timestamp 
+    END,
+    ending_timestamp = CASE 
+        WHEN EXCLUDED.ending_timestamp IS NULL OR EXCLUDED.ending_timestamp = 0 
+        THEN offchain_tx.ending_timestamp 
+        ELSE EXCLUDED.ending_timestamp 
+    END,
+    expiry_timestamp = CASE 
+        WHEN EXCLUDED.expiry_timestamp IS NULL OR EXCLUDED.expiry_timestamp = 0 
+        THEN offchain_tx.expiry_timestamp 
+        ELSE EXCLUDED.expiry_timestamp 
+    END,
     fail_reason = EXCLUDED.fail_reason,
     stage_code = EXCLUDED.stage_code
 `

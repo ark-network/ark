@@ -19,7 +19,7 @@ type WalletOption func(*service) error
 type extraChainAPI interface {
 	getTx(txid string) (*wire.MsgTx, error)
 	getTxStatus(txid string) (isConfirmed bool, blockHeight, blocktime int64, err error)
-	broadcast(txHex string) error
+	broadcast(txs ...string) error
 }
 
 // WithNeutrino creates a start a neutrino node using the provided service datadir

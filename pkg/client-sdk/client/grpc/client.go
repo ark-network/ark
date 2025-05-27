@@ -131,6 +131,18 @@ func (a *grpcClient) RegisterIntent(
 	return resp.GetRequestId(), nil
 }
 
+func (a *grpcClient) DeleteIntent(ctx context.Context, requestID, signature, message string) error {
+	req := &arkv1.DeleteIntentRequest{
+		RequestId: requestID,
+		Bip322Signature: &arkv1.Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
+	}
+	_, err := a.svc.DeleteIntent(ctx, req)
+	return err
+}
+
 func (a *grpcClient) RegisterOutputsForNextRound(
 	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {
@@ -271,19 +283,32 @@ func (a *grpcClient) Ping(
 	return err
 }
 
-func (a *grpcClient) SubmitRedeemTx(
-	ctx context.Context, redeemTx string,
-) (string, string, error) {
-	req := &arkv1.SubmitRedeemTxRequest{
-		RedeemTx: redeemTx,
+func (a *grpcClient) SubmitOffchainTx(
+	ctx context.Context, virtualTx string, checkpointsTxs []string,
+) ([]string, string, string, error) {
+	req := &arkv1.SubmitOffchainTxRequest{
+		VirtualTx:     virtualTx,
+		CheckpointTxs: checkpointsTxs,
 	}
 
-	resp, err := a.svc.SubmitRedeemTx(ctx, req)
+	resp, err := a.svc.SubmitOffchainTx(ctx, req)
 	if err != nil {
-		return "", "", err
+		return nil, "", "", err
 	}
 
-	return resp.GetSignedRedeemTx(), resp.GetTxid(), nil
+	return resp.GetSignedCheckpointTxs(), resp.GetSignedVirtualTx(), resp.GetTxid(), nil
+}
+
+func (a *grpcClient) FinalizeOffchainTx(
+	ctx context.Context, virtualTxid string, checkpointsTxs []string,
+) error {
+	req := &arkv1.FinalizeOffchainTxRequest{
+		Txid:          virtualTxid,
+		CheckpointTxs: checkpointsTxs,
+	}
+
+	_, err := a.svc.FinalizeOffchainTx(ctx, req)
+	return err
 }
 
 func (a *grpcClient) GetRound(

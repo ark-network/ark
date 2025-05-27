@@ -28,9 +28,6 @@ type V1RoundFinalizationEvent struct {
 	// id
 	ID string `json:"id,omitempty"`
 
-	// min relay fee rate
-	MinRelayFeeRate string `json:"minRelayFeeRate,omitempty"`
-
 	// round tx
 	RoundTx string `json:"roundTx,omitempty"`
 

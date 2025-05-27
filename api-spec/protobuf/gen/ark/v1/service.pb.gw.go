@@ -102,6 +102,30 @@ func local_request_ArkService_RegisterIntent_0(ctx context.Context, marshaler ru
 	return msg, metadata, err
 }
 
+func request_ArkService_DeleteIntent_0(ctx context.Context, marshaler runtime.Marshaler, client ArkServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq DeleteIntentRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.DeleteIntent(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_ArkService_DeleteIntent_0(ctx context.Context, marshaler runtime.Marshaler, server ArkServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq DeleteIntentRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.DeleteIntent(ctx, &protoReq)
+	return msg, metadata, err
+}
+
 func request_ArkService_RegisterInputsForNextRound_0(ctx context.Context, marshaler runtime.Marshaler, client ArkServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
 		protoReq RegisterInputsForNextRoundRequest
@@ -277,27 +301,51 @@ func local_request_ArkService_Ping_0(ctx context.Context, marshaler runtime.Mars
 	return msg, metadata, err
 }
 
-func request_ArkService_SubmitRedeemTx_0(ctx context.Context, marshaler runtime.Marshaler, client ArkServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func request_ArkService_SubmitOffchainTx_0(ctx context.Context, marshaler runtime.Marshaler, client ArkServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq SubmitRedeemTxRequest
+		protoReq SubmitOffchainTxRequest
 		metadata runtime.ServerMetadata
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	msg, err := client.SubmitRedeemTx(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	msg, err := client.SubmitOffchainTx(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
 	return msg, metadata, err
 }
 
-func local_request_ArkService_SubmitRedeemTx_0(ctx context.Context, marshaler runtime.Marshaler, server ArkServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+func local_request_ArkService_SubmitOffchainTx_0(ctx context.Context, marshaler runtime.Marshaler, server ArkServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
 	var (
-		protoReq SubmitRedeemTxRequest
+		protoReq SubmitOffchainTxRequest
 		metadata runtime.ServerMetadata
 	)
 	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
 		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
 	}
-	msg, err := server.SubmitRedeemTx(ctx, &protoReq)
+	msg, err := server.SubmitOffchainTx(ctx, &protoReq)
+	return msg, metadata, err
+}
+
+func request_ArkService_FinalizeOffchainTx_0(ctx context.Context, marshaler runtime.Marshaler, client ArkServiceClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq FinalizeOffchainTxRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := client.FinalizeOffchainTx(ctx, &protoReq, grpc.Header(&metadata.HeaderMD), grpc.Trailer(&metadata.TrailerMD))
+	return msg, metadata, err
+}
+
+func local_request_ArkService_FinalizeOffchainTx_0(ctx context.Context, marshaler runtime.Marshaler, server ArkServiceServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
+	var (
+		protoReq FinalizeOffchainTxRequest
+		metadata runtime.ServerMetadata
+	)
+	if err := marshaler.NewDecoder(req.Body).Decode(&protoReq); err != nil && !errors.Is(err, io.EOF) {
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "%v", err)
+	}
+	msg, err := server.FinalizeOffchainTx(ctx, &protoReq)
 	return msg, metadata, err
 }
 
@@ -384,6 +432,26 @@ func RegisterArkServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 			return
 		}
 		forward_ArkService_RegisterIntent_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_ArkService_DeleteIntent_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.ArkService/DeleteIntent", runtime.WithHTTPPathPattern("/v1/round/deleteIntent"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_ArkService_DeleteIntent_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ArkService_DeleteIntent_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_ArkService_RegisterInputsForNextRound_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -512,25 +580,45 @@ func RegisterArkServiceHandlerServer(ctx context.Context, mux *runtime.ServeMux,
 		}
 		forward_ArkService_Ping_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_ArkService_SubmitRedeemTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodPost, pattern_ArkService_SubmitOffchainTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		var stream runtime.ServerTransportStream
 		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.ArkService/SubmitRedeemTx", runtime.WithHTTPPathPattern("/v1/redeem-tx"))
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.ArkService/SubmitOffchainTx", runtime.WithHTTPPathPattern("/v1/offchain-tx/submit"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := local_request_ArkService_SubmitRedeemTx_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		resp, md, err := local_request_ArkService_SubmitOffchainTx_0(annotatedContext, inboundMarshaler, server, req, pathParams)
 		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_ArkService_SubmitRedeemTx_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_ArkService_SubmitOffchainTx_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_ArkService_FinalizeOffchainTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		var stream runtime.ServerTransportStream
+		ctx = grpc.NewContextWithServerTransportStream(ctx, &stream)
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateIncomingContext(ctx, mux, req, "/ark.v1.ArkService/FinalizeOffchainTx", runtime.WithHTTPPathPattern("/v1/offchain-tx/finalize"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := local_request_ArkService_FinalizeOffchainTx_0(annotatedContext, inboundMarshaler, server, req, pathParams)
+		md.HeaderMD, md.TrailerMD = metadata.Join(md.HeaderMD, stream.Header()), metadata.Join(md.TrailerMD, stream.Trailer())
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ArkService_FinalizeOffchainTx_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 
 	mux.Handle(http.MethodGet, pattern_ArkService_GetTransactionsStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
@@ -629,6 +717,23 @@ func RegisterArkServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 			return
 		}
 		forward_ArkService_RegisterIntent_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_ArkService_DeleteIntent_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.ArkService/DeleteIntent", runtime.WithHTTPPathPattern("/v1/round/deleteIntent"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_ArkService_DeleteIntent_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ArkService_DeleteIntent_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodPost, pattern_ArkService_RegisterInputsForNextRound_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -749,22 +854,39 @@ func RegisterArkServiceHandlerClient(ctx context.Context, mux *runtime.ServeMux,
 		}
 		forward_ArkService_Ping_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
-	mux.Handle(http.MethodPost, pattern_ArkService_SubmitRedeemTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+	mux.Handle(http.MethodPost, pattern_ArkService_SubmitOffchainTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
 		defer cancel()
 		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
-		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.ArkService/SubmitRedeemTx", runtime.WithHTTPPathPattern("/v1/redeem-tx"))
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.ArkService/SubmitOffchainTx", runtime.WithHTTPPathPattern("/v1/offchain-tx/submit"))
 		if err != nil {
 			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		resp, md, err := request_ArkService_SubmitRedeemTx_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		resp, md, err := request_ArkService_SubmitOffchainTx_0(annotatedContext, inboundMarshaler, client, req, pathParams)
 		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
 		if err != nil {
 			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
 			return
 		}
-		forward_ArkService_SubmitRedeemTx_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+		forward_ArkService_SubmitOffchainTx_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
+	})
+	mux.Handle(http.MethodPost, pattern_ArkService_FinalizeOffchainTx_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
+		ctx, cancel := context.WithCancel(req.Context())
+		defer cancel()
+		inboundMarshaler, outboundMarshaler := runtime.MarshalerForRequest(mux, req)
+		annotatedContext, err := runtime.AnnotateContext(ctx, mux, req, "/ark.v1.ArkService/FinalizeOffchainTx", runtime.WithHTTPPathPattern("/v1/offchain-tx/finalize"))
+		if err != nil {
+			runtime.HTTPError(ctx, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		resp, md, err := request_ArkService_FinalizeOffchainTx_0(annotatedContext, inboundMarshaler, client, req, pathParams)
+		annotatedContext = runtime.NewServerMetadataContext(annotatedContext, md)
+		if err != nil {
+			runtime.HTTPError(annotatedContext, mux, outboundMarshaler, w, req, err)
+			return
+		}
+		forward_ArkService_FinalizeOffchainTx_0(annotatedContext, mux, outboundMarshaler, w, req, resp, mux.GetForwardResponseOptions()...)
 	})
 	mux.Handle(http.MethodGet, pattern_ArkService_GetTransactionsStream_0, func(w http.ResponseWriter, req *http.Request, pathParams map[string]string) {
 		ctx, cancel := context.WithCancel(req.Context())
@@ -790,6 +912,7 @@ var (
 	pattern_ArkService_GetInfo_0                     = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "info"}, ""))
 	pattern_ArkService_GetBoardingAddress_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "boarding"}, ""))
 	pattern_ArkService_RegisterIntent_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "round", "registerIntent"}, ""))
+	pattern_ArkService_DeleteIntent_0                = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "round", "deleteIntent"}, ""))
 	pattern_ArkService_RegisterInputsForNextRound_0  = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "round", "registerInputs"}, ""))
 	pattern_ArkService_RegisterOutputsForNextRound_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "round", "registerOutputs"}, ""))
 	pattern_ArkService_SubmitTreeNonces_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3}, []string{"v1", "round", "tree", "submitNonces"}, ""))
@@ -797,7 +920,8 @@ var (
 	pattern_ArkService_SubmitSignedForfeitTxs_0      = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "round", "submitForfeitTxs"}, ""))
 	pattern_ArkService_GetEventStream_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "events"}, ""))
 	pattern_ArkService_Ping_0                        = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 1, 0, 4, 1, 5, 3}, []string{"v1", "round", "ping", "request_id"}, ""))
-	pattern_ArkService_SubmitRedeemTx_0              = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "redeem-tx"}, ""))
+	pattern_ArkService_SubmitOffchainTx_0            = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "offchain-tx", "submit"}, ""))
+	pattern_ArkService_FinalizeOffchainTx_0          = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2}, []string{"v1", "offchain-tx", "finalize"}, ""))
 	pattern_ArkService_GetTransactionsStream_0       = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1}, []string{"v1", "transactions"}, ""))
 )
 
@@ -805,6 +929,7 @@ var (
 	forward_ArkService_GetInfo_0                     = runtime.ForwardResponseMessage
 	forward_ArkService_GetBoardingAddress_0          = runtime.ForwardResponseMessage
 	forward_ArkService_RegisterIntent_0              = runtime.ForwardResponseMessage
+	forward_ArkService_DeleteIntent_0                = runtime.ForwardResponseMessage
 	forward_ArkService_RegisterInputsForNextRound_0  = runtime.ForwardResponseMessage
 	forward_ArkService_RegisterOutputsForNextRound_0 = runtime.ForwardResponseMessage
 	forward_ArkService_SubmitTreeNonces_0            = runtime.ForwardResponseMessage
@@ -812,6 +937,7 @@ var (
 	forward_ArkService_SubmitSignedForfeitTxs_0      = runtime.ForwardResponseMessage
 	forward_ArkService_GetEventStream_0              = runtime.ForwardResponseStream
 	forward_ArkService_Ping_0                        = runtime.ForwardResponseMessage
-	forward_ArkService_SubmitRedeemTx_0              = runtime.ForwardResponseMessage
+	forward_ArkService_SubmitOffchainTx_0            = runtime.ForwardResponseMessage
+	forward_ArkService_FinalizeOffchainTx_0          = runtime.ForwardResponseMessage
 	forward_ArkService_GetTransactionsStream_0       = runtime.ForwardResponseStream
 )
