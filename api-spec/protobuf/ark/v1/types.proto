@@ -128,6 +128,13 @@ message RequestInput {
 
 /* Events */
 
+message BatchStartedEvent {
+  string id = 1;
+  repeated string intent_ids_hashes = 2;
+  int64 batch_expiry = 3;
+  string forfeit_address = 4;
+}
+
 message RoundFinalizationEvent {
   string id = 1;
   string round_tx = 2;

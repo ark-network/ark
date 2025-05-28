@@ -218,6 +218,26 @@ func (h *handler) RegisterInputsForNextRound(
 	}, nil
 }
 
+func (h *handler) ConfirmRegistration(
+	ctx context.Context, req *arkv1.ConfirmRegistrationRequest,
+) (*arkv1.ConfirmRegistrationResponse, error) {
+	intentIdHash := req.GetIntentIdHash()
+	if len(intentIdHash) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing intent id hash")
+	}
+
+	intentIdHashArray, err := parseIntentIdHash(intentIdHash)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	if err := h.svc.ConfirmRegistration(ctx, intentIdHashArray); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.ConfirmRegistrationResponse{}, nil
+}
+
 func (h *handler) RegisterOutputsForNextRound(
 	ctx context.Context, req *arkv1.RegisterOutputsForNextRoundRequest,
 ) (*arkv1.RegisterOutputsForNextRoundResponse, error) {
@@ -620,6 +640,22 @@ func (h *handler) listenToEvents() {
 					RoundFailed: &arkv1.RoundFailed{
 						Id:     e.Id,
 						Reason: e.Err,
+					},
+				},
+			}
+		case application.BatchStarted:
+			hashes := make([]string, 0, len(e.IntentIdsHashes))
+			for _, hash := range e.IntentIdsHashes {
+				hashes = append(hashes, hex.EncodeToString(hash[:]))
+			}
+
+			ev = &arkv1.GetEventStreamResponse{
+				Event: &arkv1.GetEventStreamResponse_BatchStarted{
+					BatchStarted: &arkv1.BatchStartedEvent{
+						Id:              e.Id,
+						IntentIdsHashes: hashes,
+						BatchExpiry:     int64(e.BatchExpiry),
+						ForfeitAddress:  e.ForfeitAddress,
 					},
 				},
 			}

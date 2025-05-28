@@ -1907,17 +1907,17 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 	retryCount := 0
 	var roundErr error
 	for retryCount < maxRetry {
-		requestID, err := a.client.RegisterIntent(
+		intentID, err := a.client.RegisterIntent(
 			ctx, bip322Signature, bip322Message,
 		)
 		if err != nil {
 			return "", err
 		}
 
-		log.Infof("registered inputs and outputs with request id: %s", requestID)
+		log.Infof("registered inputs and outputs with request id: %s", intentID)
 
 		roundTxID, err := a.handleRoundStream(
-			ctx, requestID, selectedCoins, selectedBoardingCoins, outputs, signerSessions, options.EventsCh,
+			ctx, intentID, selectedCoins, selectedBoardingCoins, outputs, signerSessions, options.EventsCh,
 		)
 		if err != nil {
 			log.WithError(err).Warn("round failed, retrying...")
@@ -1935,7 +1935,7 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 
 func (a *covenantlessArkClient) handleRoundStream(
 	ctx context.Context,
-	requestID string,
+	intentID string,
 	vtxos []client.TapscriptsVtxo,
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
@@ -1947,7 +1947,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 		return "", err
 	}
 
-	eventsCh, close, err := a.client.GetEventStream(ctx, requestID)
+	eventsCh, close, err := a.client.GetEventStream(ctx, intentID)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			close()
@@ -1958,7 +1958,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 
 	var pingStop func()
 	for pingStop == nil {
-		pingStop = a.ping(ctx, requestID)
+		pingStop = a.ping(ctx, intentID)
 	}
 
 	defer func() {
@@ -1976,6 +1976,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 
 	const (
 		start = iota
+		batchStarted
 		roundSigningStarted
 		roundSigningNoncesGenerated
 		roundFinalization
@@ -1990,26 +1991,38 @@ func (a *covenantlessArkClient) handleRoundStream(
 		}
 	}
 
-	if !hasOffchainOutput {
-		// if none of the outputs are offchain, we should skip the vtxo tree signing steps
-		step = roundSigningNoncesGenerated
-	}
-
 	for {
 		select {
 		case <-ctx.Done():
 			return "", fmt.Errorf("context done %s", ctx.Err())
 		case notify := <-eventsCh:
-
 			if notify.Err != nil {
 				return "", notify.Err
 			}
+
 			if replayEventsCh != nil {
 				go func() {
 					replayEventsCh <- notify.Event
 				}()
 			}
+
 			switch event := notify.Event; event.(type) {
+			case client.BatchStartedEvent:
+				skipped, err := a.handleBatchStarted(ctx, intentID, event.(client.BatchStartedEvent))
+				if err != nil {
+					return "", err
+				}
+				if !skipped {
+					log.Info("a batch started, participation confirmed")
+					step++
+
+					if !hasOffchainOutput {
+						// if none of the outputs are offchain, we should skip the vtxo tree signing steps
+						step = roundSigningNoncesGenerated
+					}
+					continue
+				}
+				log.Info("intent id not found in batch proposal, waiting for next one...")
 			case client.RoundFinalizedEvent:
 				if step != roundFinalization {
 					continue
@@ -2023,7 +2036,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				continue
 			case client.RoundSigningStartedEvent:
 				pingStop()
-				if step != start {
+				if step != batchStarted {
 					continue
 				}
 				log.Info("a round signing started")
@@ -2081,6 +2094,25 @@ func (a *covenantlessArkClient) handleRoundStream(
 			}
 		}
 	}
+}
+
+func (a *covenantlessArkClient) handleBatchStarted(
+	ctx context.Context, intentID string, event client.BatchStartedEvent,
+) (bool, error) {
+	intentIDHash := sha256.Sum256([]byte(intentID))
+	intentIDHashStr := hex.EncodeToString(intentIDHash[:])
+
+	for _, idHash := range event.IntentIdsHashes {
+		if idHash == intentIDHashStr {
+			if err := a.client.ConfirmRegistration(ctx, intentIDHashStr); err != nil {
+				fmt.Println("error confirming registration:", err)
+				return false, err
+			}
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 func (a *covenantlessArkClient) handleRoundSigningStarted(

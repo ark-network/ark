@@ -37,6 +37,7 @@ type eventResponse interface {
 	GetRoundFinalized() *arkv1.RoundFinalizedEvent
 	GetRoundSigning() *arkv1.RoundSigningEvent
 	GetRoundSigningNoncesGenerated() *arkv1.RoundSigningNoncesGeneratedEvent
+	GetBatchStarted() *arkv1.BatchStartedEvent
 }
 
 type event struct {
@@ -88,6 +89,15 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		return client.RoundSigningNoncesGeneratedEvent{
 			ID:     ee.GetId(),
 			Nonces: nonces,
+		}, nil
+	}
+
+	if ee := e.GetBatchStarted(); ee != nil {
+		return client.BatchStartedEvent{
+			ID:              ee.GetId(),
+			IntentIdsHashes: ee.GetIntentIdsHashes(),
+			BatchExpiry:     ee.GetBatchExpiry(),
+			ForfeitAddress:  ee.GetForfeitAddress(),
 		}, nil
 	}
 

@@ -3,6 +3,7 @@ package application
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"sort"
@@ -29,6 +30,10 @@ type timedTxRequest struct {
 	timestamp      time.Time
 	pingTimestamp  time.Time
 	musig2Data     *tree.Musig2
+}
+
+func (t timedTxRequest) hashID() [32]byte {
+	return sha256.Sum256([]byte(t.Id))
 }
 
 type txRequestsQueue struct {
@@ -92,7 +97,7 @@ func (m *txRequestsQueue) push(
 	return nil
 }
 
-func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []*tree.Musig2) {
+func (m *txRequestsQueue) pop(num int64) []timedTxRequest {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -127,16 +132,14 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 		num = int64(len(requestsByTime))
 	}
 
-	requests := make([]domain.TxRequest, 0, num)
-	boardingInputs := make([]ports.BoardingInput, 0)
-	musig2Data := make([]*tree.Musig2, 0)
+	result := make([]timedTxRequest, 0, num)
+
 	for _, p := range requestsByTime[:num] {
-		boardingInputs = append(boardingInputs, p.boardingInputs...)
-		requests = append(requests, p.TxRequest)
-		musig2Data = append(musig2Data, p.musig2Data)
+		result = append(result, p)
 		delete(m.requests, p.Id)
 	}
-	return requests, boardingInputs, musig2Data
+
+	return result
 }
 
 func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musig2) error {
@@ -408,6 +411,16 @@ func (r *outpointMap) add(outpoints []domain.VtxoKey) {
 	for _, out := range outpoints {
 		r.outpoints[out.String()] = struct{}{}
 	}
+}
+
+func (r *outpointMap) removeRoundInputs(round domain.Round) {
+	vtxoKeys := make([]domain.VtxoKey, 0)
+	for _, req := range round.TxRequests {
+		for _, in := range req.Inputs {
+			vtxoKeys = append(vtxoKeys, in.VtxoKey)
+		}
+	}
+	r.remove(vtxoKeys)
 }
 
 func (r *outpointMap) remove(outpoints []domain.VtxoKey) {

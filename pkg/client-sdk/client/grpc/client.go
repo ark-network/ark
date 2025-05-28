@@ -143,6 +143,14 @@ func (a *grpcClient) DeleteIntent(ctx context.Context, requestID, signature, mes
 	return err
 }
 
+func (a *grpcClient) ConfirmRegistration(ctx context.Context, intentHash string) error {
+	req := &arkv1.ConfirmRegistrationRequest{
+		IntentIdHash: intentHash,
+	}
+	_, err := a.svc.ConfirmRegistration(ctx, req)
+	return err
+}
+
 func (a *grpcClient) RegisterOutputsForNextRound(
 	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {

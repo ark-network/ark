@@ -33,7 +33,7 @@ type covenantlessService struct {
 	network             common.Network
 	pubkey              *secp256k1.PublicKey
 	vtxoTreeExpiry      common.RelativeLocktime
-	roundInterval       int64
+	roundInterval       time.Duration
 	unilateralExitDelay common.RelativeLocktime
 	boardingExitDelay   common.RelativeLocktime
 
@@ -54,6 +54,7 @@ type covenantlessService struct {
 	// cached data for the current round
 	currentRoundLock    sync.Mutex
 	currentRound        *domain.Round
+	confirmationSession *confirmationSession
 	treeSigningSessions map[string]*musigSigningSession
 
 	// TODO derive this from wallet
@@ -126,7 +127,7 @@ func NewService(
 		network:                   network,
 		pubkey:                    pubkey,
 		vtxoTreeExpiry:            vtxoTreeExpiry,
-		roundInterval:             roundInterval,
+		roundInterval:             time.Duration(roundInterval) * time.Second,
 		unilateralExitDelay:       unilateralExitDelay,
 		wallet:                    walletSvc,
 		repoManager:               repoManager,
@@ -1178,43 +1179,12 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	return request.Id, nil
 }
 
-func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input) (*ports.BoardingInput, error) {
-	if len(tx.TxOut) <= int(input.VOut) {
-		return nil, fmt.Errorf("output not found")
+func (s *covenantlessService) ConfirmRegistration(ctx context.Context, intentIdHash [32]byte) error {
+	if s.confirmationSession == nil {
+		return fmt.Errorf("confirmation session not started")
 	}
 
-	output := tx.TxOut[input.VOut]
-
-	boardingScript, err := tree.ParseVtxoScript(input.Tapscripts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
-	}
-
-	tapKey, _, err := boardingScript.TapTree()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get taproot key: %s", err)
-	}
-
-	expectedScriptPubkey, err := common.P2TRScript(tapKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get script pubkey: %s", err)
-	}
-
-	if !bytes.Equal(output.PkScript, expectedScriptPubkey) {
-		return nil, fmt.Errorf(
-			"invalid boarding utxo taproot key: got %x expected %x",
-			output.PkScript, expectedScriptPubkey,
-		)
-	}
-
-	if err := boardingScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
-		return nil, err
-	}
-
-	return &ports.BoardingInput{
-		Amount: uint64(output.Value),
-		Input:  input,
-	}, nil
+	return s.confirmationSession.confirm(intentIdHash)
 }
 
 func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error {
@@ -1321,31 +1291,6 @@ func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx str
 	return nil
 }
 
-func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *domain.Round) {
-	roundTx, _ := psbt.NewFromRawBytes(strings.NewReader(currentRound.CommitmentTx), true)
-	numOfInputsSigned := 0
-	for _, v := range roundTx.Inputs {
-		if len(v.TaprootScriptSpendSig) > 0 {
-			if len(v.TaprootScriptSpendSig[0].Signature) > 0 {
-				numOfInputsSigned++
-			}
-		}
-	}
-
-	// Condition: all forfeit txs are signed and
-	// the number of signed boarding inputs matches
-	// numOfBoardingInputs we expect
-	s.numOfBoardingInputsMtx.RLock()
-	numOfBoardingInputs := s.numOfBoardingInputs
-	s.numOfBoardingInputsMtx.RUnlock()
-	if s.forfeitTxs.allSigned() && numOfBoardingInputs == numOfInputsSigned {
-		select {
-		case s.forfeitsBoardingSigsChan <- struct{}{}:
-		default:
-		}
-	}
-}
-
 func (s *covenantlessService) ListVtxos(ctx context.Context, address string) ([]domain.Vtxo, []domain.Vtxo, error) {
 	decodedAddress, err := common.DecodeAddress(address)
 	if err != nil {
@@ -1415,7 +1360,7 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 		VtxoTreeExpiry:      int64(s.vtxoTreeExpiry.Value),
 		UnilateralExitDelay: int64(s.unilateralExitDelay.Value),
 		BoardingExitDelay:   int64(s.boardingExitDelay.Value),
-		RoundInterval:       s.roundInterval,
+		RoundInterval:       int64(s.roundInterval.Seconds()),
 		Network:             s.network.Name,
 		Dust:                dust,
 		ForfeitAddress:      forfeitAddr,
@@ -1622,52 +1567,6 @@ func (s *covenantlessService) DeleteTxRequestsByProof(
 	return s.txRequests.delete(idsToDelete)
 }
 
-func calcNextMarketHour(marketHourStartTime, marketHourEndTime time.Time, period, marketHourDelta time.Duration, now time.Time) (time.Time, time.Time, error) {
-	// Validate input parameters
-	if period <= 0 {
-		return time.Time{}, time.Time{}, fmt.Errorf("period must be greater than 0")
-	}
-	if !marketHourEndTime.After(marketHourStartTime) {
-		return time.Time{}, time.Time{}, fmt.Errorf("market hour end time must be after start time")
-	}
-
-	// Calculate the duration of the market hour
-	duration := marketHourEndTime.Sub(marketHourStartTime)
-
-	// Calculate the number of periods since the initial marketHourStartTime
-	elapsed := now.Sub(marketHourStartTime)
-	var n int64
-	if elapsed >= 0 {
-		n = int64(elapsed / period)
-	} else {
-		n = int64((elapsed - period + 1) / period)
-	}
-
-	// Calculate the current market hour start and end times
-	currentStartTime := marketHourStartTime.Add(time.Duration(n) * period)
-	currentEndTime := currentStartTime.Add(duration)
-
-	// Adjust if now is before the currentStartTime
-	if now.Before(currentStartTime) {
-		n -= 1
-		currentStartTime = marketHourStartTime.Add(time.Duration(n) * period)
-		currentEndTime = currentStartTime.Add(duration)
-	}
-
-	timeUntilEnd := currentEndTime.Sub(now)
-
-	if !now.Before(currentStartTime) && now.Before(currentEndTime) && timeUntilEnd >= marketHourDelta {
-		// Return the current market hour
-		return currentStartTime, currentEndTime, nil
-	} else {
-		// Move to the next market hour
-		n += 1
-		nextStartTime := marketHourStartTime.Add(time.Duration(n) * period)
-		nextEndTime := nextStartTime.Add(duration)
-		return nextStartTime, nextEndTime, nil
-	}
-}
-
 func (s *covenantlessService) RegisterCosignerNonces(
 	ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, encodedNonces string,
 ) error {
@@ -1766,31 +1665,58 @@ func (s *covenantlessService) startRound() {
 	s.forfeitsBoardingSigsChan = make(chan struct{}, 1)
 
 	defer func() {
-		roundEndTime := time.Now().Add(time.Duration(s.roundInterval) * time.Second)
-		sleepingTime := s.roundInterval / 6
-		if sleepingTime < 1 {
-			sleepingTime = 1
-		}
-		time.Sleep(time.Duration(sleepingTime) * time.Second)
-		s.startFinalization(roundEndTime)
+		roundTiming := newRoundTiming(s.roundInterval)
+		roundTiming.waitForRegistration()
+		s.startConfirmation(roundTiming)
 	}()
 
 	log.Debugf("started registration stage for new round: %s", round.Id)
 }
-func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
-	log.Debugf("started finalization stage for round: %s", s.currentRound.Id)
+
+func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
+	log.Debugf("started confirmation stage for round: %s", s.currentRound.Id)
+
 	ctx := context.Background()
+
+	s.currentRoundLock.Lock()
 	round := s.currentRound
+	s.currentRoundLock.Unlock()
 
-	roundRemainingDuration := time.Duration((s.roundInterval/3)*2-1) * time.Second
-	thirdOfRemainingDuration := roundRemainingDuration / 3
+	notConfirmedRequests := make([]timedTxRequest, 0)
+	requests := make([]timedTxRequest, 0)
+	roundAborted := false
 
-	var roundAborted bool
-	var vtxoKeys []domain.VtxoKey
 	defer func() {
-		delete(s.treeSigningSessions, round.Id)
+		s.confirmationSession = nil
+
+		// readd not confirmed requests to the queue
+		if len(notConfirmedRequests) > 0 {
+			for _, req := range notConfirmedRequests {
+				if err := s.txRequests.push(req.TxRequest, req.boardingInputs, req.musig2Data); err != nil {
+					log.WithError(err).Warn("failed to re-push not confirmed request to the queue")
+				}
+			}
+		}
+
 		if roundAborted {
 			s.startRound()
+			return
+		}
+
+		txRequests := make([]domain.TxRequest, 0, len(requests))
+		numOfBoardingInputs := 0
+		for _, req := range requests {
+			txRequests = append(txRequests, req.TxRequest)
+			numOfBoardingInputs += len(req.boardingInputs)
+		}
+
+		s.numOfBoardingInputsMtx.Lock()
+		s.numOfBoardingInputs = numOfBoardingInputs
+		s.numOfBoardingInputsMtx.Unlock()
+
+		if _, err := round.RegisterTxRequests(txRequests); err != nil {
+			round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
+			log.WithError(err).Warn("failed to register tx requests")
 			return
 		}
 
@@ -1799,24 +1725,25 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		}
 
 		if round.IsFailed() {
+			vtxoKeys := make([]domain.VtxoKey, 0)
+			for _, req := range requests {
+				for _, in := range req.Inputs {
+					vtxoKeys = append(vtxoKeys, in.VtxoKey)
+				}
+			}
 			s.roundInputs.remove(vtxoKeys)
 			s.startRound()
 			return
 		}
 
-		s.finalizeRound(roundEndTime)
+		s.startFinalization(roundTiming, requests)
 	}()
-
-	if round.IsFailed() {
-		return
-	}
 
 	// TODO: understand how many tx requests must be popped from the queue and actually registered for the round
 	num := s.txRequests.len()
 	if num == 0 {
 		roundAborted = true
 		err := fmt.Errorf("no tx requests registered")
-		round.Fail(fmt.Errorf("round aborted: %s", err))
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
@@ -1824,20 +1751,21 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		num = s.roundMaxParticipantsCount
 	}
 
-	// nolint:all
-	availableBalance, _, _ := s.wallet.MainAccountBalance(ctx)
-
-	requests, boardingInputs, musig2data := s.txRequests.pop(num)
-
-	for _, req := range requests {
-		for _, in := range req.Inputs {
-			vtxoKeys = append(vtxoKeys, in.VtxoKey)
-		}
+	availableBalance, _, err := s.wallet.MainAccountBalance(ctx)
+	if err != nil {
+		round.Fail(fmt.Errorf("failed to get main account balance: %s", err))
+		log.WithError(err).Warn("failed to get main account balance")
+		return
 	}
 
-	s.numOfBoardingInputsMtx.Lock()
-	s.numOfBoardingInputs = len(boardingInputs)
-	s.numOfBoardingInputsMtx.Unlock()
+	forfeitAddress, err := s.wallet.GetForfeitAddress(ctx)
+	if err != nil {
+		round.Fail(fmt.Errorf("failed to get forfeit address: %s", err))
+		log.WithError(err).Warn("failed to get forfeit address")
+		return
+	}
+
+	requests = s.txRequests.pop(num)
 
 	totAmount := uint64(0)
 	for _, request := range requests {
@@ -1850,9 +1778,93 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		return
 	}
 
-	if _, err := round.RegisterTxRequests(requests); err != nil {
-		round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
-		log.WithError(err).Warn("failed to register tx requests")
+	numberOfConfirmationAttemps := roundTiming.confirmationAttempts()
+	confirmationInterval := roundTiming.confirmationAttemptDuration()
+	confirmationTicker := time.NewTicker(confirmationInterval)
+
+	s.propagateBatchStartedEvent(requests, forfeitAddress)
+
+	for {
+		select {
+		case <-confirmationTicker.C:
+			numberOfConfirmationAttemps--
+			if numberOfConfirmationAttemps == 0 {
+				// no more attempts, abort the round
+				confirmationTicker.Stop()
+				err := fmt.Errorf("confirmation timed out")
+				round.Fail(err)
+				log.WithError(err).Warn("confirmation timed out")
+				return
+			}
+
+			// retry with only confirmed requests
+			confirmedRequests := make([]timedTxRequest, 0)
+			toPop := int64(0)
+			for _, req := range requests {
+				if s.confirmationSession.intentsHashes[req.hashID()] {
+					confirmedRequests = append(confirmedRequests, req)
+					continue
+				}
+				notConfirmedRequests = append(notConfirmedRequests, req)
+			}
+			requests = confirmedRequests
+			num = s.txRequests.len()
+
+			// no more requests in queue, but 0 confirmed requests: fail the round
+			if num == 0 && len(confirmedRequests) == 0 {
+				err := fmt.Errorf("no tx requests confirmed")
+				round.Fail(err)
+				log.WithError(err).Debugf("round %s failed", round.Id)
+				return
+			}
+
+			requests = confirmedRequests
+
+			// try to pop more requests
+			if num < toPop {
+				toPop = num
+			}
+
+			if toPop > 0 {
+				additionalRequests := s.txRequests.pop(toPop)
+				requests = append(requests, additionalRequests...)
+			}
+
+			// resend the event with the new requests
+			s.propagateBatchStartedEvent(requests, forfeitAddress)
+		case <-s.confirmationSession.confirmedC:
+			confirmationTicker.Stop()
+			return
+		}
+	}
+}
+
+func (s *covenantlessService) startFinalization(roundTiming roundTiming, requests []timedTxRequest) {
+	log.Debugf("started finalization stage for round: %s", s.currentRound.Id)
+	ctx := context.Background()
+	s.currentRoundLock.Lock()
+	round := s.currentRound
+	s.currentRoundLock.Unlock()
+
+	thirdOfRemainingDuration := roundTiming.finalizationPhaseDuration()
+
+	defer func() {
+		delete(s.treeSigningSessions, round.Id)
+
+		if err := s.saveEvents(ctx, round.Id, round.Events()); err != nil {
+			log.WithError(err).Warn("failed to store new round events")
+		}
+
+		if round.IsFailed() {
+			s.roundInputs.removeRoundInputs(*round)
+			s.startRound()
+			return
+		}
+
+		s.finalizeRound(roundTiming)
+	}()
+
+	if round.IsFailed() {
 		return
 	}
 
@@ -1863,9 +1875,19 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		return
 	}
 
+	txRequests := make([]domain.TxRequest, 0, len(requests))
+	boardingInputs := make([]ports.BoardingInput, 0)
+	musig2data := make([]*tree.Musig2, 0)
+	for _, req := range requests {
+		txRequests = append(txRequests, req.TxRequest)
+		boardingInputs = append(boardingInputs, req.boardingInputs...)
+		musig2data = append(musig2data, req.musig2Data)
+	}
+
 	// add server pubkey in musig2data and count the number of unique keys
 	uniqueSignerPubkeys := make(map[string]struct{})
 	serverPubKeyHex := hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed())
+
 	for _, data := range musig2data {
 		if data == nil {
 			continue
@@ -1877,7 +1899,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	}
 	log.Debugf("building tx for round %s", round.Id)
 	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
-		s.pubkey, requests, boardingInputs, connectorAddresses, musig2data,
+		s.pubkey, txRequests, boardingInputs, connectorAddresses, musig2data,
 	)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create round tx: %s", err))
@@ -1886,7 +1908,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	}
 	log.Debugf("round tx created for round %s", round.Id)
 
-	if err := s.forfeitTxs.init(connectors, requests); err != nil {
+	if err := s.forfeitTxs.init(connectors, txRequests); err != nil {
 		round.Fail(fmt.Errorf("failed to initialize forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to initialize forfeit txs")
 		return
@@ -2065,7 +2087,24 @@ func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combined
 	s.eventsCh <- ev
 }
 
-func (s *covenantlessService) finalizeRound(roundEndTime time.Time) {
+func (s *covenantlessService) propagateBatchStartedEvent(requests []timedTxRequest, forfeitAddr string) {
+	intentIdsHashes := make([][32]byte, 0, len(requests))
+	for _, req := range requests {
+		intentIdsHashes = append(intentIdsHashes, req.hashID())
+	}
+
+	s.confirmationSession = newConfirmationSession(intentIdsHashes)
+
+	ev := BatchStarted{
+		Id:              s.currentRound.Id,
+		IntentIdsHashes: intentIdsHashes,
+		BatchExpiry:     s.vtxoTreeExpiry.Value,
+		ForfeitAddress:  forfeitAddr,
+	}
+	s.eventsCh <- ev
+}
+
+func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 	defer s.startRound()
 
 	ctx := context.Background()
@@ -2074,13 +2113,7 @@ func (s *covenantlessService) finalizeRound(roundEndTime time.Time) {
 	s.currentRoundLock.Unlock()
 
 	defer func() {
-		vtxoKeys := make([]domain.VtxoKey, 0)
-		for _, req := range round.TxRequests {
-			for _, in := range req.Inputs {
-				vtxoKeys = append(vtxoKeys, in.VtxoKey)
-			}
-		}
-		s.roundInputs.remove(vtxoKeys)
+		s.roundInputs.removeRoundInputs(*round)
 	}()
 
 	if round.IsFailed() {
@@ -2118,7 +2151,7 @@ func (s *covenantlessService) finalizeRound(roundEndTime time.Time) {
 	forfeitTxs := make([]domain.ForfeitTx, 0)
 
 	if len(s.forfeitTxs.forfeitTxs) > 0 || includesBoardingInputs {
-		remainingTime := time.Until(roundEndTime)
+		remainingTime := roundTiming.remainingDuration()
 		select {
 		case <-s.forfeitsBoardingSigsChan:
 			log.Debug("all forfeit txs and boarding inputs signatures have been sent")
@@ -2290,6 +2323,116 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 
 	if err := s.sweeper.schedule(expirationTimestamp, round.Txid, round.VtxoTree); err != nil {
 		log.WithError(err).Warn("failed to schedule sweep tx")
+	}
+}
+
+func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input) (*ports.BoardingInput, error) {
+	if len(tx.TxOut) <= int(input.VOut) {
+		return nil, fmt.Errorf("output not found")
+	}
+
+	output := tx.TxOut[input.VOut]
+
+	boardingScript, err := tree.ParseVtxoScript(input.Tapscripts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
+	}
+
+	tapKey, _, err := boardingScript.TapTree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get taproot key: %s", err)
+	}
+
+	expectedScriptPubkey, err := common.P2TRScript(tapKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get script pubkey: %s", err)
+	}
+
+	if !bytes.Equal(output.PkScript, expectedScriptPubkey) {
+		return nil, fmt.Errorf(
+			"invalid boarding utxo taproot key: got %x expected %x",
+			output.PkScript, expectedScriptPubkey,
+		)
+	}
+
+	if err := boardingScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+		return nil, err
+	}
+
+	return &ports.BoardingInput{
+		Amount: uint64(output.Value),
+		Input:  input,
+	}, nil
+}
+
+func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *domain.Round) {
+	roundTx, _ := psbt.NewFromRawBytes(strings.NewReader(currentRound.CommitmentTx), true)
+	numOfInputsSigned := 0
+	for _, v := range roundTx.Inputs {
+		if len(v.TaprootScriptSpendSig) > 0 {
+			if len(v.TaprootScriptSpendSig[0].Signature) > 0 {
+				numOfInputsSigned++
+			}
+		}
+	}
+
+	// Condition: all forfeit txs are signed and
+	// the number of signed boarding inputs matches
+	// numOfBoardingInputs we expect
+	s.numOfBoardingInputsMtx.RLock()
+	numOfBoardingInputs := s.numOfBoardingInputs
+	s.numOfBoardingInputsMtx.RUnlock()
+	if s.forfeitTxs.allSigned() && numOfBoardingInputs == numOfInputsSigned {
+		select {
+		case s.forfeitsBoardingSigsChan <- struct{}{}:
+		default:
+		}
+	}
+}
+
+func calcNextMarketHour(marketHourStartTime, marketHourEndTime time.Time, period, marketHourDelta time.Duration, now time.Time) (time.Time, time.Time, error) {
+	// Validate input parameters
+	if period <= 0 {
+		return time.Time{}, time.Time{}, fmt.Errorf("period must be greater than 0")
+	}
+	if !marketHourEndTime.After(marketHourStartTime) {
+		return time.Time{}, time.Time{}, fmt.Errorf("market hour end time must be after start time")
+	}
+
+	// Calculate the duration of the market hour
+	duration := marketHourEndTime.Sub(marketHourStartTime)
+
+	// Calculate the number of periods since the initial marketHourStartTime
+	elapsed := now.Sub(marketHourStartTime)
+	var n int64
+	if elapsed >= 0 {
+		n = int64(elapsed / period)
+	} else {
+		n = int64((elapsed - period + 1) / period)
+	}
+
+	// Calculate the current market hour start and end times
+	currentStartTime := marketHourStartTime.Add(time.Duration(n) * period)
+	currentEndTime := currentStartTime.Add(duration)
+
+	// Adjust if now is before the currentStartTime
+	if now.Before(currentStartTime) {
+		n -= 1
+		currentStartTime = marketHourStartTime.Add(time.Duration(n) * period)
+		currentEndTime = currentStartTime.Add(duration)
+	}
+
+	timeUntilEnd := currentEndTime.Sub(now)
+
+	if !now.Before(currentStartTime) && now.Before(currentEndTime) && timeUntilEnd >= marketHourDelta {
+		// Return the current market hour
+		return currentStartTime, currentEndTime, nil
+	} else {
+		// Move to the next market hour
+		n += 1
+		nextStartTime := marketHourStartTime.Add(time.Duration(n) * period)
+		nextEndTime := nextStartTime.Add(duration)
+		return nextStartTime, nextEndTime, nil
 	}
 }
 
@@ -2530,6 +2673,46 @@ func newMusigSigningSession(cosigners map[string]struct{}) *musigSigningSession 
 		cosigners:   cosigners,
 		nbCosigners: len(cosigners) + 1, // the server
 	}
+}
+
+// confirmationSession holds the state of the confirmation process
+type confirmationSession struct {
+	lock sync.Mutex
+
+	intentsHashes map[[32]byte]bool // hash --> confirmed
+	confirmedC    chan struct{}
+}
+
+func newConfirmationSession(intentsHashes [][32]byte) *confirmationSession {
+	hashes := make(map[[32]byte]bool)
+	for _, hash := range intentsHashes {
+		hashes[hash] = false
+	}
+
+	return &confirmationSession{
+		intentsHashes: hashes,
+		confirmedC:    make(chan struct{}),
+		lock:          sync.Mutex{},
+	}
+}
+
+func (s *confirmationSession) confirm(hash [32]byte) error {
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	if _, ok := s.intentsHashes[hash]; !ok {
+		return fmt.Errorf("intent hash not found")
+	}
+
+	s.intentsHashes[hash] = true
+
+	for _, confirmed := range s.intentsHashes {
+		if !confirmed {
+			return nil
+		}
+	}
+
+	s.confirmedC <- struct{}{}
+	return nil
 }
 
 func (s *covenantlessService) GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error) {

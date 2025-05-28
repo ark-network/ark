@@ -16,6 +16,38 @@
     "application/json"
   ],
   "paths": {
+    "/v1/batch/ack": {
+      "post": {
+        "operationId": "ArkService_ConfirmRegistration",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ConfirmRegistrationResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1ConfirmRegistrationRequest"
+            }
+          }
+        ],
+        "tags": [
+          "ArkService"
+        ]
+      }
+    },
     "/v1/boarding": {
       "post": {
         "operationId": "ArkService_GetBoardingAddress",
@@ -481,6 +513,27 @@
         }
       }
     },
+    "v1BatchStartedEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "intentIdsHashes": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "batchExpiry": {
+          "type": "string",
+          "format": "int64"
+        },
+        "forfeitAddress": {
+          "type": "string"
+        }
+      }
+    },
     "v1Bip322Signature": {
       "type": "object",
       "properties": {
@@ -491,6 +544,17 @@
           "type": "string"
         }
       }
+    },
+    "v1ConfirmRegistrationRequest": {
+      "type": "object",
+      "properties": {
+        "intentIdHash": {
+          "type": "string"
+        }
+      }
+    },
+    "v1ConfirmRegistrationResponse": {
+      "type": "object"
     },
     "v1DeleteIntentRequest": {
       "type": "object",
@@ -545,6 +609,9 @@
     "v1GetEventStreamResponse": {
       "type": "object",
       "properties": {
+        "batchStarted": {
+          "$ref": "#/definitions/v1BatchStartedEvent"
+        },
         "roundFinalization": {
           "$ref": "#/definitions/v1RoundFinalizationEvent"
         },

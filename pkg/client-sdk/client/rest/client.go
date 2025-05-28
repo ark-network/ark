@@ -216,6 +216,16 @@ func (a *restClient) DeleteIntent(_ context.Context, requestID, signature, messa
 	return err
 }
 
+func (a *restClient) ConfirmRegistration(ctx context.Context, intentHash string) error {
+	body := &models.V1ConfirmRegistrationRequest{
+		IntentIDHash: intentHash,
+	}
+	_, err := a.svc.ArkServiceConfirmRegistration(
+		ark_service.NewArkServiceConfirmRegistrationParams().WithBody(body),
+	)
+	return err
+}
+
 func (a *restClient) RegisterOutputsForNextRound(
 	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {
@@ -365,6 +375,19 @@ func (c *restClient) GetEventStream(
 					event = client.RoundFailedEvent{
 						ID:     e.ID,
 						Reason: e.Reason,
+					}
+				case resp.Result.BatchStarted != nil:
+					e := resp.Result.BatchStarted
+					batchExpiry, err := strconv.ParseUint(e.BatchExpiry, 10, 32)
+					if err != nil {
+						_err = err
+						break
+					}
+					event = client.BatchStartedEvent{
+						ID:              e.ID,
+						IntentIdsHashes: e.IntentIdsHashes,
+						BatchExpiry:     int64(batchExpiry),
+						ForfeitAddress:  e.ForfeitAddress,
 					}
 				case resp.Result.RoundFinalization != nil:
 					e := resp.Result.RoundFinalization

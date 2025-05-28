@@ -38,6 +38,12 @@ service ArkService {
       body: "*"
     };
   };
+  rpc ConfirmRegistration(ConfirmRegistrationRequest) returns (ConfirmRegistrationResponse) {
+    option (google.api.http) = {
+      post: "/v1/batch/ack"
+      body: "*"
+    };
+  };
   rpc RegisterOutputsForNextRound(RegisterOutputsForNextRoundRequest) returns (RegisterOutputsForNextRoundResponse) {
     option (google.api.http) = {
       post: "/v1/round/registerOutputs"
@@ -145,6 +151,11 @@ message RegisterInputsForNextRoundResponse {
   string request_id = 1;
 }
 
+message ConfirmRegistrationRequest {
+  string intent_id_hash = 1;
+}
+message ConfirmRegistrationResponse {}
+
 message Musig2 {
   repeated string cosigners_public_keys = 1;
   bool signing_all = 2;
@@ -183,11 +194,12 @@ message SubmitSignedForfeitTxsResponse {}
 message GetEventStreamRequest {}
 message GetEventStreamResponse {
   oneof event {
-    RoundFinalizationEvent round_finalization = 1;
-    RoundFinalizedEvent round_finalized = 2;
-    RoundFailed round_failed = 3;
-    RoundSigningEvent round_signing = 4;
-    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5;
+    BatchStartedEvent batch_started = 1;
+    RoundFinalizationEvent round_finalization = 2;
+    RoundFinalizedEvent round_finalized = 3;
+    RoundFailed round_failed = 4;
+    RoundSigningEvent round_signing = 5;
+    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 6;
   }
 }
 

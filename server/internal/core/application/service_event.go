@@ -13,6 +13,14 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 )
 
+// the user should react to this event by confirming the registration using sha256(intent_id)
+type BatchStarted struct {
+	Id              string
+	IntentIdsHashes [][32]byte
+	BatchExpiry     uint32
+	ForfeitAddress  string
+}
+
 // signer should react to this event by generating a musig2 nonce for each transaction in the tree
 type RoundSigningStarted struct {
 	Id               string
@@ -41,3 +49,4 @@ func (e RoundSigningNoncesGenerated) SerializeNonces() (string, error) {
 // implement domain.RoundEvent interface
 func (r RoundSigningStarted) GetTopic() string         { return domain.RoundTopic }
 func (r RoundSigningNoncesGenerated) GetTopic() string { return domain.RoundTopic }
+func (r BatchStarted) GetTopic() string                { return domain.RoundTopic }

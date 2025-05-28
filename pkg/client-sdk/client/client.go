@@ -37,6 +37,7 @@ type TransportClient interface {
 		ctx context.Context, signature, message string,
 	) (string, error)
 	DeleteIntent(ctx context.Context, requestID, signature, message string) error
+	ConfirmRegistration(ctx context.Context, intentHash string) error
 	RegisterOutputsForNextRound(
 		ctx context.Context, requestID string, outputs []Output, musig2 *tree.Musig2,
 	) error
@@ -268,6 +269,15 @@ type RoundSigningNoncesGeneratedEvent struct {
 }
 
 func (e RoundSigningNoncesGeneratedEvent) isRoundEvent() {}
+
+type BatchStartedEvent struct {
+	ID              string
+	IntentIdsHashes []string
+	BatchExpiry     int64
+	ForfeitAddress  string
+}
+
+func (e BatchStartedEvent) isRoundEvent() {}
 
 type TransactionEvent struct {
 	Round  *RoundTransaction
