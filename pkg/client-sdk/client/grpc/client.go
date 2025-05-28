@@ -281,16 +281,6 @@ func (a *grpcClient) GetEventStream(
 	return eventsCh, closeFn, nil
 }
 
-func (a *grpcClient) Ping(
-	ctx context.Context, requestID string,
-) error {
-	req := &arkv1.PingRequest{
-		RequestId: requestID,
-	}
-	_, err := a.svc.Ping(ctx, req)
-	return err
-}
-
 func (a *grpcClient) SubmitOffchainTx(
 	ctx context.Context, virtualTx string, checkpointsTxs []string,
 ) ([]string, string, string, error) {

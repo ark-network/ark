@@ -16,19 +16,12 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcutil/psbt"
-	log "github.com/sirupsen/logrus"
-)
-
-const (
-	selectGapMinutes = float64(1)
-	deleteGapMinutes = float64(5)
 )
 
 type timedTxRequest struct {
 	domain.TxRequest
 	boardingInputs []ports.BoardingInput
 	timestamp      time.Time
-	pingTimestamp  time.Time
 	musig2Data     *tree.Musig2
 }
 
@@ -93,7 +86,7 @@ func (m *txRequestsQueue) push(
 	}
 
 	now := time.Now()
-	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, now, now, musig2Data}
+	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, now, musig2Data}
 	return nil
 }
 
@@ -105,20 +98,6 @@ func (m *txRequestsQueue) pop(num int64) []timedTxRequest {
 	for _, p := range m.requests {
 		// Skip tx requests without registered receivers.
 		if len(p.Receivers) <= 0 {
-			continue
-		}
-
-		sinceLastPing := time.Since(p.pingTimestamp).Minutes()
-
-		// Skip tx requests for which users didn't notify to be online in the last minute.
-		if sinceLastPing > selectGapMinutes {
-			// Cleanup the request from the map if greater than deleteGapMinutes
-			// TODO move to dedicated function
-			if sinceLastPing > deleteGapMinutes {
-				log.Debugf("delete tx request %s : we didn't receive a ping in the last %d minutes", p.Id, int(deleteGapMinutes))
-				delete(m.requests, p.Id)
-			}
-
 			continue
 		}
 
@@ -176,19 +155,6 @@ func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musi
 	if musig2Data != nil {
 		r.musig2Data = musig2Data
 	}
-	return nil
-}
-
-func (m *txRequestsQueue) updatePingTimestamp(id string) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	request, ok := m.requests[id]
-	if !ok {
-		return errTxRequestNotFound{id}
-	}
-
-	request.pingTimestamp = time.Now()
 	return nil
 }
 

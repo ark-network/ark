@@ -24,7 +24,6 @@ type Service interface {
 	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
 	GetEventsChannel(ctx context.Context) <-chan domain.Event
-	UpdateTxRequestStatus(ctx context.Context, requestID string) error
 	ListVtxos(
 		ctx context.Context, address string,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
@@ -143,7 +142,6 @@ type TxRequestInfo struct {
 	BoardingInputs []ports.BoardingInput
 	SigningType    string
 	Cosigners      []string
-	LastPing       time.Time
 }
 
 type VtxoChainResp struct {

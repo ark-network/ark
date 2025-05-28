@@ -29,7 +29,6 @@ type ArkServiceClient interface {
 	SubmitTreeSignatures(ctx context.Context, in *SubmitTreeSignaturesRequest, opts ...grpc.CallOption) (*SubmitTreeSignaturesResponse, error)
 	SubmitSignedForfeitTxs(ctx context.Context, in *SubmitSignedForfeitTxsRequest, opts ...grpc.CallOption) (*SubmitSignedForfeitTxsResponse, error)
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
-	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	SubmitOffchainTx(ctx context.Context, in *SubmitOffchainTxRequest, opts ...grpc.CallOption) (*SubmitOffchainTxResponse, error)
 	FinalizeOffchainTx(ctx context.Context, in *FinalizeOffchainTxRequest, opts ...grpc.CallOption) (*FinalizeOffchainTxResponse, error)
 	GetTransactionsStream(ctx context.Context, in *GetTransactionsStreamRequest, opts ...grpc.CallOption) (ArkService_GetTransactionsStreamClient, error)
@@ -165,15 +164,6 @@ func (x *arkServiceGetEventStreamClient) Recv() (*GetEventStreamResponse, error)
 	return m, nil
 }
 
-func (c *arkServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error) {
-	out := new(PingResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/Ping", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *arkServiceClient) SubmitOffchainTx(ctx context.Context, in *SubmitOffchainTxRequest, opts ...grpc.CallOption) (*SubmitOffchainTxResponse, error) {
 	out := new(SubmitOffchainTxResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SubmitOffchainTx", in, out, opts...)
@@ -239,7 +229,6 @@ type ArkServiceServer interface {
 	SubmitTreeSignatures(context.Context, *SubmitTreeSignaturesRequest) (*SubmitTreeSignaturesResponse, error)
 	SubmitSignedForfeitTxs(context.Context, *SubmitSignedForfeitTxsRequest) (*SubmitSignedForfeitTxsResponse, error)
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
-	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	SubmitOffchainTx(context.Context, *SubmitOffchainTxRequest) (*SubmitOffchainTxResponse, error)
 	FinalizeOffchainTx(context.Context, *FinalizeOffchainTxRequest) (*FinalizeOffchainTxResponse, error)
 	GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error
@@ -281,9 +270,6 @@ func (UnimplementedArkServiceServer) SubmitSignedForfeitTxs(context.Context, *Su
 }
 func (UnimplementedArkServiceServer) GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetEventStream not implemented")
-}
-func (UnimplementedArkServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
 func (UnimplementedArkServiceServer) SubmitOffchainTx(context.Context, *SubmitOffchainTxRequest) (*SubmitOffchainTxResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitOffchainTx not implemented")
@@ -507,24 +493,6 @@ func (x *arkServiceGetEventStreamServer) Send(m *GetEventStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _ArkService_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PingRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).Ping(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/Ping",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).Ping(ctx, req.(*PingRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ArkService_SubmitOffchainTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SubmitOffchainTxRequest)
 	if err := dec(in); err != nil {
@@ -628,10 +596,6 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitSignedForfeitTxs",
 			Handler:    _ArkService_SubmitSignedForfeitTxs_Handler,
-		},
-		{
-			MethodName: "Ping",
-			Handler:    _ArkService_Ping_Handler,
 		},
 		{
 			MethodName: "SubmitOffchainTx",

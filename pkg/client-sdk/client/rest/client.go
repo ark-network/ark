@@ -440,15 +440,6 @@ func (c *restClient) GetEventStream(
 	return eventsCh, cancel, nil
 }
 
-func (a *restClient) Ping(
-	ctx context.Context, requestID string,
-) error {
-	r := ark_service.NewArkServicePingParams()
-	r.SetRequestID(requestID)
-	_, err := a.svc.ArkServicePing(r)
-	return err
-}
-
 func (a *restClient) SubmitOffchainTx(
 	ctx context.Context, virtualTx string, checkpointsTxs []string,
 ) ([]string, string, string, error) {

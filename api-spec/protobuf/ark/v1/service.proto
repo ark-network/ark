@@ -73,11 +73,6 @@ service ArkService {
       get: "/v1/events"
     };
   };
-  rpc Ping(PingRequest) returns (PingResponse) {
-    option (google.api.http) = {
-      get: "/v1/round/ping/{request_id}"
-    };
-  };
 
   /* Out-of-Round Transaction APIs */
 
@@ -202,12 +197,6 @@ message GetEventStreamResponse {
     RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 6;
   }
 }
-
-message PingRequest {
-  // The id used to register inputs and ouptuts.
-  string request_id = 1;
-}
-message PingResponse {}
 
 /* Out-of-Round Transaction API messages */
 

@@ -229,37 +229,6 @@
         ]
       }
     },
-    "/v1/round/ping/{requestId}": {
-      "get": {
-        "operationId": "ArkService_Ping",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1PingResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "requestId",
-            "description": "The id used to register inputs and ouptuts.",
-            "in": "path",
-            "required": true,
-            "type": "string"
-          }
-        ],
-        "tags": [
-          "ArkService"
-        ]
-      }
-    },
     "/v1/round/registerInputs": {
       "post": {
         "operationId": "ArkService_RegisterInputsForNextRound",
@@ -785,9 +754,6 @@
           "description": "Amount to send in satoshis."
         }
       }
-    },
-    "v1PingResponse": {
-      "type": "object"
     },
     "v1RedeemTransaction": {
       "type": "object",

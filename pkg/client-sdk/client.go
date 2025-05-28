@@ -1956,16 +1956,6 @@ func (a *covenantlessArkClient) handleRoundStream(
 		return "", err
 	}
 
-	var pingStop func()
-	for pingStop == nil {
-		pingStop = a.ping(ctx, intentID)
-	}
-
-	defer func() {
-		pingStop()
-		close()
-	}()
-
 	vtxosToSign := make([]client.TapscriptsVtxo, 0)
 	for _, vtxo := range vtxos {
 		if !vtxo.IsRecoverable() {
@@ -2035,7 +2025,6 @@ func (a *covenantlessArkClient) handleRoundStream(
 				}
 				continue
 			case client.RoundSigningStartedEvent:
-				pingStop()
 				if step != batchStarted {
 					continue
 				}
@@ -2054,7 +2043,6 @@ func (a *covenantlessArkClient) handleRoundStream(
 				if step != roundSigningStarted {
 					continue
 				}
-				pingStop()
 				log.Info("round combined nonces generated")
 				if err := a.handleRoundSigningNoncesGenerated(
 					ctx, event.(client.RoundSigningNoncesGeneratedEvent), signerSessions,
@@ -2067,7 +2055,6 @@ func (a *covenantlessArkClient) handleRoundStream(
 				if step != roundSigningNoncesGenerated {
 					continue
 				}
-				pingStop()
 				log.Info("a round finalization started")
 
 				signedForfeitTxs, signedRoundTx, err := a.handleRoundFinalization(

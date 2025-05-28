@@ -1238,10 +1238,6 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 	return s.txRequests.update(*request, data)
 }
 
-func (s *covenantlessService) UpdateTxRequestStatus(_ context.Context, id string) error {
-	return s.txRequests.updatePingTimestamp(id)
-}
-
 func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
 	if len(forfeitTxs) <= 0 {
 		return nil
@@ -1448,7 +1444,6 @@ func (s *covenantlessService) GetTxRequestQueue(
 			Receivers:      receivers,
 			Inputs:         request.Inputs,
 			BoardingInputs: request.boardingInputs,
-			LastPing:       request.pingTimestamp,
 			SigningType:    signingType,
 			Cosigners:      cosigners,
 		})

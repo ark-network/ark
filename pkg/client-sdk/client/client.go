@@ -53,7 +53,6 @@ type TransportClient interface {
 	GetEventStream(
 		ctx context.Context, requestID string,
 	) (<-chan RoundEventChannel, func(), error)
-	Ping(ctx context.Context, requestID string) error
 	SubmitOffchainTx(
 		ctx context.Context, virtualTx string, checkpointsTxs []string,
 	) (signedCheckpointsTxs []string, signedVirtualTx, virtualTxid string, err error)

@@ -389,20 +389,6 @@ func (h *handler) GetEventStream(
 	}
 }
 
-func (h *handler) Ping(
-	ctx context.Context, req *arkv1.PingRequest,
-) (*arkv1.PingResponse, error) {
-	if req.GetRequestId() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing request id")
-	}
-
-	if err := h.svc.UpdateTxRequestStatus(ctx, req.GetRequestId()); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.PingResponse{}, nil
-}
-
 func (h *handler) SubmitOffchainTx(
 	ctx context.Context, req *arkv1.SubmitOffchainTxRequest,
 ) (*arkv1.SubmitOffchainTxResponse, error) {
