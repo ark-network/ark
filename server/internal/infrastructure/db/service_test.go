@@ -174,11 +174,11 @@ func TestService(t *testing.T) {
 			require.NoError(t, err)
 			defer svc.Close()
 
-			//testEventRepository(t, svc)
-			//testRoundRepository(t, svc)
-			//testVtxoRepository(t, svc)
+			testEventRepository(t, svc)
+			testRoundRepository(t, svc)
+			testVtxoRepository(t, svc)
 			testOffchainTxRepository(t, svc)
-			//testMarketHourRepository(t, svc)
+			testMarketHourRepository(t, svc)
 		})
 	}
 }
