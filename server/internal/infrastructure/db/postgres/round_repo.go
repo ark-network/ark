@@ -381,8 +381,8 @@ func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) 
 
 func (r *roundRepository) GetTxsWithTxids(ctx context.Context, txids []string) ([]string, error) {
 	rows, err := r.querier.GetTxsByTxid(ctx, queries.GetTxsByTxidParams{
-		Ids1: txids,
-		Ids2: txids,
+		Column1: txids,
+		Column2: txids,
 	})
 	if err != nil {
 		return nil, err

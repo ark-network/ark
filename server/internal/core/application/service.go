@@ -323,6 +323,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 	checkpointTxs := make(map[string]string)
 	checkpointPsbts := make(map[string]*psbt.Packet) // txid -> psbt
 	spentVtxoKeys := make([]domain.VtxoKey, 0)
+	checkpointTxsByVtxoKey := make(map[domain.VtxoKey]string)
 	for _, tx := range unsignedCheckpoints {
 		checkpointPtx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
 		if err != nil {
@@ -339,6 +340,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 		}
 		checkpointTxs[checkpointPtx.UnsignedTx.TxID()] = tx
 		checkpointPsbts[checkpointPtx.UnsignedTx.TxID()] = checkpointPtx
+		checkpointTxsByVtxoKey[vtxoKey] = checkpointPtx.UnsignedTx.TxID()
 		spentVtxoKeys = append(spentVtxoKeys, vtxoKey)
 	}
 
@@ -366,10 +368,10 @@ func (s *covenantlessService) SubmitOffchainTx(
 	defer s.offchainTxInputs.remove(spentVtxoKeys)
 
 	indexedSpentVtxos := make(map[domain.VtxoKey]domain.Vtxo)
-	indexedCommitmentTxids := make(map[string]struct{}, 0)
+	commitmentTxsByCheckpointTxid := make(map[string]string)
 	for _, vtxo := range spentVtxos {
 		indexedSpentVtxos[vtxo.VtxoKey] = vtxo
-		indexedCommitmentTxids[vtxo.RoundTxid] = struct{}{}
+		commitmentTxsByCheckpointTxid[checkpointTxsByVtxoKey[vtxo.VtxoKey]] = vtxo.RoundTxid
 	}
 
 	for _, checkpointPsbt := range checkpointPsbts {
@@ -639,18 +641,18 @@ func (s *covenantlessService) SubmitOffchainTx(
 		signedCheckpointTxs[rebuiltCheckpointTx.UnsignedTx.TxID()] = signedCheckpointTx
 	}
 
-	expiration, roundTxid := findFirstRoundToExpire(spentVtxos)
+	expiration, rootCommitmentTxid := findFirstRoundToExpire(spentVtxos)
 	if expiration == 0 {
 		return nil, "", "", fmt.Errorf("invalid expiry")
 	}
 
-	commitmentTxids := []string{roundTxid}
-	delete(indexedCommitmentTxids, roundTxid)
-	for txid := range indexedCommitmentTxids {
-		commitmentTxids = append(commitmentTxids, txid)
-	}
-
-	change, err := offchainTx.Accept(signedRedeemTx, signedCheckpointTxs, commitmentTxids, expiration)
+	change, err := offchainTx.Accept(
+		signedRedeemTx,
+		signedCheckpointTxs,
+		commitmentTxsByCheckpointTxid,
+		rootCommitmentTxid,
+		expiration,
+	)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to accept offchain tx: %s", err)
 	}

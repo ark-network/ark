@@ -61,8 +61,8 @@ func (r *marketHourRepository) Upsert(ctx context.Context, marketHour domain.Mar
 			_, err = r.querier.InsertMarketHour(ctx, queries.InsertMarketHourParams{
 				StartTime:     marketHour.StartTime.Unix(),
 				EndTime:       marketHour.EndTime.Unix(),
-				Period:        int32(marketHour.Period),
-				RoundInterval: int32(marketHour.RoundInterval),
+				Period:        int64(marketHour.Period),
+				RoundInterval: int64(marketHour.RoundInterval),
 				UpdatedAt:     marketHour.UpdatedAt.Unix(),
 			})
 			return err
@@ -73,8 +73,8 @@ func (r *marketHourRepository) Upsert(ctx context.Context, marketHour domain.Mar
 			_, err = r.querier.UpdateMarketHour(ctx, queries.UpdateMarketHourParams{
 				StartTime:     marketHour.StartTime.Unix(),
 				EndTime:       marketHour.EndTime.Unix(),
-				Period:        int32(marketHour.Period),
-				RoundInterval: int32(marketHour.RoundInterval),
+				Period:        int64(marketHour.Period),
+				RoundInterval: int64(marketHour.RoundInterval),
 				UpdatedAt:     marketHour.UpdatedAt.Unix(),
 				ID:            latest.ID,
 			})

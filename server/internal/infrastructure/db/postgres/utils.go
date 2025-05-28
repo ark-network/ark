@@ -4,35 +4,29 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/ark-network/ark/server/internal/infrastructure/db/postgres/sqlc/queries"
-	_ "modernc.org/sqlite"
+	_ "github.com/lib/pq"
 )
 
 const (
-	driverName = "sqlite"
+	driverName = "postgres"
 	maxRetries = 5
 )
 
-func OpenDb(dbPath string) (*sql.DB, error) {
-	dir := filepath.Dir(dbPath)
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
-		err = os.MkdirAll(dir, 0755)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create directory: %v", err)
-		}
-	}
-
-	db, err := sql.Open(driverName, dbPath)
+func OpenDb(dsn string) (*sql.DB, error) {
+	db, err := sql.Open(driverName, dsn)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open db: %w", err)
+		return nil, fmt.Errorf("failed to open postgres db: %v", err)
 	}
 
-	db.SetMaxOpenConns(1) // prevent concurrent writes
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	if err = db.PingContext(ctx); err != nil {
+		return nil, fmt.Errorf("failed to ping postgres db: %v", err)
+	}
 
 	return db, nil
 }

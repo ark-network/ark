@@ -639,6 +639,8 @@ func (a *covenantlessArkClient) SendOffChain(
 		return "", err
 	}
 
+	time.Sleep(50 * time.Millisecond)
+
 	finalCheckpoints := make([]string, 0, len(signedCheckpoints))
 
 	for _, checkpoint := range signedCheckpoints {

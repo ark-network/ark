@@ -37,18 +37,19 @@ INSERT INTO round (
                            swept = EXCLUDED.swept,
                            vtxo_tree_expiration = EXCLUDED.vtxo_tree_expiration;
 
+
 -- name: GetTxsByTxid :many
 SELECT
     tx.txid,
     tx.tx AS data
 FROM tx
-WHERE tx.txid IN (sqlc.slice('ids1'))
+WHERE tx.txid = ANY($1::varchar[])
 UNION
 SELECT
     vtxo.txid,
     vtxo.redeem_tx AS data
 FROM vtxo
-WHERE vtxo.txid IN (sqlc.slice('ids2')) AND vtxo.redeem_tx IS NOT NULL AND vtxo.redeem_tx <> '';
+WHERE vtxo.txid = ANY($2::varchar[]) AND vtxo.redeem_tx IS NOT NULL AND vtxo.redeem_tx <> '';
 
 -- name: UpsertTxRequest :exec
 INSERT INTO tx_request (id, round_id) VALUES (@id, @round_id)
@@ -244,40 +245,34 @@ WHERE round.txid = @txid AND tx.type = 'tree';
 SELECT sqlc.embed(vtxo) FROM vtxo WHERE pubkey = @pubkey;
 
 -- name: GetExistingRounds :many
-SELECT txid FROM round WHERE txid IN (sqlc.slice('txids'));
+SELECT txid FROM round WHERE txid = ANY($1::varchar[]);
 
 -- name: SelectLeafVtxosByRoundTxid :many
 SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE round_tx = @round_tx AND (redeem_tx IS NULL or redeem_tx = '');
 
--- name: UpsertVirtualTransaction :exec
+-- name: UpsertVirtualTx :exec
 INSERT INTO virtual_tx (
     txid, tx, starting_timestamp, ending_timestamp, expiry_timestamp, fail_reason, stage_code
 ) VALUES (@txid, @tx, @starting_timestamp, @ending_timestamp, @expiry_timestamp, @fail_reason, @stage_code)
     ON CONFLICT(txid) DO UPDATE SET
-        tx = EXCLUDED.tx,
-        starting_timestamp = EXCLUDED.starting_timestamp,
-        ending_timestamp = EXCLUDED.ending_timestamp,
-        expiry_timestamp = EXCLUDED.expiry_timestamp,
-        fail_reason = EXCLUDED.fail_reason,
-        stage_code = EXCLUDED.stage_code;
+    tx = EXCLUDED.tx,
+    starting_timestamp = EXCLUDED.starting_timestamp,
+    ending_timestamp = EXCLUDED.ending_timestamp,
+    expiry_timestamp = EXCLUDED.expiry_timestamp,
+    fail_reason = EXCLUDED.fail_reason,
+    stage_code = EXCLUDED.stage_code;
 
 -- name: UpsertCheckpointTx :exec
 INSERT INTO checkpoint_tx (
-    txid, tx, commitment_txid, commitment_tx_expiry_position, virtual_txid
-) VALUES (@txid, @tx, @commitment_txid, @commitment_tx_expiry_position, @virtual_txid)
+    txid, tx, commitment_txid, is_root_commitment_tx, virtual_txid
+) VALUES (@txid, @tx, @commitment_txid, @is_root_commitment_tx, @virtual_txid)
     ON CONFLICT(txid) DO UPDATE SET
-        tx = EXCLUDED.tx,
-        commitment_txid = EXCLUDED.commitment_txid,
-        commitment_tx_expiry_position = EXCLUDED.commitment_tx_expiry_position,
-        virtual_txid = EXCLUDED.virtual_txid;
+    tx = EXCLUDED.tx,
+    commitment_txid = EXCLUDED.commitment_txid,
+    is_root_commitment_tx = EXCLUDED.is_root_commitment_tx,
+    virtual_txid = EXCLUDED.virtual_txid;
 
--- name: SelectVirtualTxWithTxId :one
-SELECT sqlc.embed(virtual_tx),
-       sqlc.embed(virtual_tx_virtual_tx_vw)
-FROM virtual_tx
-         LEFT OUTER JOIN virtual_tx_virtual_tx_vw ON virtual_tx.txid=virtual_tx_virtual_tx_vw.virtual_txid
-WHERE virtual_tx.txid = @txid;
-
--- name: SelectCheckpointTxsByVirtualTxId :many
-SELECT * FROM checkpoint_tx WHERE virtual_txid = @virtual_txid ORDER BY commitment_tx_expiry_position ASC;
+-- name: SelectVirtualTxWithTxId :many
+SELECT  sqlc.embed(virtual_tx_checkpoint_tx_vw)
+FROM virtual_tx_checkpoint_tx_vw WHERE txid = @txid;

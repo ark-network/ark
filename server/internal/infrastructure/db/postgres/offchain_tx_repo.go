@@ -33,23 +33,30 @@ func (v *offchainTxRepository) AddOrUpdateOffchainTx(
 	ctx context.Context, offchainTx *domain.OffchainTx,
 ) error {
 	txBody := func(querierWithTx *queries.Queries) error {
-		// Upsert virtual tx (offchain tx)
-		// (Assume there is an upsert for the virtual_tx table, pseudo-code)
-		// err := querierWithTx.UpsertVirtualTx(...)
-		// if err != nil { return err }
+		if err := querierWithTx.UpsertVirtualTx(ctx, queries.UpsertVirtualTxParams{
+			Txid:              offchainTx.VirtualTxid,
+			Tx:                offchainTx.VirtualTx,
+			StartingTimestamp: offchainTx.StartingTimestamp,
+			EndingTimestamp:   offchainTx.EndingTimestamp,
+			ExpiryTimestamp:   offchainTx.ExpiryTimestamp,
+			FailReason:        sql.NullString{String: offchainTx.FailReason, Valid: offchainTx.FailReason != ""},
+			StageCode:         int32(offchainTx.Stage.Code),
+		}); err != nil {
+			return err
+		}
 
-		// Upsert checkpoint txs and their order
-		for i, commitmentTxid := range offchainTx.CommitmentTxids {
-			checkpointTx, ok := offchainTx.CheckpointTxs[commitmentTxid]
+		for checkpointTxid, commitmentTxid := range offchainTx.CommitmentTxids {
+			checkpointTx, ok := offchainTx.CheckpointTxs[checkpointTxid]
 			if !ok {
 				continue
 			}
+			isRoot := commitmentTxid == offchainTx.RootCommitmentTxId
 			err := querierWithTx.UpsertCheckpointTx(ctx, queries.UpsertCheckpointTxParams{
-				Txid:                       commitmentTxid,
-				Tx:                         checkpointTx,
-				CommitmentTxid:             commitmentTxid,
-				CommitmentTxExpiryPosition: int32(i),
-				VirtualTxid:                offchainTx.VirtualTxid,
+				Txid:               checkpointTxid,
+				Tx:                 checkpointTx,
+				CommitmentTxid:     commitmentTxid,
+				IsRootCommitmentTx: isRoot,
+				VirtualTxid:        offchainTx.VirtualTxid,
 			})
 			if err != nil {
 				return err
@@ -61,41 +68,41 @@ func (v *offchainTxRepository) AddOrUpdateOffchainTx(
 }
 
 func (v *offchainTxRepository) GetOffchainTx(ctx context.Context, txid string) (*domain.OffchainTx, error) {
-	// Get the virtual tx (offchain tx)
-	virtualTx, err := v.querier.SelectVirtualTxWithTxId(ctx, txid)
+	rows, err := v.querier.SelectVirtualTxWithTxId(ctx, txid)
 	if err != nil {
 		return nil, err
 	}
-
-	// Get checkpoint txs in order
-	checkpointTxRows, err := v.querier.SelectCheckpointTxsByVirtualTxId(ctx, txid)
-	if err != nil {
-		return nil, err
+	if len(rows) == 0 {
+		return nil, sql.ErrNoRows
 	}
+	vt := rows[0].VirtualTxCheckpointTxVw
 	checkpointTxs := make(map[string]string)
-	commitmentTxids := make([]string, 0, len(checkpointTxRows))
-	for _, row := range checkpointTxRows {
-		checkpointTxs[row.CommitmentTxid] = row.Tx
-		commitmentTxids = append(commitmentTxids, row.CommitmentTxid)
+	commitmentTxids := make(map[string]string)
+	rootCommitmentTxId := ""
+	for _, row := range rows {
+		vw := row.VirtualTxCheckpointTxVw
+		if vw.CheckpointTxid.Valid && vw.CheckpointTx.Valid {
+			checkpointTxs[vw.CheckpointTxid.String] = vw.CheckpointTx.String
+			commitmentTxids[vw.CheckpointTxid.String] = vw.CommitmentTxid.String
+			if vw.IsRootCommitmentTx.Valid && vw.IsRootCommitmentTx.Bool {
+				rootCommitmentTxId = vw.CommitmentTxid.String
+			}
+		}
 	}
-
 	return &domain.OffchainTx{
-		VirtualTxid:       virtualTx.VirtualTx.Txid,
-		VirtualTx:         virtualTx.VirtualTx.Tx,
-		StartingTimestamp: virtualTx.VirtualTx.StartingTimestamp,
-		EndingTimestamp:   virtualTx.VirtualTx.EndingTimestamp,
-		ExpiryTimestamp:   virtualTx.VirtualTx.ExpiryTimestamp,
-		FailReason:        virtualTx.VirtualTx.FailReason.String,
-		Stage:             domain.Stage{Code: int(virtualTx.VirtualTx.StageCode)},
-		CheckpointTxs:     checkpointTxs,
-		CommitmentTxids:   commitmentTxids,
+		VirtualTxid:        vt.Txid,
+		VirtualTx:          vt.Tx,
+		StartingTimestamp:  vt.StartingTimestamp,
+		EndingTimestamp:    vt.EndingTimestamp,
+		ExpiryTimestamp:    vt.ExpiryTimestamp,
+		FailReason:         vt.FailReason.String,
+		Stage:              domain.Stage{Code: int(vt.StageCode)},
+		CheckpointTxs:      checkpointTxs,
+		CommitmentTxids:    commitmentTxids,
+		RootCommitmentTxId: rootCommitmentTxId,
 	}, nil
 }
 
 func (v *offchainTxRepository) Close() {
 	_ = v.db.Close()
-}
-
-func rowsToOffchainTxs(rows []queries.SelectVirtualTxWithTxIdRow) []*domain.OffchainTx {
-
 }

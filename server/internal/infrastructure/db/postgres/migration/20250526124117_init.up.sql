@@ -62,8 +62,8 @@ CREATE TABLE IF NOT EXISTS market_hour (
    id SERIAL PRIMARY KEY,
    start_time BIGINT NOT NULL,
    end_time BIGINT NOT NULL,
-   period INTEGER NOT NULL,
-   round_interval INTEGER NOT NULL,
+   period BIGINT NOT NULL,
+   round_interval BIGINT NOT NULL,
    updated_at BIGINT NOT NULL
 );
 
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS checkpoint_tx (
     txid VARCHAR PRIMARY KEY,
     tx TEXT NOT NULL,
     commitment_txid TEXT NOT NULL,
-    commitment_tx_expiry_position INTEGER NOT NULL,
+    is_root_commitment_tx BOOLEAN NOT NULL DEFAULT FALSE,
     virtual_txid VARCHAR NOT NULL,
     FOREIGN KEY (virtual_txid) REFERENCES virtual_tx(txid)
 );
@@ -112,13 +112,14 @@ FROM tx_request
 LEFT OUTER JOIN vtxo
 ON tx_request.id=vtxo.request_id;
 
-CREATE VIEW virtual_tx_virtual_tx_vw AS
+CREATE VIEW virtual_tx_checkpoint_tx_vw AS
 SELECT
     virtual_tx.*,
     checkpoint_tx.txid AS checkpoint_txid,
     checkpoint_tx.tx AS checkpoint_tx,
     checkpoint_tx.commitment_txid,
+    checkpoint_tx.is_root_commitment_tx,
     checkpoint_tx.virtual_txid
 FROM virtual_tx
-    LEFT JOIN checkpoint_tx
-    ON virtual_tx.txid = checkpoint_tx.virtual_txid;
+LEFT JOIN checkpoint_tx
+ON virtual_tx.txid = checkpoint_tx.virtual_txid;

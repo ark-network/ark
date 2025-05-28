@@ -250,44 +250,28 @@ SELECT txid FROM round WHERE txid IN (sqlc.slice('txids'));
 SELECT sqlc.embed(vtxo) FROM vtxo
 WHERE round_tx = ? AND (redeem_tx IS NULL or redeem_tx = '');
 
--- name: UpsertVirtualTransaction :exec
+-- name: UpsertVirtualTx :exec
 INSERT INTO virtual_tx (
-    txid, tx, offchain_txid, type, position
-) VALUES (?, ?, ?, ?, ?)
-ON CONFLICT(txid) DO UPDATE SET
-    txid = EXCLUDED.txid,
+    txid, tx, starting_timestamp, ending_timestamp, expiry_timestamp, fail_reason, stage_code
+) VALUES (@txid, @tx, @starting_timestamp, @ending_timestamp, @expiry_timestamp, @fail_reason, @stage_code)
+    ON CONFLICT(txid) DO UPDATE SET
     tx = EXCLUDED.tx,
-    offchain_txid = EXCLUDED.offchain_txid,
-    type = EXCLUDED.type,
-    position = EXCLUDED.position;
-
--- name: UpsertOffchainTx :exec
-INSERT INTO offchain_tx (
-    txid, starting_timestamp, ending_timestamp, expiry_timestamp, fail_reason, stage_code
-) VALUES (?, ?, ?, ?, ?, ?)
-ON CONFLICT(txid) DO UPDATE SET
-    txid = EXCLUDED.txid,
-    starting_timestamp = CASE 
-        WHEN EXCLUDED.starting_timestamp IS NULL OR EXCLUDED.starting_timestamp = 0 
-        THEN offchain_tx.starting_timestamp 
-        ELSE EXCLUDED.starting_timestamp 
-    END,
-    ending_timestamp = CASE 
-        WHEN EXCLUDED.ending_timestamp IS NULL OR EXCLUDED.ending_timestamp = 0 
-        THEN offchain_tx.ending_timestamp 
-        ELSE EXCLUDED.ending_timestamp 
-    END,
-    expiry_timestamp = CASE 
-        WHEN EXCLUDED.expiry_timestamp IS NULL OR EXCLUDED.expiry_timestamp = 0 
-        THEN offchain_tx.expiry_timestamp 
-        ELSE EXCLUDED.expiry_timestamp 
-    END,
+    starting_timestamp = EXCLUDED.starting_timestamp,
+    ending_timestamp = EXCLUDED.ending_timestamp,
+    expiry_timestamp = EXCLUDED.expiry_timestamp,
     fail_reason = EXCLUDED.fail_reason,
     stage_code = EXCLUDED.stage_code;
 
--- name: SelectOffchainTxWithTxId :many
-SELECT sqlc.embed(offchain_tx),
-       sqlc.embed(offchain_tx_virtual_tx_vw)
-FROM offchain_tx
-         LEFT OUTER JOIN offchain_tx_virtual_tx_vw ON offchain_tx.txid=offchain_tx_virtual_tx_vw.offchain_txid
-WHERE offchain_tx.txid = ?;
+-- name: UpsertCheckpointTx :exec
+INSERT INTO checkpoint_tx (
+    txid, tx, commitment_txid, is_root_commitment_tx, virtual_txid
+) VALUES (@txid, @tx, @commitment_txid, @is_root_commitment_tx, @virtual_txid)
+    ON CONFLICT(txid) DO UPDATE SET
+    tx = EXCLUDED.tx,
+    commitment_txid = EXCLUDED.commitment_txid,
+    is_root_commitment_tx = EXCLUDED.is_root_commitment_tx,
+    virtual_txid = EXCLUDED.virtual_txid;
+
+-- name: SelectVirtualTxWithTxId :many
+SELECT  sqlc.embed(virtual_tx_checkpoint_tx_vw)
+FROM virtual_tx_checkpoint_tx_vw WHERE txid = @txid;

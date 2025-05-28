@@ -16,7 +16,8 @@ type OffchainTxRequested struct {
 
 type OffchainTxAccepted struct {
 	Id                  string
-	CommitmentTxids     []string
+	CommitmentTxids     map[string]string
+	RootCommitmentTxid  string
 	FinalVirtualTx      string
 	SignedCheckpointTxs map[string]string
 	ExpiryTimestamp     int64

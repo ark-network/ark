@@ -8,25 +8,16 @@ package queries
 import (
 	"context"
 	"database/sql"
-	"strings"
+
+	"github.com/lib/pq"
 )
 
 const getExistingRounds = `-- name: GetExistingRounds :many
-SELECT txid FROM round WHERE txid IN ($1)
+SELECT txid FROM round WHERE txid = ANY($1::varchar[])
 `
 
-func (q *Queries) GetExistingRounds(ctx context.Context, txids []string) ([]string, error) {
-	query := getExistingRounds
-	var queryParams []interface{}
-	if len(txids) > 0 {
-		for _, v := range txids {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:txids*/?", strings.Repeat(",?", len(txids))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:txids*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+func (q *Queries) GetExistingRounds(ctx context.Context, dollar_1 []string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, getExistingRounds, pq.Array(dollar_1))
 	if err != nil {
 		return nil, err
 	}
@@ -284,18 +275,18 @@ SELECT
     tx.txid,
     tx.tx AS data
 FROM tx
-WHERE tx.txid IN ($1)
+WHERE tx.txid = ANY($1::varchar[])
 UNION
 SELECT
     vtxo.txid,
     vtxo.redeem_tx AS data
 FROM vtxo
-WHERE vtxo.txid IN ($2) AND vtxo.redeem_tx IS NOT NULL AND vtxo.redeem_tx <> ''
+WHERE vtxo.txid = ANY($2::varchar[]) AND vtxo.redeem_tx IS NOT NULL AND vtxo.redeem_tx <> ''
 `
 
 type GetTxsByTxidParams struct {
-	Ids1 []string
-	Ids2 []string
+	Column1 []string
+	Column2 []string
 }
 
 type GetTxsByTxidRow struct {
@@ -304,25 +295,7 @@ type GetTxsByTxidRow struct {
 }
 
 func (q *Queries) GetTxsByTxid(ctx context.Context, arg GetTxsByTxidParams) ([]GetTxsByTxidRow, error) {
-	query := getTxsByTxid
-	var queryParams []interface{}
-	if len(arg.Ids1) > 0 {
-		for _, v := range arg.Ids1 {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:ids1*/?", strings.Repeat(",?", len(arg.Ids1))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:ids1*/?", "NULL", 1)
-	}
-	if len(arg.Ids2) > 0 {
-		for _, v := range arg.Ids2 {
-			queryParams = append(queryParams, v)
-		}
-		query = strings.Replace(query, "/*SLICE:ids2*/?", strings.Repeat(",?", len(arg.Ids2))[1:], 1)
-	} else {
-		query = strings.Replace(query, "/*SLICE:ids2*/?", "NULL", 1)
-	}
-	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	rows, err := q.db.QueryContext(ctx, getTxsByTxid, pq.Array(arg.Column1), pq.Array(arg.Column2))
 	if err != nil {
 		return nil, err
 	}
@@ -358,8 +331,8 @@ INSERT INTO market_hour (
 type InsertMarketHourParams struct {
 	StartTime     int64
 	EndTime       int64
-	Period        int32
-	RoundInterval int32
+	Period        int64
+	RoundInterval int64
 	UpdatedAt     int64
 }
 
@@ -457,39 +430,6 @@ func (q *Queries) SelectAllVtxos(ctx context.Context) ([]SelectAllVtxosRow, erro
 			&i.Vtxo.CreatedAt,
 			&i.Vtxo.RequestID,
 			&i.Vtxo.RedeemTx,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
-const selectCheckpointTxsByVirtualTxId = `-- name: SelectCheckpointTxsByVirtualTxId :many
-SELECT txid, tx, commitment_txid, commitment_tx_expiry_position, virtual_txid FROM checkpoint_tx WHERE virtual_txid = $1 ORDER BY commitment_tx_expiry_position ASC
-`
-
-func (q *Queries) SelectCheckpointTxsByVirtualTxId(ctx context.Context, virtualTxid string) ([]CheckpointTx, error) {
-	rows, err := q.db.QueryContext(ctx, selectCheckpointTxsByVirtualTxId, virtualTxid)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []CheckpointTx
-	for rows.Next() {
-		var i CheckpointTx
-		if err := rows.Scan(
-			&i.Txid,
-			&i.Tx,
-			&i.CommitmentTxid,
-			&i.CommitmentTxExpiryPosition,
-			&i.VirtualTxid,
 		); err != nil {
 			return nil, err
 		}
@@ -1020,43 +960,49 @@ func (q *Queries) SelectTreeTxsWithRoundTxid(ctx context.Context, txid string) (
 	return items, nil
 }
 
-const selectVirtualTxWithTxId = `-- name: SelectVirtualTxWithTxId :one
-SELECT virtual_tx.txid, virtual_tx.tx, virtual_tx.starting_timestamp, virtual_tx.ending_timestamp, virtual_tx.expiry_timestamp, virtual_tx.fail_reason, virtual_tx.stage_code,
-       virtual_tx_virtual_tx_vw.txid, virtual_tx_virtual_tx_vw.tx, virtual_tx_virtual_tx_vw.starting_timestamp, virtual_tx_virtual_tx_vw.ending_timestamp, virtual_tx_virtual_tx_vw.expiry_timestamp, virtual_tx_virtual_tx_vw.fail_reason, virtual_tx_virtual_tx_vw.stage_code, virtual_tx_virtual_tx_vw.checkpoint_txid, virtual_tx_virtual_tx_vw.checkpoint_tx, virtual_tx_virtual_tx_vw.commitment_txid, virtual_tx_virtual_tx_vw.virtual_txid
-FROM virtual_tx
-         LEFT OUTER JOIN virtual_tx_virtual_tx_vw ON virtual_tx.txid=virtual_tx_virtual_tx_vw.virtual_txid
-WHERE virtual_tx.txid = $1
+const selectVirtualTxWithTxId = `-- name: SelectVirtualTxWithTxId :many
+SELECT  virtual_tx_checkpoint_tx_vw.txid, virtual_tx_checkpoint_tx_vw.tx, virtual_tx_checkpoint_tx_vw.starting_timestamp, virtual_tx_checkpoint_tx_vw.ending_timestamp, virtual_tx_checkpoint_tx_vw.expiry_timestamp, virtual_tx_checkpoint_tx_vw.fail_reason, virtual_tx_checkpoint_tx_vw.stage_code, virtual_tx_checkpoint_tx_vw.checkpoint_txid, virtual_tx_checkpoint_tx_vw.checkpoint_tx, virtual_tx_checkpoint_tx_vw.commitment_txid, virtual_tx_checkpoint_tx_vw.is_root_commitment_tx, virtual_tx_checkpoint_tx_vw.virtual_txid
+FROM virtual_tx_checkpoint_tx_vw WHERE txid = $1
 `
 
 type SelectVirtualTxWithTxIdRow struct {
-	VirtualTx            VirtualTx
-	VirtualTxVirtualTxVw VirtualTxVirtualTxVw
+	VirtualTxCheckpointTxVw VirtualTxCheckpointTxVw
 }
 
-func (q *Queries) SelectVirtualTxWithTxId(ctx context.Context, txid string) (SelectVirtualTxWithTxIdRow, error) {
-	row := q.db.QueryRowContext(ctx, selectVirtualTxWithTxId, txid)
-	var i SelectVirtualTxWithTxIdRow
-	err := row.Scan(
-		&i.VirtualTx.Txid,
-		&i.VirtualTx.Tx,
-		&i.VirtualTx.StartingTimestamp,
-		&i.VirtualTx.EndingTimestamp,
-		&i.VirtualTx.ExpiryTimestamp,
-		&i.VirtualTx.FailReason,
-		&i.VirtualTx.StageCode,
-		&i.VirtualTxVirtualTxVw.Txid,
-		&i.VirtualTxVirtualTxVw.Tx,
-		&i.VirtualTxVirtualTxVw.StartingTimestamp,
-		&i.VirtualTxVirtualTxVw.EndingTimestamp,
-		&i.VirtualTxVirtualTxVw.ExpiryTimestamp,
-		&i.VirtualTxVirtualTxVw.FailReason,
-		&i.VirtualTxVirtualTxVw.StageCode,
-		&i.VirtualTxVirtualTxVw.CheckpointTxid,
-		&i.VirtualTxVirtualTxVw.CheckpointTx,
-		&i.VirtualTxVirtualTxVw.CommitmentTxid,
-		&i.VirtualTxVirtualTxVw.VirtualTxid,
-	)
-	return i, err
+func (q *Queries) SelectVirtualTxWithTxId(ctx context.Context, txid string) ([]SelectVirtualTxWithTxIdRow, error) {
+	rows, err := q.db.QueryContext(ctx, selectVirtualTxWithTxId, txid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []SelectVirtualTxWithTxIdRow
+	for rows.Next() {
+		var i SelectVirtualTxWithTxIdRow
+		if err := rows.Scan(
+			&i.VirtualTxCheckpointTxVw.Txid,
+			&i.VirtualTxCheckpointTxVw.Tx,
+			&i.VirtualTxCheckpointTxVw.StartingTimestamp,
+			&i.VirtualTxCheckpointTxVw.EndingTimestamp,
+			&i.VirtualTxCheckpointTxVw.ExpiryTimestamp,
+			&i.VirtualTxCheckpointTxVw.FailReason,
+			&i.VirtualTxCheckpointTxVw.StageCode,
+			&i.VirtualTxCheckpointTxVw.CheckpointTxid,
+			&i.VirtualTxCheckpointTxVw.CheckpointTx,
+			&i.VirtualTxCheckpointTxVw.CommitmentTxid,
+			&i.VirtualTxCheckpointTxVw.IsRootCommitmentTx,
+			&i.VirtualTxCheckpointTxVw.VirtualTxid,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const selectVtxoByOutpoint = `-- name: SelectVtxoByOutpoint :one
@@ -1199,8 +1145,8 @@ WHERE id = $6
 type UpdateMarketHourParams struct {
 	StartTime     int64
 	EndTime       int64
-	Period        int32
-	RoundInterval int32
+	Period        int64
+	RoundInterval int64
 	UpdatedAt     int64
 	ID            int32
 }
@@ -1258,21 +1204,21 @@ func (q *Queries) UpdateVtxoRequestId(ctx context.Context, arg UpdateVtxoRequest
 
 const upsertCheckpointTx = `-- name: UpsertCheckpointTx :exec
 INSERT INTO checkpoint_tx (
-    txid, tx, commitment_txid, commitment_tx_expiry_position, virtual_txid
+    txid, tx, commitment_txid, is_root_commitment_tx, virtual_txid
 ) VALUES ($1, $2, $3, $4, $5)
     ON CONFLICT(txid) DO UPDATE SET
-        tx = EXCLUDED.tx,
-        commitment_txid = EXCLUDED.commitment_txid,
-        commitment_tx_expiry_position = EXCLUDED.commitment_tx_expiry_position,
-        virtual_txid = EXCLUDED.virtual_txid
+    tx = EXCLUDED.tx,
+    commitment_txid = EXCLUDED.commitment_txid,
+    is_root_commitment_tx = EXCLUDED.is_root_commitment_tx,
+    virtual_txid = EXCLUDED.virtual_txid
 `
 
 type UpsertCheckpointTxParams struct {
-	Txid                       string
-	Tx                         string
-	CommitmentTxid             string
-	CommitmentTxExpiryPosition int32
-	VirtualTxid                string
+	Txid               string
+	Tx                 string
+	CommitmentTxid     string
+	IsRootCommitmentTx bool
+	VirtualTxid        string
 }
 
 func (q *Queries) UpsertCheckpointTx(ctx context.Context, arg UpsertCheckpointTxParams) error {
@@ -1280,7 +1226,7 @@ func (q *Queries) UpsertCheckpointTx(ctx context.Context, arg UpsertCheckpointTx
 		arg.Txid,
 		arg.Tx,
 		arg.CommitmentTxid,
-		arg.CommitmentTxExpiryPosition,
+		arg.IsRootCommitmentTx,
 		arg.VirtualTxid,
 	)
 	return err
@@ -1423,20 +1369,20 @@ func (q *Queries) UpsertTxRequest(ctx context.Context, arg UpsertTxRequestParams
 	return err
 }
 
-const upsertVirtualTransaction = `-- name: UpsertVirtualTransaction :exec
+const upsertVirtualTx = `-- name: UpsertVirtualTx :exec
 INSERT INTO virtual_tx (
     txid, tx, starting_timestamp, ending_timestamp, expiry_timestamp, fail_reason, stage_code
 ) VALUES ($1, $2, $3, $4, $5, $6, $7)
     ON CONFLICT(txid) DO UPDATE SET
-        tx = EXCLUDED.tx,
-        starting_timestamp = EXCLUDED.starting_timestamp,
-        ending_timestamp = EXCLUDED.ending_timestamp,
-        expiry_timestamp = EXCLUDED.expiry_timestamp,
-        fail_reason = EXCLUDED.fail_reason,
-        stage_code = EXCLUDED.stage_code
+    tx = EXCLUDED.tx,
+    starting_timestamp = EXCLUDED.starting_timestamp,
+    ending_timestamp = EXCLUDED.ending_timestamp,
+    expiry_timestamp = EXCLUDED.expiry_timestamp,
+    fail_reason = EXCLUDED.fail_reason,
+    stage_code = EXCLUDED.stage_code
 `
 
-type UpsertVirtualTransactionParams struct {
+type UpsertVirtualTxParams struct {
 	Txid              string
 	Tx                string
 	StartingTimestamp int64
@@ -1446,8 +1392,8 @@ type UpsertVirtualTransactionParams struct {
 	StageCode         int32
 }
 
-func (q *Queries) UpsertVirtualTransaction(ctx context.Context, arg UpsertVirtualTransactionParams) error {
-	_, err := q.db.ExecContext(ctx, upsertVirtualTransaction,
+func (q *Queries) UpsertVirtualTx(ctx context.Context, arg UpsertVirtualTxParams) error {
+	_, err := q.db.ExecContext(ctx, upsertVirtualTx,
 		arg.Txid,
 		arg.Tx,
 		arg.StartingTimestamp,

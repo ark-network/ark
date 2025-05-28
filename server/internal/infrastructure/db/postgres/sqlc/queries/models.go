@@ -9,19 +9,19 @@ import (
 )
 
 type CheckpointTx struct {
-	Txid                       string
-	Tx                         string
-	CommitmentTxid             string
-	CommitmentTxExpiryPosition int32
-	VirtualTxid                string
+	Txid               string
+	Tx                 string
+	CommitmentTxid     string
+	IsRootCommitmentTx bool
+	VirtualTxid        string
 }
 
 type MarketHour struct {
 	ID            int32
 	StartTime     int64
 	EndTime       int64
-	Period        int32
-	RoundInterval int32
+	Period        int64
+	RoundInterval int64
 	UpdatedAt     int64
 }
 
@@ -111,18 +111,19 @@ type VirtualTx struct {
 	StageCode         int32
 }
 
-type VirtualTxVirtualTxVw struct {
-	Txid              string
-	Tx                string
-	StartingTimestamp int64
-	EndingTimestamp   int64
-	ExpiryTimestamp   int64
-	FailReason        sql.NullString
-	StageCode         int32
-	CheckpointTxid    sql.NullString
-	CheckpointTx      sql.NullString
-	CommitmentTxid    sql.NullString
-	VirtualTxid       sql.NullString
+type VirtualTxCheckpointTxVw struct {
+	Txid               string
+	Tx                 string
+	StartingTimestamp  int64
+	EndingTimestamp    int64
+	ExpiryTimestamp    int64
+	FailReason         sql.NullString
+	StageCode          int32
+	CheckpointTxid     sql.NullString
+	CheckpointTx       sql.NullString
+	CommitmentTxid     sql.NullString
+	IsRootCommitmentTx sql.NullBool
+	VirtualTxid        sql.NullString
 }
 
 type Vtxo struct {
