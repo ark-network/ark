@@ -1275,6 +1275,7 @@ func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx str
 	s.currentRound.CommitmentTx = combined
 
 	go func() {
+		round := s.getCurrentRound()
 		s.checkForfeitsAndBoardingSigsSent(round)
 	}()
 
