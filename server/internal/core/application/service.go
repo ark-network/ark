@@ -1272,9 +1272,7 @@ func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx str
 		return fmt.Errorf("failed to verify and combine partial tx: %s", err)
 	}
 
-	s.currentRoundLock.Lock()
 	s.currentRound.CommitmentTx = combined
-	s.currentRoundLock.Unlock()
 
 	go func() {
 		s.checkForfeitsAndBoardingSigsSent(round)
@@ -1651,9 +1649,7 @@ func (s *covenantlessService) startRound() {
 	round := domain.NewRound()
 	//nolint:all
 	round.StartRegistration()
-	s.currentRoundLock.Lock()
 	s.currentRound = round
-	s.currentRoundLock.Unlock()
 
 	close(s.forfeitsBoardingSigsChan)
 	s.forfeitsBoardingSigsChan = make(chan struct{}, 1)
@@ -1954,9 +1950,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 
 		log.Debugf("signing session created for round %s with %d signers", round.Id, len(uniqueSignerPubkeys))
 
-		s.currentRoundLock.Lock()
 		s.currentRound.CommitmentTx = unsignedRoundTx
-		s.currentRoundLock.Unlock()
 
 		// send back the unsigned tree & all cosigners pubkeys
 		listOfCosignersPubkeys := make([]string, 0, len(uniqueSignerPubkeys))
