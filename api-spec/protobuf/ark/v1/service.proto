@@ -188,6 +188,7 @@ message GetEventStreamResponse {
     RoundFailed round_failed = 3;
     RoundSigningEvent round_signing = 4;
     RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5;
+    BatchTreeEvent batch_tree = 6;
   }
 }
 

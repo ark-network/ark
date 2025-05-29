@@ -48,7 +48,7 @@ type covenantlessService struct {
 	offchainTxInputs *outpointMap
 	roundInputs      *outpointMap
 
-	eventsCh            chan domain.Event
+	eventsCh            chan []domain.Event
 	transactionEventsCh chan TransactionEvent
 
 	// cached data for the current round
@@ -137,7 +137,7 @@ func NewService(
 		forfeitTxs:                newForfeitTxsMap(builder),
 		offchainTxInputs:          newOutpointMap(),
 		roundInputs:               newOutpointMap(),
-		eventsCh:                  make(chan domain.Event),
+		eventsCh:                  make(chan []domain.Event),
 		transactionEventsCh:       make(chan TransactionEvent),
 		currentRoundLock:          sync.Mutex{},
 		treeSigningSessions:       make(map[string]*musigSigningSession),
@@ -1361,7 +1361,7 @@ func (s *covenantlessService) ListVtxos(ctx context.Context, address string) ([]
 	return s.repoManager.Vtxos().GetAllNonRedeemedVtxos(ctx, pubkey)
 }
 
-func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan domain.Event {
+func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan []domain.Event {
 	return s.eventsCh
 }
 
@@ -2046,14 +2046,16 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 }
 
 func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree tree.TxTree, cosignersPubkeys []string) {
-	ev := RoundSigningStarted{
-		Id:               s.currentRound.Id,
-		UnsignedVtxoTree: unsignedVtxoTree,
-		UnsignedRoundTx:  s.currentRound.CommitmentTx,
-		CosignersPubkeys: cosignersPubkeys,
-	}
+	events := append(
+		batchTreeEvents(unsignedVtxoTree, 0, s.currentRound.Id),
+		RoundSigningStarted{
+			Id:               s.currentRound.Id,
+			UnsignedRoundTx:  s.currentRound.CommitmentTx,
+			CosignersPubkeys: cosignersPubkeys,
+		},
+	)
 
-	s.eventsCh <- ev
+	s.eventsCh <- events
 }
 
 func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combinedNonces tree.TreeNonces) {
@@ -2062,7 +2064,7 @@ func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combined
 		Nonces: combinedNonces,
 	}
 
-	s.eventsCh <- ev
+	s.eventsCh <- []domain.Event{ev}
 }
 
 func (s *covenantlessService) finalizeRound(roundEndTime time.Time) {
@@ -2277,7 +2279,24 @@ func (s *covenantlessService) listenToScannerNotifications() {
 
 func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	lastEvent := round.Events()[len(round.Events())-1]
-	s.eventsCh <- lastEvent
+	events := make([]domain.Event, 0)
+	switch ev := lastEvent.(type) {
+	// RoundFinalizationStarted event must be handled differently
+	// because it contains the vtxoTree and connectorsTree
+	// and we need to propagate them in specific BatchTree events
+	case domain.RoundFinalizationStarted:
+		events = append(
+			events,
+			batchTreeEvents(ev.VtxoTree, 0, round.Id)...,
+		)
+		events = append(
+			events,
+			batchTreeEvents(ev.Connectors, 1, round.Id)...,
+		)
+	}
+
+	events = append(events, lastEvent)
+	s.eventsCh <- events
 }
 
 func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
@@ -2551,4 +2570,20 @@ func (s *covenantlessService) UpdateMarketHourConfig(
 	}
 
 	return nil
+}
+
+func batchTreeEvents(txTree tree.TxTree, batchIndex int32, roundId string) []domain.Event {
+	events := make([]domain.Event, 0)
+
+	for _, lvl := range txTree {
+		for _, node := range lvl {
+			events = append(events, BatchTree{
+				ID:         roundId,
+				BatchIndex: batchIndex,
+				Node:       node,
+			})
+		}
+	}
+
+	return events
 }

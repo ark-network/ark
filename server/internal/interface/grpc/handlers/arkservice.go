@@ -589,77 +589,98 @@ func (h *handler) listenToStop() {
 // listenToEvents forwards events from the application layer to the set of listeners
 func (h *handler) listenToEvents() {
 	channel := h.svc.GetEventsChannel(context.Background())
-	for event := range channel {
-		var ev *arkv1.GetEventStreamResponse
+	for events := range channel {
+		evs := make([]*arkv1.GetEventStreamResponse, 0, len(events))
 
-		switch e := event.(type) {
-		case domain.RoundFinalizationStarted:
-			ev = &arkv1.GetEventStreamResponse{
-				Event: &arkv1.GetEventStreamResponse_RoundFinalization{
-					RoundFinalization: &arkv1.RoundFinalizationEvent{
-						Id:              e.Id,
-						RoundTx:         e.RoundTx,
-						VtxoTree:        vtxoTree(e.VtxoTree).toProto(),
-						Connectors:      vtxoTree(e.Connectors).toProto(),
-						ConnectorsIndex: connectorsIndex(e.ConnectorsIndex).toProto(),
+		for _, event := range events {
+			switch e := event.(type) {
+			case domain.RoundFinalizationStarted:
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundFinalization{
+						RoundFinalization: &arkv1.RoundFinalizationEvent{
+							Id:              e.Id,
+							RoundTx:         e.RoundTx,
+							ConnectorsIndex: connectorsIndex(e.ConnectorsIndex).toProto(),
+						},
 					},
-				},
-			}
-		case domain.RoundFinalized:
-			ev = &arkv1.GetEventStreamResponse{
-				Event: &arkv1.GetEventStreamResponse_RoundFinalized{
-					RoundFinalized: &arkv1.RoundFinalizedEvent{
-						Id:        e.Id,
-						RoundTxid: e.Txid,
+				})
+			case domain.RoundFinalized:
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundFinalized{
+						RoundFinalized: &arkv1.RoundFinalizedEvent{
+							Id:        e.Id,
+							RoundTxid: e.Txid,
+						},
 					},
-				},
-			}
-		case domain.RoundFailed:
-			ev = &arkv1.GetEventStreamResponse{
-				Event: &arkv1.GetEventStreamResponse_RoundFailed{
-					RoundFailed: &arkv1.RoundFailed{
-						Id:     e.Id,
-						Reason: e.Err,
+				})
+			case domain.RoundFailed:
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundFailed{
+						RoundFailed: &arkv1.RoundFailed{
+							Id:     e.Id,
+							Reason: e.Err,
+						},
 					},
-				},
-			}
-		case application.RoundSigningStarted:
-			ev = &arkv1.GetEventStreamResponse{
-				Event: &arkv1.GetEventStreamResponse_RoundSigning{
-					RoundSigning: &arkv1.RoundSigningEvent{
-						Id:               e.Id,
-						UnsignedVtxoTree: vtxoTree(e.UnsignedVtxoTree).toProto(),
-						UnsignedRoundTx:  e.UnsignedRoundTx,
-						CosignersPubkeys: e.CosignersPubkeys,
+				})
+			case application.RoundSigningStarted:
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundSigning{
+						RoundSigning: &arkv1.RoundSigningEvent{
+							Id:               e.Id,
+							UnsignedRoundTx:  e.UnsignedRoundTx,
+							CosignersPubkeys: e.CosignersPubkeys,
+						},
 					},
-				},
-			}
-		case application.RoundSigningNoncesGenerated:
-			serialized, err := e.SerializeNonces()
-			if err != nil {
-				logrus.WithError(err).Error("failed to serialize nonces")
-				continue
-			}
+				})
+			case application.RoundSigningNoncesGenerated:
+				serialized, err := e.SerializeNonces()
+				if err != nil {
+					logrus.WithError(err).Error("failed to serialize nonces")
+					continue
+				}
 
-			ev = &arkv1.GetEventStreamResponse{
-				Event: &arkv1.GetEventStreamResponse_RoundSigningNoncesGenerated{
-					RoundSigningNoncesGenerated: &arkv1.RoundSigningNoncesGeneratedEvent{
-						Id:         e.Id,
-						TreeNonces: serialized,
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundSigningNoncesGenerated{
+						RoundSigningNoncesGenerated: &arkv1.RoundSigningNoncesGeneratedEvent{
+							Id:         e.Id,
+							TreeNonces: serialized,
+						},
 					},
-				},
+				})
+			case application.BatchTree:
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_BatchTree{
+						BatchTree: &arkv1.BatchTreeEvent{
+							Id:         e.ID,
+							Topic:      e.Topic,
+							BatchIndex: e.BatchIndex,
+							TreeTx: &arkv1.Node{
+								Txid:       e.Node.Txid,
+								Tx:         e.Node.Tx,
+								ParentTxid: e.Node.ParentTxid,
+								Level:      e.Node.Level,
+								LevelIndex: e.Node.LevelIndex,
+								Leaf:       e.Node.Leaf,
+							},
+						},
+					},
+				})
 			}
 		}
 
-		if ev != nil {
+		// forward all events in the same routine in order to preserve the ordering
+		if len(evs) > 0 {
 			logrus.Debugf("forwarding event to %d listeners", len(h.eventsListenerHandler.listeners))
 			for _, l := range h.eventsListenerHandler.listeners {
 				go func(l *listener[*arkv1.GetEventStreamResponse]) {
-					l.ch <- ev
+					for _, ev := range evs {
+						l.ch <- ev
+					}
 				}(l)
 			}
 		}
 	}
+
 }
 
 func (h *handler) listenToTxEvents() {

@@ -368,14 +368,10 @@ func (c *restClient) GetEventStream(
 					}
 				case resp.Result.RoundFinalization != nil:
 					e := resp.Result.RoundFinalization
-					vtxoTree := treeFromProto{e.VtxoTree}.parse()
-					connectorTree := treeFromProto{e.Connectors}.parse()
 
 					event = client.RoundFinalizationEvent{
 						ID:              e.ID,
 						Tx:              e.RoundTx,
-						Tree:            vtxoTree,
-						Connectors:      connectorTree,
 						ConnectorsIndex: connectorsIndexFromProto{e.ConnectorsIndex}.parse(),
 					}
 				case resp.Result.RoundFinalized != nil:
@@ -388,7 +384,6 @@ func (c *restClient) GetEventStream(
 					e := resp.Result.RoundSigning
 					event = client.RoundSigningStartedEvent{
 						ID:               e.ID,
-						UnsignedTree:     treeFromProto{e.UnsignedVtxoTree}.parse(),
 						UnsignedRoundTx:  e.UnsignedRoundTx,
 						CosignersPubkeys: e.CosignersPubkeys,
 					}
@@ -403,6 +398,21 @@ func (c *restClient) GetEventStream(
 					event = client.RoundSigningNoncesGeneratedEvent{
 						ID:     e.ID,
 						Nonces: nonces,
+					}
+				case resp.Result.BatchTree != nil:
+					e := resp.Result.BatchTree
+					event = client.BatchTreeEvent{
+						ID:         e.ID,
+						Topic:      e.Topic,
+						BatchIndex: e.BatchIndex,
+						Node: tree.Node{
+							Txid:       e.TreeTx.Txid,
+							Tx:         e.TreeTx.Tx,
+							ParentTxid: e.TreeTx.ParentTxid,
+							Leaf:       e.TreeTx.Leaf,
+							Level:      e.TreeTx.Level,
+							LevelIndex: e.TreeTx.LevelIndex,
+						},
 					}
 				}
 
@@ -767,22 +777,12 @@ func (t treeFromProto) parse() tree.TxTree {
 				Txid:       n.Txid,
 				Tx:         n.Tx,
 				ParentTxid: n.ParentTxid,
+				Leaf:       n.Leaf,
+				Level:      n.Level,
+				LevelIndex: n.LevelIndex,
 			})
 		}
 		vtxoTree = append(vtxoTree, level)
-	}
-
-	for j, treeLvl := range vtxoTree {
-		for i, node := range treeLvl {
-			if len(vtxoTree.Children(node.Txid)) == 0 {
-				vtxoTree[j][i] = tree.Node{
-					Txid:       node.Txid,
-					Tx:         node.Tx,
-					ParentTxid: node.ParentTxid,
-					Leaf:       true,
-				}
-			}
-		}
 	}
 
 	return vtxoTree

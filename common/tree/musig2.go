@@ -600,6 +600,8 @@ func (t *treeCoordinatorSession) SignTree() (TxTree, error) {
 			Tx:         encodedSignedTx,
 			ParentTxid: t.vtxoTree[i][j].ParentTxid,
 			Leaf:       t.vtxoTree[i][j].Leaf,
+			Level:      int32(i),
+			LevelIndex: int32(j),
 		}
 
 		return nil
