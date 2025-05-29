@@ -722,8 +722,6 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			finalCheckpoints = append(finalCheckpoints, finalCheckpoint)
 		}
 
-		time.Sleep(50 * time.Millisecond)
-
 		err = grpcTransportClient.FinalizeOffchainTx(ctx, bobTxid, finalCheckpoints)
 		require.NoError(t, err)
 
@@ -1257,9 +1255,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 		finalCheckpoints = append(finalCheckpoints, finalCheckpoint)
 	}
-
-	time.Sleep(50 * time.Millisecond)
-
+	
 	err = grpcAlice.FinalizeOffchainTx(ctx, txid, finalCheckpoints)
 	require.NoError(t, err)
 }
@@ -1504,8 +1500,6 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 		finalCheckpoints = append(finalCheckpoints, finalCheckpoint)
 	}
-
-	time.Sleep(50 * time.Millisecond)
 
 	err = grpcAlice.FinalizeOffchainTx(ctx, bobTxid, finalCheckpoints)
 	require.NoError(t, err)

@@ -47,6 +47,7 @@ type covenantlessService struct {
 	forfeitTxs       *forfeitTxsMap
 	offchainTxInputs *outpointMap
 	roundInputs      *outpointMap
+	offchainTxs      *offchainTxsMap
 
 	eventsCh            chan domain.Event
 	transactionEventsCh chan TransactionEvent
@@ -137,6 +138,7 @@ func NewService(
 		forfeitTxs:                newForfeitTxsMap(builder),
 		offchainTxInputs:          newOutpointMap(),
 		roundInputs:               newOutpointMap(),
+		offchainTxs:               newOffchainTxsMap(),
 		eventsCh:                  make(chan domain.Event),
 		transactionEventsCh:       make(chan TransactionEvent),
 		currentRoundLock:          sync.Mutex{},
@@ -657,6 +659,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 		return nil, "", "", fmt.Errorf("failed to accept offchain tx: %s", err)
 	}
 	changes = append(changes, change)
+	s.offchainTxs.add(*domain.NewOffchainTxFromEvents(changes))
 
 	finalVirtualTx = signedRedeemTx
 	signedCheckpoints = make([]string, 0)
@@ -668,11 +671,15 @@ func (s *covenantlessService) SubmitOffchainTx(
 }
 
 func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid string, finalCheckpoints []string) error {
-	var changes []domain.Event
+	var (
+		changes []domain.Event
+		err     error
+	)
 
-	offchainTx, err := s.repoManager.OffchainTxs().GetOffchainTx(ctx, txid)
-	if err != nil {
-		return fmt.Errorf("offchain tx %s not found", err)
+	offchainTx, exists := s.offchainTxs.get(txid)
+	if !exists {
+		err = fmt.Errorf("offchain tx: %v not found", txid)
+		return err
 	}
 
 	defer func() {
@@ -681,11 +688,13 @@ func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid strin
 			changes = append(changes, change)
 		}
 
-		if err := s.repoManager.Events().Save(
+		if err = s.repoManager.Events().Save(
 			ctx, domain.OffchainTxTopic, txid, changes,
 		); err != nil {
 			log.WithError(err).Fatal("failed to save offchain tx events")
 		}
+
+		s.offchainTxs.remove(txid)
 	}()
 
 	finalCheckpointsTxs := make(map[string]string)
