@@ -1803,7 +1803,6 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 				}
 				notConfirmedRequests = append(notConfirmedRequests, req)
 			}
-			requests = confirmedRequests
 			num = s.txRequests.len()
 
 			// no more requests in queue, but 0 confirmed requests: fail the round
