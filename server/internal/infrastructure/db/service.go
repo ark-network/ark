@@ -15,10 +15,12 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	badgerdb "github.com/ark-network/ark/server/internal/infrastructure/db/badger"
+	pgdb "github.com/ark-network/ark/server/internal/infrastructure/db/postgres"
 	sqlitedb "github.com/ark-network/ark/server/internal/infrastructure/db/sqlite"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/golang-migrate/migrate/v4"
+	migratepg "github.com/golang-migrate/migrate/v4/database/postgres"
 	sqlitemigrate "github.com/golang-migrate/migrate/v4/database/sqlite"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
 	"github.com/golang-migrate/migrate/v4/source/iofs"
@@ -28,25 +30,32 @@ import (
 //go:embed sqlite/migration/*
 var migrations embed.FS
 
+//go:embed postgres/migration/*
+var pgMigration embed.FS
+
 var (
 	eventStoreTypes = map[string]func(...interface{}) (domain.EventRepository, error){
 		"badger": badgerdb.NewEventRepository,
 	}
 	roundStoreTypes = map[string]func(...interface{}) (domain.RoundRepository, error){
-		"badger": badgerdb.NewRoundRepository,
-		"sqlite": sqlitedb.NewRoundRepository,
+		"badger":   badgerdb.NewRoundRepository,
+		"sqlite":   sqlitedb.NewRoundRepository,
+		"postgres": pgdb.NewRoundRepository,
 	}
 	vtxoStoreTypes = map[string]func(...interface{}) (domain.VtxoRepository, error){
-		"badger": badgerdb.NewVtxoRepository,
-		"sqlite": sqlitedb.NewVtxoRepository,
+		"badger":   badgerdb.NewVtxoRepository,
+		"sqlite":   sqlitedb.NewVtxoRepository,
+		"postgres": pgdb.NewVtxoRepository,
 	}
 	marketHourStoreTypes = map[string]func(...interface{}) (domain.MarketHourRepo, error){
-		"badger": badgerdb.NewMarketHourRepository,
-		"sqlite": sqlitedb.NewMarketHourRepository,
+		"badger":   badgerdb.NewMarketHourRepository,
+		"sqlite":   sqlitedb.NewMarketHourRepository,
+		"postgres": pgdb.NewMarketHourRepository,
 	}
 	offchainTxStoreTypes = map[string]func(...interface{}) (domain.OffchainTxRepository, error){
-		"badger": badgerdb.NewOffchainTxRepository,
-		"sqlite": sqlitedb.NewOffchainTxRepository,
+		"badger":   badgerdb.NewOffchainTxRepository,
+		"sqlite":   sqlitedb.NewOffchainTxRepository,
+		"postgres": pgdb.NewOffchainTxRepository,
 	}
 )
 
@@ -126,6 +135,59 @@ func NewService(config ServiceConfig, txDecoder ports.TxDecoder) (ports.RepoMana
 			return nil, fmt.Errorf("failed to create market hour store: %w", err)
 		}
 		offchainTxStore, err = offchainTxStoreFactory(config.DataStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create offchain tx store: %w", err)
+		}
+	case "postgres":
+		if len(config.DataStoreConfig) != 1 {
+			return nil, fmt.Errorf("invalid data store config for postgres")
+		}
+
+		dsn, ok := config.DataStoreConfig[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid DSN for postgres")
+		}
+
+		db, err := pgdb.OpenDb(dsn)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open postgres db: %s", err)
+		}
+
+		pgDriver, err := migratepg.WithInstance(db, &migratepg.Config{})
+		if err != nil {
+			return nil, fmt.Errorf("failed to init postgres migration driver: %s", err)
+		}
+
+		source, err := iofs.New(pgMigration, "postgres/migration")
+		if err != nil {
+			return nil, fmt.Errorf("failed to embed postgres migrations: %s", err)
+		}
+
+		m, err := migrate.NewWithInstance("iofs", source, "postgres", pgDriver)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create postgres migration instance: %s", err)
+		}
+
+		if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
+			return nil, fmt.Errorf("failed to run postgres migrations: %s", err)
+		}
+		
+		roundStore, err = roundStoreFactory(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open round store: %s", err)
+		}
+
+		vtxoStore, err = vtxoStoreFactory(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open vtxo store: %s", err)
+		}
+
+		marketHourStore, err = marketHourStoreFactory(db)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create market hour store: %w", err)
+		}
+
+		offchainTxStore, err = offchainTxStoreFactory(db)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create offchain tx store: %w", err)
 		}

@@ -438,6 +438,37 @@ func (r *outpointMap) includesAny(outpoints []domain.VtxoKey) (bool, string) {
 	return false, ""
 }
 
+type offchainTxsMap struct {
+	lock        *sync.RWMutex
+	offchainTxs map[string]domain.OffchainTx
+}
+
+func newOffchainTxsMap() *offchainTxsMap {
+	return &offchainTxsMap{
+		lock:        &sync.RWMutex{},
+		offchainTxs: make(map[string]domain.OffchainTx),
+	}
+}
+
+func (m *offchainTxsMap) add(offchainTx domain.OffchainTx) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.offchainTxs[offchainTx.VirtualTxid] = offchainTx
+}
+
+func (m *offchainTxsMap) remove(virtualTxid string) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	delete(m.offchainTxs, virtualTxid)
+}
+
+func (m *offchainTxsMap) get(offchainTxid string) (domain.OffchainTx, bool) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	offchainTx, ok := m.offchainTxs[offchainTxid]
+	return offchainTx, ok
+}
+
 // onchainOutputs iterates over all the nodes' outputs in the vtxo tree and checks their onchain state
 // returns the sweepable outputs as ports.SweepInput mapped by their expiration time
 func findSweepableOutputs(

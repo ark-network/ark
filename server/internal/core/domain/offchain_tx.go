@@ -33,17 +33,18 @@ type Tx struct {
 }
 
 type OffchainTx struct {
-	Stage             Stage
-	StartingTimestamp int64
-	EndingTimestamp   int64
-	VirtualTxid       string
-	VirtualTx         string
-	CheckpointTxs     map[string]string
-	CommitmentTxids   []string
-	ExpiryTimestamp   int64
-	FailReason        string
-	Version           uint
-	changes           []Event
+	Stage              Stage
+	StartingTimestamp  int64
+	EndingTimestamp    int64
+	VirtualTxid        string
+	VirtualTx          string
+	CheckpointTxs      map[string]string //tx/hex
+	CommitmentTxids    map[string]string //checkpointTxId/CommitmentTxId
+	RootCommitmentTxId string
+	ExpiryTimestamp    int64
+	FailReason         string
+	Version            uint
+	changes            []Event
 }
 
 func NewOffchainTx() *OffchainTx {
@@ -92,7 +93,7 @@ func (s *OffchainTx) Request(
 
 func (s *OffchainTx) Accept(
 	finalVirtualTx string, signedCheckpointTxs map[string]string,
-	commitmentTxids []string, expiryTimestamp int64,
+	commitmentTxsByCheckpointTxid map[string]string, rootCommitmentTx string, expiryTimestamp int64,
 ) (Event, error) {
 	if finalVirtualTx == "" {
 		return nil, fmt.Errorf("missing final virtual tx")
@@ -103,8 +104,11 @@ func (s *OffchainTx) Accept(
 	if len(signedCheckpointTxs) != len(s.CheckpointTxs) {
 		return nil, fmt.Errorf("invalid number of signed checkpoint txs, expected %d, got %d", len(s.CheckpointTxs), len(signedCheckpointTxs))
 	}
-	if len(commitmentTxids) == 0 {
+	if len(commitmentTxsByCheckpointTxid) == 0 {
 		return nil, fmt.Errorf("missing commitment txids")
+	}
+	if rootCommitmentTx == "" {
+		return nil, fmt.Errorf("missing root commitment txid")
 	}
 	if !s.IsRequested() {
 		return nil, fmt.Errorf("not in a valid stage to accept offchain tx")
@@ -116,7 +120,8 @@ func (s *OffchainTx) Accept(
 		Id:                  s.VirtualTxid,
 		FinalVirtualTx:      finalVirtualTx,
 		SignedCheckpointTxs: signedCheckpointTxs,
-		CommitmentTxids:     commitmentTxids,
+		CommitmentTxids:     commitmentTxsByCheckpointTxid,
+		RootCommitmentTxid:  rootCommitmentTx,
 		ExpiryTimestamp:     expiryTimestamp,
 	}
 	s.raise(event)
@@ -156,10 +161,7 @@ func (s *OffchainTx) Fail(err error) Event {
 }
 
 func (s *OffchainTx) RootCommitmentTxid() string {
-	if len(s.CommitmentTxids) == 0 {
-		return ""
-	}
-	return s.CommitmentTxids[0]
+	return s.RootCommitmentTxId
 }
 
 func (s *OffchainTx) Events() []Event {
@@ -195,6 +197,7 @@ func (s *OffchainTx) on(event Event, replayed bool) {
 		s.VirtualTx = e.FinalVirtualTx
 		s.CheckpointTxs = e.SignedCheckpointTxs
 		s.CommitmentTxids = e.CommitmentTxids
+		s.RootCommitmentTxId = e.RootCommitmentTxid
 		s.ExpiryTimestamp = e.ExpiryTimestamp
 	case OffchainTxFinalized:
 		s.Stage.Code = int(OffchainTxFinalizedStage)

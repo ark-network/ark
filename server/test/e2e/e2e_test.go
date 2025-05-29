@@ -1255,7 +1255,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 		finalCheckpoints = append(finalCheckpoints, finalCheckpoint)
 	}
-
+	
 	err = grpcAlice.FinalizeOffchainTx(ctx, txid, finalCheckpoints)
 	require.NoError(t, err)
 }

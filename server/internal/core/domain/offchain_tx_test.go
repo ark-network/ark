@@ -22,10 +22,10 @@ var (
 	finalCheckpointTxs = map[string]string{
 		txid: finalPtx,
 	}
-	virtualTx       = signedPtx
-	finalVirtualTx  = finalPtx
-	commitmentTxids = []string{rootCommitmentTxid, txid2}
-	expiryTimestamp = time.Now().Add(1 * time.Hour).Unix()
+	virtualTx                     = signedPtx
+	finalVirtualTx                = finalPtx
+	commitmentTxsByCheckpointTxid = map[string]string{txid: rootCommitmentTxid}
+	expiryTimestamp               = time.Now().Add(1 * time.Hour).Unix()
 )
 
 func TestOffchainTx(t *testing.T) {
@@ -135,7 +135,13 @@ func testAcceptOffchainTx(t *testing.T) {
 			require.NotNil(t, event)
 			require.Empty(t, offchainTx.RootCommitmentTxid())
 
-			event, err = offchainTx.Accept(finalVirtualTx, signedCheckpointTxs, commitmentTxids, expiryTimestamp)
+			event, err = offchainTx.Accept(
+				finalVirtualTx,
+				signedCheckpointTxs,
+				commitmentTxsByCheckpointTxid,
+				rootCommitmentTxid,
+				expiryTimestamp,
+			)
 			require.NoError(t, err)
 			require.NotNil(t, event)
 			require.False(t, offchainTx.IsRequested())
@@ -144,7 +150,7 @@ func testAcceptOffchainTx(t *testing.T) {
 			require.False(t, offchainTx.IsFailed())
 			require.Equal(t, finalVirtualTx, offchainTx.VirtualTx)
 			require.Equal(t, signedCheckpointTxs, offchainTx.CheckpointTxs)
-			require.Equal(t, commitmentTxids, offchainTx.CommitmentTxids)
+			require.Equal(t, commitmentTxsByCheckpointTxid, offchainTx.CommitmentTxids)
 			require.Equal(t, rootCommitmentTxid, offchainTx.RootCommitmentTxid())
 
 			events := offchainTx.Events()
@@ -157,7 +163,7 @@ func testAcceptOffchainTx(t *testing.T) {
 				offchainTx          *domain.OffchainTx
 				finalVirtualTx      string
 				signedCheckpointTxs map[string]string
-				commitmentTxids     []string
+				commitmentTxids     map[string]string
 				expiryTimestamp     int64
 				expectedErr         string
 			}{
@@ -168,7 +174,7 @@ func testAcceptOffchainTx(t *testing.T) {
 						},
 					},
 					signedCheckpointTxs: signedCheckpointTxs,
-					commitmentTxids:     commitmentTxids,
+					commitmentTxids:     commitmentTxsByCheckpointTxid,
 					expectedErr:         "missing final virtual tx",
 					expiryTimestamp:     expiryTimestamp,
 				},
@@ -179,7 +185,7 @@ func testAcceptOffchainTx(t *testing.T) {
 						},
 					},
 					finalVirtualTx:  finalVirtualTx,
-					commitmentTxids: commitmentTxids,
+					commitmentTxids: commitmentTxsByCheckpointTxid,
 					expectedErr:     "missing signed checkpoint txs",
 					expiryTimestamp: expiryTimestamp,
 				},
@@ -205,7 +211,7 @@ func testAcceptOffchainTx(t *testing.T) {
 					},
 					finalVirtualTx:      finalVirtualTx,
 					signedCheckpointTxs: signedCheckpointTxs,
-					commitmentTxids:     commitmentTxids,
+					commitmentTxids:     commitmentTxsByCheckpointTxid,
 					expectedErr:         "not in a valid stage to accept offchain tx",
 					expiryTimestamp:     expiryTimestamp,
 				},
@@ -218,7 +224,7 @@ func testAcceptOffchainTx(t *testing.T) {
 					},
 					finalVirtualTx:      finalVirtualTx,
 					signedCheckpointTxs: signedCheckpointTxs,
-					commitmentTxids:     commitmentTxids,
+					commitmentTxids:     commitmentTxsByCheckpointTxid,
 					expectedErr:         "missing expiry timestamp",
 					expiryTimestamp:     0,
 				},
@@ -231,7 +237,7 @@ func testAcceptOffchainTx(t *testing.T) {
 					},
 					finalVirtualTx:      finalVirtualTx,
 					signedCheckpointTxs: signedCheckpointTxs,
-					commitmentTxids:     commitmentTxids,
+					commitmentTxids:     commitmentTxsByCheckpointTxid,
 					expectedErr:         "not in a valid stage to accept offchain tx",
 					expiryTimestamp:     expiryTimestamp,
 				},
@@ -239,7 +245,7 @@ func testAcceptOffchainTx(t *testing.T) {
 
 			for _, f := range fixtures {
 				event, err := f.offchainTx.Accept(
-					f.finalVirtualTx, f.signedCheckpointTxs, f.commitmentTxids, f.expiryTimestamp,
+					f.finalVirtualTx, f.signedCheckpointTxs, f.commitmentTxids, rootCommitmentTxid, f.expiryTimestamp,
 				)
 				require.EqualError(t, err, f.expectedErr)
 				require.Nil(t, event)
@@ -257,7 +263,7 @@ func testFinalizeOffchainTx(t *testing.T) {
 			require.NotNil(t, event)
 
 			event, err = offchainTx.Accept(
-				finalVirtualTx, signedCheckpointTxs, commitmentTxids, expiryTimestamp,
+				finalVirtualTx, signedCheckpointTxs, commitmentTxsByCheckpointTxid, rootCommitmentTxid, expiryTimestamp,
 			)
 			require.NoError(t, err)
 			require.NotNil(t, event)
@@ -333,7 +339,7 @@ func testFailOffchainTx(t *testing.T) {
 			require.NotNil(t, event)
 
 			event, err = offchainTx.Accept(
-				finalVirtualTx, signedCheckpointTxs, commitmentTxids, expiryTimestamp,
+				finalVirtualTx, signedCheckpointTxs, commitmentTxsByCheckpointTxid, rootCommitmentTxid, expiryTimestamp,
 			)
 			require.NoError(t, err)
 			require.NotNil(t, event)

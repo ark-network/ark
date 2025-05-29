@@ -10,16 +10,20 @@ This is a Go implementation of the Ark server. An Ark server it's an always-on s
 - [Go](https://go.dev/doc/install)
 - [Bitcoin Core](https://bitcoincore.org) with `compact block filters` enabled
 
-### Run the arkd and arkd-wallet servers
+### Run the postgres, arkd-wallet and arkd servers
+1. Start postgres container and create ark-db database
+```bash
+make pg
+```
 
-1. Run arkd-wallet
+2. Run arkd-wallet
 ```bash
 cd ../pkg/ark-wallet && make run-neutrino
 ```
 
-2. Run arkd
+3. Run arkd
 ```bash
-make run-neutrino
+make run
 ```
 
 Refer to [config.go](./internal/config/config.go) for the available configuration options via ENV VARs.

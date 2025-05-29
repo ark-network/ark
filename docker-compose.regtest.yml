@@ -1,4 +1,15 @@
 services:
+  ark-db-pg:
+    container_name: ark-db-pg
+    image: postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: root
+      POSTGRES_PASSWORD: secret
+      POSTGRES_DB: ark-db
+
   arkd-wallet:
     build:
       context: .
@@ -20,8 +31,10 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: arkd
+    restart: unless-stopped
     depends_on:
       - arkd-wallet
+      - ark-db-pg
     ports:
       - "7070:7070"
     environment:
@@ -35,6 +48,7 @@ services:
       - ARK_DATADIR=./data/regtest
       - ARK_WALLET_ADDR=arkd-wallet:6060
       - ARK_ESPLORA_URL=http://chopsticks:3000
+      - ARK_DB_URL=postgresql://root:secret@ark-db-pg:5432/ark-db?sslmode=disable
     volumes:
       - type: tmpfs
         target: /app/data

@@ -2,26 +2,33 @@ ALTER TABLE round DROP COLUMN dust_amount;
 ALTER TABLE round DROP COLUMN unsigned_tx;
 ALTER TABLE round ADD COLUMN vtxo_tree_expiration INTEGER NOT NULL;
 
-CREATE TABLE IF NOT EXISTS offchain_tx (
-    txid TEXT PRIMARY KEY NOT NULL,
-    starting_timestamp INTEGER NOT NULL,
-    ending_timestamp INTEGER NOT NULL,
-    expiry_timestamp INTEGER NOT NULL,
-    fail_reason TEXT,
+CREATE TABLE IF NOT EXISTS virtual_tx (
+    txid VARCHAR PRIMARY KEY,
+    tx TEXT NOT NULL,
+    starting_timestamp BIGINT NOT NULL,
+    ending_timestamp BIGINT NOT NULL,
+    expiry_timestamp BIGINT NOT NULL,
+    fail_reason VARCHAR,
     stage_code INTEGER NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS virtual_tx (
-    txid TEXT PRIMARY KEY,
+CREATE TABLE IF NOT EXISTS checkpoint_tx (
+    txid VARCHAR PRIMARY KEY,
     tx TEXT NOT NULL,
-    offchain_txid TEXT NOT NULL,
-    type TEXT NOT NULL,
-    position INTEGER NOT NULL,
-    FOREIGN KEY (offchain_txid) REFERENCES offchain_tx(txid)
+    commitment_txid TEXT NOT NULL,
+    is_root_commitment_tx BOOLEAN NOT NULL DEFAULT FALSE,
+    virtual_txid VARCHAR NOT NULL,
+    FOREIGN KEY (virtual_txid) REFERENCES virtual_tx(txid)
 );
 
-CREATE VIEW IF NOT EXISTS offchain_tx_virtual_tx_vw AS
-SELECT virtual_tx.*
-FROM offchain_tx
-LEFT OUTER JOIN virtual_tx
-ON offchain_tx.txid=virtual_tx.offchain_txid;
+CREATE VIEW virtual_tx_checkpoint_tx_vw AS
+SELECT
+    virtual_tx.*,
+    checkpoint_tx.txid AS checkpoint_txid,
+    checkpoint_tx.tx AS checkpoint_tx,
+    checkpoint_tx.commitment_txid,
+    checkpoint_tx.is_root_commitment_tx,
+    checkpoint_tx.virtual_txid
+FROM virtual_tx
+    INNER JOIN checkpoint_tx
+    ON virtual_tx.txid = checkpoint_tx.virtual_txid;
