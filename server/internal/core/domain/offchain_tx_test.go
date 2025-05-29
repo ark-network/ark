@@ -133,6 +133,7 @@ func testAcceptOffchainTx(t *testing.T) {
 			event, err := offchainTx.Request(txid, virtualTx, unsignedCheckpointTxs)
 			require.NoError(t, err)
 			require.NotNil(t, event)
+			require.Equal(t, domain.EventTypeOffchainTxRequested, event.GetType())
 			require.Empty(t, offchainTx.RootCommitmentTxid())
 
 			event, err = offchainTx.Accept(finalVirtualTx, signedCheckpointTxs, commitmentTxids, expiryTimestamp)
@@ -255,12 +256,14 @@ func testFinalizeOffchainTx(t *testing.T) {
 			event, err := offchainTx.Request(txid, virtualTx, unsignedCheckpointTxs)
 			require.NoError(t, err)
 			require.NotNil(t, event)
+			require.Equal(t, domain.EventTypeOffchainTxRequested, event.GetType())
 
 			event, err = offchainTx.Accept(
 				finalVirtualTx, signedCheckpointTxs, commitmentTxids, expiryTimestamp,
 			)
 			require.NoError(t, err)
 			require.NotNil(t, event)
+			require.Equal(t, domain.EventTypeOffchainTxAccepted, event.GetType())
 
 			event, err = offchainTx.Finalize(finalCheckpointTxs)
 			require.NoError(t, err)
@@ -331,12 +334,14 @@ func testFailOffchainTx(t *testing.T) {
 			event, err := offchainTx.Request(txid, virtualTx, unsignedCheckpointTxs)
 			require.NoError(t, err)
 			require.NotNil(t, event)
+			require.Equal(t, domain.EventTypeOffchainTxRequested, event.GetType())
 
 			event, err = offchainTx.Accept(
 				finalVirtualTx, signedCheckpointTxs, commitmentTxids, expiryTimestamp,
 			)
 			require.NoError(t, err)
 			require.NotNil(t, event)
+			require.Equal(t, domain.EventTypeOffchainTxAccepted, event.GetType())
 
 			reason := fmt.Errorf("some valid reason")
 			event = offchainTx.Fail(reason)
@@ -346,6 +351,7 @@ func testFailOffchainTx(t *testing.T) {
 			require.False(t, offchainTx.IsFinalized())
 			require.True(t, offchainTx.IsFailed())
 			require.Equal(t, reason.Error(), offchainTx.FailReason)
+			require.Equal(t, domain.EventTypeOffchainTxFailed, event.GetType())
 
 			events := offchainTx.Events()
 			require.Len(t, events, 3)

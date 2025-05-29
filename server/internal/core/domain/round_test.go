@@ -180,6 +180,7 @@ func testStartRegistration(t *testing.T) {
 
 			event, ok := events[0].(domain.RoundStarted)
 			require.True(t, ok)
+			require.Equal(t, domain.EventTypeRoundStarted, event.Type)
 			require.Equal(t, round.Id, event.Id)
 			require.Equal(t, round.StartingTimestamp, event.Timestamp)
 		})
@@ -251,6 +252,7 @@ func testRegisterTxRequests(t *testing.T) {
 
 			event, ok := events[0].(domain.TxRequestsRegistered)
 			require.True(t, ok)
+			require.Equal(t, domain.EventTypeTxRequestsRegistered, event.Type)
 			require.Equal(t, round.Id, event.Id)
 			require.Equal(t, requests, event.TxRequests)
 		})
@@ -341,6 +343,7 @@ func testStartFinalization(t *testing.T) {
 
 			event, ok := events[0].(domain.RoundFinalizationStarted)
 			require.True(t, ok)
+			require.Equal(t, domain.EventTypeRoundFinalizationStarted, event.Type)
 			require.Equal(t, round.Id, event.Id)
 			require.Exactly(t, connectors, event.Connectors)
 			require.Exactly(t, vtxoTree, event.VtxoTree)
@@ -491,6 +494,7 @@ func testEndFinalization(t *testing.T) {
 
 			event, ok := events[0].(domain.RoundFinalized)
 			require.True(t, ok)
+			require.Equal(t, domain.EventTypeRoundFinalized, event.Type)
 			require.Equal(t, round.Id, event.Id)
 			require.Exactly(t, txid, event.Txid)
 			require.Exactly(t, forfeitTxs, event.ForfeitTxs)
@@ -606,6 +610,7 @@ func testFail(t *testing.T) {
 
 			event, ok := events[0].(domain.RoundFailed)
 			require.True(t, ok)
+			require.Equal(t, domain.EventTypeRoundFailed, event.Type)
 			require.Exactly(t, round.Id, event.Id)
 			require.Exactly(t, round.EndingTimestamp, event.Timestamp)
 			require.EqualError(t, reason, event.Err)
