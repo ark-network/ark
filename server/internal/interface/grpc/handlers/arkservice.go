@@ -221,17 +221,12 @@ func (h *handler) RegisterInputsForNextRound(
 func (h *handler) ConfirmRegistration(
 	ctx context.Context, req *arkv1.ConfirmRegistrationRequest,
 ) (*arkv1.ConfirmRegistrationResponse, error) {
-	intentIdHash := req.GetIntentIdHash()
-	if len(intentIdHash) <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "missing intent id hash")
+	intentId := req.GetIntentId()
+	if len(intentId) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing intent id")
 	}
 
-	intentIdHashArray, err := parseIntentIdHash(intentIdHash)
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	if err := h.svc.ConfirmRegistration(ctx, intentIdHashArray); err != nil {
+	if err := h.svc.ConfirmRegistration(ctx, intentId); err != nil {
 		return nil, err
 	}
 

@@ -95,22 +95,6 @@ func parseReceivers(outs []*arkv1.Output) ([]domain.Receiver, error) {
 	return receivers, nil
 }
 
-func parseIntentIdHash(intentIdHash string) ([32]byte, error) {
-	intentIdHashBytes, err := hex.DecodeString(intentIdHash)
-	if err != nil {
-		return [32]byte{}, fmt.Errorf("invalid intent id hash: %s", err)
-	}
-
-	if len(intentIdHashBytes) != 32 {
-		return [32]byte{}, fmt.Errorf("invalid intent id hash")
-	}
-
-	var intentIdHashArray [32]byte
-	copy(intentIdHashArray[:], intentIdHashBytes)
-
-	return intentIdHashArray, nil
-}
-
 // From app type to interface type
 
 type vtxoList []domain.Vtxo

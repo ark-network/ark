@@ -216,9 +216,9 @@ func (a *restClient) DeleteIntent(_ context.Context, requestID, signature, messa
 	return err
 }
 
-func (a *restClient) ConfirmRegistration(ctx context.Context, intentHash string) error {
+func (a *restClient) ConfirmRegistration(ctx context.Context, intentID string) error {
 	body := &models.V1ConfirmRegistrationRequest{
-		IntentIDHash: intentHash,
+		IntentID: intentID,
 	}
 	_, err := a.svc.ArkServiceConfirmRegistration(
 		ark_service.NewArkServiceConfirmRegistrationParams().WithBody(body),

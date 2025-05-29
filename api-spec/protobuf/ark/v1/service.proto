@@ -147,9 +147,11 @@ message RegisterInputsForNextRoundResponse {
 }
 
 message ConfirmRegistrationRequest {
-  string intent_id_hash = 1;
+  string intent_id = 1;
 }
-message ConfirmRegistrationResponse {}
+message ConfirmRegistrationResponse {
+  string blinded_creds = 1;
+}
 
 message Musig2 {
   repeated string cosigners_public_keys = 1;

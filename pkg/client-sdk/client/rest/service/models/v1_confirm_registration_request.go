@@ -17,8 +17,8 @@ import (
 // swagger:model v1ConfirmRegistrationRequest
 type V1ConfirmRegistrationRequest struct {
 
-	// intent Id hash
-	IntentIDHash string `json:"intentIdHash,omitempty"`
+	// intent Id
+	IntentID string `json:"intentId,omitempty"`
 }
 
 // Validate validates this v1 confirm registration request

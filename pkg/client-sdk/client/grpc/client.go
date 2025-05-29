@@ -143,9 +143,9 @@ func (a *grpcClient) DeleteIntent(ctx context.Context, requestID, signature, mes
 	return err
 }
 
-func (a *grpcClient) ConfirmRegistration(ctx context.Context, intentHash string) error {
+func (a *grpcClient) ConfirmRegistration(ctx context.Context, intentID string) error {
 	req := &arkv1.ConfirmRegistrationRequest{
-		IntentIdHash: intentHash,
+		IntentId: intentID,
 	}
 	_, err := a.svc.ConfirmRegistration(ctx, req)
 	return err

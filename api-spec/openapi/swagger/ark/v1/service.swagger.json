@@ -517,13 +517,18 @@
     "v1ConfirmRegistrationRequest": {
       "type": "object",
       "properties": {
-        "intentIdHash": {
+        "intentId": {
           "type": "string"
         }
       }
     },
     "v1ConfirmRegistrationResponse": {
-      "type": "object"
+      "type": "object",
+      "properties": {
+        "blindedCreds": {
+          "type": "string"
+        }
+      }
     },
     "v1DeleteIntentRequest": {
       "type": "object",

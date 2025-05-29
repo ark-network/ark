@@ -3,6 +3,7 @@ package application
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"runtime"
@@ -1179,12 +1180,12 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	return request.Id, nil
 }
 
-func (s *covenantlessService) ConfirmRegistration(ctx context.Context, intentIdHash [32]byte) error {
+func (s *covenantlessService) ConfirmRegistration(ctx context.Context, intentId string) error {
 	if s.confirmationSession == nil {
 		return fmt.Errorf("confirmation session not started")
 	}
 
-	return s.confirmationSession.confirm(intentIdHash)
+	return s.confirmationSession.confirm(intentId)
 }
 
 func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error {
@@ -2691,7 +2692,8 @@ func newConfirmationSession(intentsHashes [][32]byte) *confirmationSession {
 	}
 }
 
-func (s *confirmationSession) confirm(hash [32]byte) error {
+func (s *confirmationSession) confirm(intentId string) error {
+	hash := sha256.Sum256([]byte(intentId))
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	if _, ok := s.intentsHashes[hash]; !ok {
