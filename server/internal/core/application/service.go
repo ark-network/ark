@@ -1249,9 +1249,7 @@ func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string
 	}
 
 	go func() {
-		s.currentRoundLock.Lock()
-		round := s.currentRound
-		s.currentRoundLock.Unlock()
+		round := s.getCurrentRound()
 		s.checkForfeitsAndBoardingSigsSent(round)
 	}()
 
@@ -1267,21 +1265,18 @@ func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx str
 		return nil
 	}
 
-	s.currentRoundLock.Lock()
-	defer s.currentRoundLock.Unlock()
-	currentRound := s.currentRound
+	round := s.getCurrentRound()
 
-	combined, err := s.builder.VerifyAndCombinePartialTx(currentRound.CommitmentTx, signedRoundTx)
+	combined, err := s.builder.VerifyAndCombinePartialTx(round.CommitmentTx, signedRoundTx)
 	if err != nil {
 		return fmt.Errorf("failed to verify and combine partial tx: %s", err)
 	}
 
+	s.currentRoundLock.Lock()
 	s.currentRound.CommitmentTx = combined
+	s.currentRoundLock.Unlock()
 
 	go func() {
-		s.currentRoundLock.Lock()
-		round := s.currentRound
-		s.currentRoundLock.Unlock()
 		s.checkForfeitsAndBoardingSigsSent(round)
 	}()
 
@@ -1656,7 +1651,10 @@ func (s *covenantlessService) startRound() {
 	round := domain.NewRound()
 	//nolint:all
 	round.StartRegistration()
+	s.currentRoundLock.Lock()
 	s.currentRound = round
+	s.currentRoundLock.Unlock()
+
 	close(s.forfeitsBoardingSigsChan)
 	s.forfeitsBoardingSigsChan = make(chan struct{}, 1)
 
@@ -1670,13 +1668,10 @@ func (s *covenantlessService) startRound() {
 }
 
 func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
-	log.Debugf("started confirmation stage for round: %s", s.currentRound.Id)
+	round := s.getCurrentRound()
+	log.Debugf("started confirmation stage for round: %s", round.Id)
 
 	ctx := context.Background()
-
-	s.currentRoundLock.Lock()
-	round := s.currentRound
-	s.currentRoundLock.Unlock()
 
 	notConfirmedRequests := make([]timedTxRequest, 0)
 	requests := make([]timedTxRequest, 0)
@@ -1835,11 +1830,9 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 }
 
 func (s *covenantlessService) startFinalization(roundTiming roundTiming, requests []timedTxRequest) {
-	log.Debugf("started finalization stage for round: %s", s.currentRound.Id)
+	round := s.getCurrentRound()
+	log.Debugf("started finalization stage for round: %s", round.Id)
 	ctx := context.Background()
-	s.currentRoundLock.Lock()
-	round := s.currentRound
-	s.currentRoundLock.Unlock()
 
 	thirdOfRemainingDuration := roundTiming.finalizationPhaseDuration()
 
@@ -1961,7 +1954,10 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 
 		log.Debugf("signing session created for round %s with %d signers", round.Id, len(uniqueSignerPubkeys))
 
+		s.currentRoundLock.Lock()
 		s.currentRound.CommitmentTx = unsignedRoundTx
+		s.currentRoundLock.Unlock()
+
 		// send back the unsigned tree & all cosigners pubkeys
 		listOfCosignersPubkeys := make([]string, 0, len(uniqueSignerPubkeys))
 		for pubkey := range uniqueSignerPubkeys {
@@ -2103,9 +2099,7 @@ func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 	defer s.startRound()
 
 	ctx := context.Background()
-	s.currentRoundLock.Lock()
-	round := s.currentRound
-	s.currentRoundLock.Unlock()
+	round := s.getCurrentRound()
 
 	defer func() {
 		s.roundInputs.removeRoundInputs(*round)
@@ -2153,10 +2147,6 @@ func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 		case <-time.After(remainingTime):
 			log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
 		}
-
-		s.currentRoundLock.Lock()
-		round := s.currentRound
-		s.currentRoundLock.Unlock()
 
 		roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.CommitmentTx), true)
 		if err != nil {
@@ -2730,4 +2720,10 @@ func (s *covenantlessService) UpdateMarketHourConfig(
 	}
 
 	return nil
+}
+
+func (s *covenantlessService) getCurrentRound() *domain.Round {
+	s.currentRoundLock.Lock()
+	defer s.currentRoundLock.Unlock()
+	return s.currentRound
 }
