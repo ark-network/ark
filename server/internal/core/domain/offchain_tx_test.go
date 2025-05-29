@@ -52,6 +52,7 @@ func testRequestOffchainTx(t *testing.T) {
 			event, err := offchainTx.Request(txid, virtualTx, unsignedCheckpointTxs)
 			require.NoError(t, err)
 			require.NotNil(t, event)
+			require.Equal(t, domain.EventTypeOffchainTxRequested, event.GetType())
 			require.True(t, offchainTx.IsRequested())
 			require.False(t, offchainTx.IsAccepted())
 			require.False(t, offchainTx.IsFinalized())
@@ -133,12 +134,12 @@ func testAcceptOffchainTx(t *testing.T) {
 			event, err := offchainTx.Request(txid, virtualTx, unsignedCheckpointTxs)
 			require.NoError(t, err)
 			require.NotNil(t, event)
-			require.Equal(t, domain.EventTypeOffchainTxRequested, event.GetType())
 			require.Empty(t, offchainTx.RootCommitmentTxid())
 
 			event, err = offchainTx.Accept(finalVirtualTx, signedCheckpointTxs, commitmentTxids, expiryTimestamp)
 			require.NoError(t, err)
 			require.NotNil(t, event)
+			require.Equal(t, domain.EventTypeOffchainTxAccepted, event.GetType())
 			require.False(t, offchainTx.IsRequested())
 			require.True(t, offchainTx.IsAccepted())
 			require.False(t, offchainTx.IsFinalized())
@@ -256,18 +257,17 @@ func testFinalizeOffchainTx(t *testing.T) {
 			event, err := offchainTx.Request(txid, virtualTx, unsignedCheckpointTxs)
 			require.NoError(t, err)
 			require.NotNil(t, event)
-			require.Equal(t, domain.EventTypeOffchainTxRequested, event.GetType())
 
 			event, err = offchainTx.Accept(
 				finalVirtualTx, signedCheckpointTxs, commitmentTxids, expiryTimestamp,
 			)
 			require.NoError(t, err)
 			require.NotNil(t, event)
-			require.Equal(t, domain.EventTypeOffchainTxAccepted, event.GetType())
 
 			event, err = offchainTx.Finalize(finalCheckpointTxs)
 			require.NoError(t, err)
 			require.NotNil(t, event)
+			require.Equal(t, domain.EventTypeOffchainTxFinalized, event.GetType())
 			require.False(t, offchainTx.IsRequested())
 			require.False(t, offchainTx.IsAccepted())
 			require.True(t, offchainTx.IsFinalized())
