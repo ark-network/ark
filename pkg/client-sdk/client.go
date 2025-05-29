@@ -2089,7 +2089,7 @@ func (a *covenantlessArkClient) handleBatchStarted(
 	intentIDHash := sha256.Sum256([]byte(intentID))
 	intentIDHashStr := hex.EncodeToString(intentIDHash[:])
 
-	for _, idHash := range event.IntentIdsHashes {
+	for _, idHash := range event.IntentIdHashes {
 		if idHash == intentIDHashStr {
 			if err := a.client.ConfirmRegistration(ctx, intentID); err != nil {
 				fmt.Println("error confirming registration:", err)

@@ -270,10 +270,10 @@ type RoundSigningNoncesGeneratedEvent struct {
 func (e RoundSigningNoncesGeneratedEvent) isRoundEvent() {}
 
 type BatchStartedEvent struct {
-	ID              string
-	IntentIdsHashes []string
-	BatchExpiry     int64
-	ForfeitAddress  string
+	ID             string
+	IntentIdHashes []string
+	BatchExpiry    int64
+	ForfeitAddress string
 }
 
 func (e BatchStartedEvent) isRoundEvent() {}

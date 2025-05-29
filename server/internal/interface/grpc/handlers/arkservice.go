@@ -633,10 +633,10 @@ func (h *handler) listenToEvents() {
 			ev = &arkv1.GetEventStreamResponse{
 				Event: &arkv1.GetEventStreamResponse_BatchStarted{
 					BatchStarted: &arkv1.BatchStartedEvent{
-						Id:              e.Id,
-						IntentIdsHashes: hashes,
-						BatchExpiry:     int64(e.BatchExpiry),
-						ForfeitAddress:  e.ForfeitAddress,
+						Id:             e.Id,
+						IntentIdHashes: hashes,
+						BatchExpiry:    int64(e.BatchExpiry),
+						ForfeitAddress: e.ForfeitAddress,
 					},
 				},
 			}

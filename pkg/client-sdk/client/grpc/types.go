@@ -94,10 +94,10 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 
 	if ee := e.GetBatchStarted(); ee != nil {
 		return client.BatchStartedEvent{
-			ID:              ee.GetId(),
-			IntentIdsHashes: ee.GetIntentIdsHashes(),
-			BatchExpiry:     ee.GetBatchExpiry(),
-			ForfeitAddress:  ee.GetForfeitAddress(),
+			ID:             ee.GetId(),
+			IntentIdHashes: ee.GetIntentIdHashes(),
+			BatchExpiry:    ee.GetBatchExpiry(),
+			ForfeitAddress: ee.GetForfeitAddress(),
 		}, nil
 	}
 

@@ -26,8 +26,8 @@ type V1BatchStartedEvent struct {
 	// id
 	ID string `json:"id,omitempty"`
 
-	// intent ids hashes
-	IntentIdsHashes []string `json:"intentIdsHashes"`
+	// intent Id hashes
+	IntentIDHashes []string `json:"intentIdHashes"`
 }
 
 // Validate validates this v1 batch started event

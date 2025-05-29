@@ -129,7 +129,7 @@ message RequestInput {
 
 message BatchStartedEvent {
   string id = 1;
-  repeated string intent_ids_hashes = 2;
+  repeated string intent_id_hashes = 2;
   int64 batch_expiry = 3;
   string forfeit_address = 4;
 }

@@ -488,7 +488,7 @@
         "id": {
           "type": "string"
         },
-        "intentIdsHashes": {
+        "intentIdHashes": {
           "type": "array",
           "items": {
             "type": "string"

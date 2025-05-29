@@ -384,10 +384,10 @@ func (c *restClient) GetEventStream(
 						break
 					}
 					event = client.BatchStartedEvent{
-						ID:              e.ID,
-						IntentIdsHashes: e.IntentIdsHashes,
-						BatchExpiry:     int64(batchExpiry),
-						ForfeitAddress:  e.ForfeitAddress,
+						ID:             e.ID,
+						IntentIdHashes: e.IntentIDHashes,
+						BatchExpiry:    int64(batchExpiry),
+						ForfeitAddress: e.ForfeitAddress,
 					}
 				case resp.Result.RoundFinalization != nil:
 					e := resp.Result.RoundFinalization
