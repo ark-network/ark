@@ -3931,7 +3931,7 @@ func handleBatchTreeNode(node tree.Node, tree tree.TxTree) tree.TxTree {
 
 func handleBatchTreeSignature(event client.BatchTreeSignatureEvent, vtxoTree tree.TxTree) (tree.TxTree, error) {
 	if event.BatchIndex != 0 {
-		return vtxoTree, nil
+		return nil, fmt.Errorf("batch index %d is not 0", event.BatchIndex)
 	}
 
 	decodedSig, err := hex.DecodeString(event.Signature)
