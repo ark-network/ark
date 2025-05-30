@@ -13,7 +13,7 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 )
 
-// the user should react to this event by confirming the registration using sha256(intent_id)
+// the user should react to this event by confirming the registration using intent_id
 type BatchStarted struct {
 	domain.RoundEvent
 	IntentIdsHashes [][32]byte
