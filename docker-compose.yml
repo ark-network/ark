@@ -29,3 +29,9 @@ services:
       - ARK_WALLET_ADDR=arkd-wallet:6060
     volumes:
       - arkd-volume:/app/data
+
+volumes:
+  arkd-wallet-volume:
+    name: arkd-wallet-volume
+  arkd-volume:
+    name: arkd-volume
