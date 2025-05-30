@@ -87,7 +87,10 @@ func (r *Round) StartRegistration() ([]Event, error) {
 	}
 
 	event := RoundStarted{
-		Id:        r.Id,
+		RoundEvent: RoundEvent{
+			Id:   r.Id,
+			Type: EventTypeRoundStarted,
+		},
 		Timestamp: time.Now().Unix(),
 	}
 	r.raise(event)
@@ -109,7 +112,10 @@ func (r *Round) RegisterTxRequests(txRequests []TxRequest) ([]Event, error) {
 	}
 
 	event := TxRequestsRegistered{
-		Id:         r.Id,
+		RoundEvent: RoundEvent{
+			Id:   r.Id,
+			Type: EventTypeTxRequestsRegistered,
+		},
 		TxRequests: txRequests,
 	}
 	r.raise(event)
@@ -139,7 +145,10 @@ func (r *Round) StartFinalization(
 	}
 
 	event := RoundFinalizationStarted{
-		Id:                 r.Id,
+		RoundEvent: RoundEvent{
+			Id:   r.Id,
+			Type: EventTypeRoundFinalizationStarted,
+		},
 		VtxoTree:           vtxoTree,
 		Connectors:         connectors,
 		ConnectorAddress:   connectorAddress,
@@ -178,7 +187,10 @@ func (r *Round) EndFinalization(forfeitTxs []ForfeitTx, txid, finalCommitmentTx 
 	}
 
 	event := RoundFinalized{
-		Id:                r.Id,
+		RoundEvent: RoundEvent{
+			Id:   r.Id,
+			Type: EventTypeRoundFinalized,
+		},
 		Txid:              txid,
 		ForfeitTxs:        forfeitTxs,
 		FinalCommitmentTx: finalCommitmentTx,
@@ -194,7 +206,10 @@ func (r *Round) Fail(err error) []Event {
 		return nil
 	}
 	event := RoundFailed{
-		Id:        r.Id,
+		RoundEvent: RoundEvent{
+			Id:   r.Id,
+			Type: EventTypeRoundFailed,
+		},
 		Err:       err.Error(),
 		Timestamp: time.Now().Unix(),
 	}

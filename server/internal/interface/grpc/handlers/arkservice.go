@@ -651,7 +651,7 @@ func (h *handler) listenToEvents() {
 				evs = append(evs, &arkv1.GetEventStreamResponse{
 					Event: &arkv1.GetEventStreamResponse_BatchTree{
 						BatchTree: &arkv1.BatchTreeEvent{
-							Id:         e.ID,
+							Id:         e.Id,
 							Topic:      e.Topic,
 							BatchIndex: e.BatchIndex,
 							TreeTx: &arkv1.Node{
@@ -669,7 +669,7 @@ func (h *handler) listenToEvents() {
 				evs = append(evs, &arkv1.GetEventStreamResponse{
 					Event: &arkv1.GetEventStreamResponse_BatchTreeSignature{
 						BatchTreeSignature: &arkv1.BatchTreeSignatureEvent{
-							Id:         e.ID,
+							Id:         e.Id,
 							Topic:      e.Topic,
 							BatchIndex: e.BatchIndex,
 							Level:      e.Level,

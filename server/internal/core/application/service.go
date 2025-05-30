@@ -2049,7 +2049,10 @@ func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree
 	events := append(
 		batchTreeEvents(unsignedVtxoTree, 0, s.currentRound.Id),
 		RoundSigningStarted{
-			Id:               s.currentRound.Id,
+			RoundEvent: domain.RoundEvent{
+				Id:   s.currentRound.Id,
+				Type: domain.EventTypeUndefined,
+			},
 			UnsignedRoundTx:  s.currentRound.CommitmentTx,
 			CosignersPubkeys: cosignersPubkeys,
 		},
@@ -2060,7 +2063,10 @@ func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree
 
 func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combinedNonces tree.TreeNonces) {
 	ev := RoundSigningNoncesGenerated{
-		Id:     s.currentRound.Id,
+		RoundEvent: domain.RoundEvent{
+			Id:   s.currentRound.Id,
+			Type: domain.EventTypeUndefined,
+		},
 		Nonces: combinedNonces,
 	}
 
@@ -2578,7 +2584,10 @@ func batchTreeEvents(txTree tree.TxTree, batchIndex int32, roundId string) []dom
 	for _, lvl := range txTree {
 		for _, node := range lvl {
 			events = append(events, BatchTree{
-				ID:         roundId,
+				RoundEvent: domain.RoundEvent{
+					Id:   roundId,
+					Type: domain.EventTypeUndefined,
+				},
 				BatchIndex: batchIndex,
 				Node:       node,
 			})
@@ -2602,7 +2611,10 @@ func batchTreeSignatureEvents(txTree tree.TxTree, batchIndex int32, roundId stri
 			sig := ptx.Inputs[0].TaprootKeySpendSig
 
 			events = append(events, BatchTreeSignature{
-				ID:         roundId,
+				RoundEvent: domain.RoundEvent{
+					Id:   roundId,
+					Type: domain.EventTypeUndefined,
+				},
 				Topic:      []string{},
 				BatchIndex: batchIndex,
 				Level:      int32(level),

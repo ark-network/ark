@@ -15,7 +15,7 @@ import (
 
 // signer should react to this event by generating a musig2 nonce for each transaction in the tree
 type RoundSigningStarted struct {
-	Id               string
+	domain.RoundEvent
 	UnsignedRoundTx  string
 	CosignersPubkeys []string
 }
@@ -23,7 +23,7 @@ type RoundSigningStarted struct {
 // signer should react to this event by partially signing the vtxo tree transactions
 // then, delete its ephemeral key
 type RoundSigningNoncesGenerated struct {
-	Id     string
+	domain.RoundEvent
 	Nonces tree.TreeNonces // aggregated nonces
 }
 
@@ -38,14 +38,14 @@ func (e RoundSigningNoncesGenerated) SerializeNonces() (string, error) {
 }
 
 type BatchTree struct {
-	ID         string
+	domain.RoundEvent
 	Topic      []string
 	BatchIndex int32
 	Node       tree.Node
 }
 
 type BatchTreeSignature struct {
-	ID         string
+	domain.RoundEvent
 	Topic      []string
 	BatchIndex int32
 	Level      int32
