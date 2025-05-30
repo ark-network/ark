@@ -1659,7 +1659,7 @@ func (s *covenantlessService) startRound() {
 
 	defer func() {
 		roundTiming := newRoundTiming(s.roundInterval)
-		roundTiming.waitForRegistration()
+		time.Sleep(roundTiming.registrationDuration())
 		s.startConfirmation(roundTiming)
 	}()
 
@@ -1819,7 +1819,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 	log.Debugf("started finalization stage for round: %s", round.Id)
 	ctx := context.Background()
 
-	thirdOfRemainingDuration := roundTiming.finalizationPhaseDuration()
+	thirdOfRemainingDuration := roundTiming.finalizationDuration()
 
 	defer func() {
 		delete(s.treeSigningSessions, round.Id)
