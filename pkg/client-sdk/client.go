@@ -1942,7 +1942,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 	signerSessions []tree.SignerSession,
 	replayEventsCh chan<- client.RoundEvent,
 ) (string, error) {
-	eventsCh, close, err := a.client.GetEventStream(ctx, intentID)
+	eventsCh, close, err := a.client.GetEventStream(ctx)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			close()

@@ -319,9 +319,7 @@ func (a *restClient) SubmitSignedForfeitTxs(
 	return err
 }
 
-func (c *restClient) GetEventStream(
-	ctx context.Context, requestID string,
-) (<-chan client.RoundEventChannel, func(), error) {
+func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEventChannel, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
 	eventsCh := make(chan client.RoundEventChannel)
 	chunkCh := make(chan chunk)

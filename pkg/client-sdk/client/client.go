@@ -50,9 +50,7 @@ type TransportClient interface {
 	SubmitSignedForfeitTxs(
 		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 	) error
-	GetEventStream(
-		ctx context.Context, requestID string,
-	) (<-chan RoundEventChannel, func(), error)
+	GetEventStream(ctx context.Context) (<-chan RoundEventChannel, func(), error)
 	SubmitOffchainTx(
 		ctx context.Context, virtualTx string, checkpointsTxs []string,
 	) (signedCheckpointsTxs []string, signedVirtualTx, virtualTxid string, err error)

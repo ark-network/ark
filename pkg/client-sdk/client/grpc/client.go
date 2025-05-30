@@ -231,9 +231,7 @@ func (a *grpcClient) SubmitSignedForfeitTxs(
 	return err
 }
 
-func (a *grpcClient) GetEventStream(
-	ctx context.Context, requestID string,
-) (<-chan client.RoundEventChannel, func(), error) {
+func (a *grpcClient) GetEventStream(ctx context.Context) (<-chan client.RoundEventChannel, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
 
 	stream, err := a.svc.GetEventStream(ctx, &arkv1.GetEventStreamRequest{})
