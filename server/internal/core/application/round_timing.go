@@ -1,7 +1,6 @@
 package application
 
 import (
-	"math"
 	"time"
 )
 
@@ -39,5 +38,8 @@ func (r roundTiming) finalizationDuration() time.Duration {
 }
 
 func atLeastOneSecond(duration time.Duration) time.Duration {
-	return time.Duration(math.Max(float64(duration), float64(time.Second)))
+	if duration < time.Second {
+		return time.Second
+	}
+	return duration
 }
