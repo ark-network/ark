@@ -1766,6 +1766,8 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 		confirmedRequests = requests
 	}
 
+	close(s.confirmationSession.confirmedC)
+
 	repushToQueue := notConfirmedRequests
 	if int64(len(confirmedRequests)) < s.roundMinParticipantsCount {
 		repushToQueue = append(repushToQueue, confirmedRequests...)
@@ -2647,8 +2649,10 @@ func newMusigSigningSession(cosigners map[string]struct{}) *musigSigningSession 
 type confirmationSession struct {
 	lock sync.Mutex
 
-	intentsHashes map[[32]byte]bool // hash --> confirmed
-	confirmedC    chan struct{}
+	intentsHashes       map[[32]byte]bool // hash --> confirmed
+	numIntents          int
+	numConfirmedIntents int
+	confirmedC          chan struct{}
 }
 
 func newConfirmationSession(intentsHashes [][32]byte) *confirmationSession {
@@ -2658,9 +2662,11 @@ func newConfirmationSession(intentsHashes [][32]byte) *confirmationSession {
 	}
 
 	return &confirmationSession{
-		intentsHashes: hashes,
-		confirmedC:    make(chan struct{}),
-		lock:          sync.Mutex{},
+		intentsHashes:       hashes,
+		numIntents:          len(intentsHashes),
+		numConfirmedIntents: 0,
+		confirmedC:          make(chan struct{}),
+		lock:                sync.Mutex{},
 	}
 }
 
@@ -2668,19 +2674,25 @@ func (s *confirmationSession) confirm(intentId string) error {
 	hash := sha256.Sum256([]byte(intentId))
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	if _, ok := s.intentsHashes[hash]; !ok {
+	alreadyConfirmed, ok := s.intentsHashes[hash]
+	if !ok {
 		return fmt.Errorf("intent hash not found")
 	}
 
+	if alreadyConfirmed {
+		return nil
+	}
+
+	s.numConfirmedIntents++
 	s.intentsHashes[hash] = true
 
-	for _, confirmed := range s.intentsHashes {
-		if !confirmed {
-			return nil
+	if s.numConfirmedIntents == s.numIntents {
+		select {
+		case s.confirmedC <- struct{}{}:
+		default:
 		}
 	}
 
-	s.confirmedC <- struct{}{}
 	return nil
 }
 
