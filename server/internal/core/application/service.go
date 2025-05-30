@@ -3,7 +3,6 @@ package application
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"runtime"
@@ -855,10 +854,11 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			tx := boardingTxs[vtxoKey.Txid]
 			prevout := tx.TxOut[vtxoKey.VOut]
 			prevouts[outpoint] = prevout
-			boardingInput, err := s.newBoardingInput(tx, ports.Input{
+			input := ports.Input{
 				VtxoKey:    vtxoKey,
 				Tapscripts: tapscripts,
-			})
+			}
+			boardingInput, err := newBoardingInput(tx, input, s.serverSigningPubKey, s.boardingExitDelay)
 			if err != nil {
 				return "", err
 			}
@@ -1111,7 +1111,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 			}
 
 			tx := boardingTxs[input.Txid]
-			boardingInput, err := s.newBoardingInput(tx, input)
+			boardingInput, err := newBoardingInput(tx, input, s.serverSigningPubKey, s.boardingExitDelay)
 			if err != nil {
 				return "", err
 			}
@@ -1627,6 +1627,27 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 			}()
 		}
 	}(session)
+
+	return nil
+}
+
+func (s *covenantlessService) GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error) {
+	return s.repoManager.MarketHourRepo().Get(ctx)
+}
+
+func (s *covenantlessService) UpdateMarketHourConfig(
+	ctx context.Context,
+	marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration,
+) error {
+	marketHour := domain.NewMarketHour(
+		marketHourStartTime,
+		marketHourEndTime,
+		period,
+		roundInterval,
+	)
+	if err := s.repoManager.MarketHourRepo().Upsert(ctx, *marketHour); err != nil {
+		return fmt.Errorf("failed to upsert market hours: %w", err)
+	}
 
 	return nil
 }
@@ -2292,45 +2313,6 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 	}
 }
 
-func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input) (*ports.BoardingInput, error) {
-	if len(tx.TxOut) <= int(input.VOut) {
-		return nil, fmt.Errorf("output not found")
-	}
-
-	output := tx.TxOut[input.VOut]
-
-	boardingScript, err := tree.ParseVtxoScript(input.Tapscripts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
-	}
-
-	tapKey, _, err := boardingScript.TapTree()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get taproot key: %s", err)
-	}
-
-	expectedScriptPubkey, err := common.P2TRScript(tapKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get script pubkey: %s", err)
-	}
-
-	if !bytes.Equal(output.PkScript, expectedScriptPubkey) {
-		return nil, fmt.Errorf(
-			"invalid boarding utxo taproot key: got %x expected %x",
-			output.PkScript, expectedScriptPubkey,
-		)
-	}
-
-	if err := boardingScript.Validate(s.pubkey, s.boardingExitDelay); err != nil {
-		return nil, err
-	}
-
-	return &ports.BoardingInput{
-		Amount: uint64(output.Value),
-		Input:  input,
-	}, nil
-}
-
 func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *domain.Round) {
 	roundTx, _ := psbt.NewFromRawBytes(strings.NewReader(currentRound.CommitmentTx), true)
 	numOfInputsSigned := 0
@@ -2354,94 +2336,6 @@ func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *dom
 		default:
 		}
 	}
-}
-
-func calcNextMarketHour(marketHourStartTime, marketHourEndTime time.Time, period, marketHourDelta time.Duration, now time.Time) (time.Time, time.Time, error) {
-	// Validate input parameters
-	if period <= 0 {
-		return time.Time{}, time.Time{}, fmt.Errorf("period must be greater than 0")
-	}
-	if !marketHourEndTime.After(marketHourStartTime) {
-		return time.Time{}, time.Time{}, fmt.Errorf("market hour end time must be after start time")
-	}
-
-	// Calculate the duration of the market hour
-	duration := marketHourEndTime.Sub(marketHourStartTime)
-
-	// Calculate the number of periods since the initial marketHourStartTime
-	elapsed := now.Sub(marketHourStartTime)
-	var n int64
-	if elapsed >= 0 {
-		n = int64(elapsed / period)
-	} else {
-		n = int64((elapsed - period + 1) / period)
-	}
-
-	// Calculate the current market hour start and end times
-	currentStartTime := marketHourStartTime.Add(time.Duration(n) * period)
-	currentEndTime := currentStartTime.Add(duration)
-
-	// Adjust if now is before the currentStartTime
-	if now.Before(currentStartTime) {
-		n -= 1
-		currentStartTime = marketHourStartTime.Add(time.Duration(n) * period)
-		currentEndTime = currentStartTime.Add(duration)
-	}
-
-	timeUntilEnd := currentEndTime.Sub(now)
-
-	if !now.Before(currentStartTime) && now.Before(currentEndTime) && timeUntilEnd >= marketHourDelta {
-		// Return the current market hour
-		return currentStartTime, currentEndTime, nil
-	} else {
-		// Move to the next market hour
-		n += 1
-		nextStartTime := marketHourStartTime.Add(time.Duration(n) * period)
-		nextEndTime := nextStartTime.Add(duration)
-		return nextStartTime, nextEndTime, nil
-	}
-}
-
-func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
-	if len(round.VtxoTree) <= 0 {
-		return nil
-	}
-
-	now := time.Now()
-	createdAt := now.Unix()
-	expireAt := round.ExpiryTimestamp()
-
-	leaves := round.VtxoTree.Leaves()
-	vtxos := make([]domain.Vtxo, 0)
-	for _, node := range leaves {
-		tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
-		if err != nil {
-			log.WithError(err).Warn("failed to parse tx")
-			continue
-		}
-		for i, out := range tx.UnsignedTx.TxOut {
-			if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
-				continue
-			}
-
-			vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
-			if err != nil {
-				log.WithError(err).Warn("failed to parse vtxo tap key")
-				continue
-			}
-
-			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
-			vtxos = append(vtxos, domain.Vtxo{
-				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-				PubKey:    vtxoPubkey,
-				Amount:    uint64(out.Value),
-				RoundTxid: round.Txid,
-				CreatedAt: createdAt,
-				ExpireAt:  expireAt,
-			})
-		}
-	}
-	return vtxos
 }
 
 func (s *covenantlessService) getSpentVtxos(requests map[string]domain.TxRequest) []domain.Vtxo {
@@ -2561,6 +2455,12 @@ func (s *covenantlessService) chainParams() *chaincfg.Params {
 	}
 }
 
+func (s *covenantlessService) getCurrentRound() *domain.Round {
+	s.currentRoundLock.Lock()
+	defer s.currentRoundLock.Unlock()
+	return s.currentRound
+}
+
 func (s *covenantlessService) markAsRedeemed(ctx context.Context, vtxo domain.Vtxo) error {
 	if err := s.repoManager.Vtxos().RedeemVtxos(ctx, []domain.VtxoKey{vtxo.VtxoKey}); err != nil {
 		return err
@@ -2614,107 +2514,4 @@ func (s *covenantlessService) verifyForfeitTxsSigs(txs []string) error {
 		close(errChan)
 		return nil
 	}
-}
-
-// musigSigningSession holds the state of ephemeral nonces and signatures in order to coordinate the signing of the tree
-type musigSigningSession struct {
-	lock        sync.Mutex
-	nbCosigners int
-	cosigners   map[string]struct{}
-	nonces      map[*secp256k1.PublicKey]tree.TreeNonces
-	nonceDoneC  chan struct{}
-
-	signatures map[*secp256k1.PublicKey]tree.TreePartialSigs
-	sigDoneC   chan struct{}
-}
-
-func newMusigSigningSession(cosigners map[string]struct{}) *musigSigningSession {
-	return &musigSigningSession{
-		nonces:     make(map[*secp256k1.PublicKey]tree.TreeNonces),
-		nonceDoneC: make(chan struct{}),
-
-		signatures:  make(map[*secp256k1.PublicKey]tree.TreePartialSigs),
-		sigDoneC:    make(chan struct{}),
-		lock:        sync.Mutex{},
-		cosigners:   cosigners,
-		nbCosigners: len(cosigners) + 1, // the server
-	}
-}
-
-// confirmationSession holds the state of the confirmation process
-type confirmationSession struct {
-	lock sync.Mutex
-
-	intentsHashes       map[[32]byte]bool // hash --> confirmed
-	numIntents          int
-	numConfirmedIntents int
-	confirmedC          chan struct{}
-}
-
-func newConfirmationSession(intentsHashes [][32]byte) *confirmationSession {
-	hashes := make(map[[32]byte]bool)
-	for _, hash := range intentsHashes {
-		hashes[hash] = false
-	}
-
-	return &confirmationSession{
-		intentsHashes:       hashes,
-		numIntents:          len(intentsHashes),
-		numConfirmedIntents: 0,
-		confirmedC:          make(chan struct{}),
-		lock:                sync.Mutex{},
-	}
-}
-
-func (s *confirmationSession) confirm(intentId string) error {
-	hash := sha256.Sum256([]byte(intentId))
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	alreadyConfirmed, ok := s.intentsHashes[hash]
-	if !ok {
-		return fmt.Errorf("intent hash not found")
-	}
-
-	if alreadyConfirmed {
-		return nil
-	}
-
-	s.numConfirmedIntents++
-	s.intentsHashes[hash] = true
-
-	if s.numConfirmedIntents == s.numIntents {
-		select {
-		case s.confirmedC <- struct{}{}:
-		default:
-		}
-	}
-
-	return nil
-}
-
-func (s *covenantlessService) GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error) {
-	return s.repoManager.MarketHourRepo().Get(ctx)
-}
-
-func (s *covenantlessService) UpdateMarketHourConfig(
-	ctx context.Context,
-	marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration,
-) error {
-	marketHour := domain.NewMarketHour(
-		marketHourStartTime,
-		marketHourEndTime,
-		period,
-		roundInterval,
-	)
-	if err := s.repoManager.MarketHourRepo().Upsert(ctx, *marketHour); err != nil {
-		return fmt.Errorf("failed to upsert market hours: %w", err)
-	}
-
-	return nil
-}
-
-func (s *covenantlessService) getCurrentRound() *domain.Round {
-	s.currentRoundLock.Lock()
-	defer s.currentRoundLock.Unlock()
-	return s.currentRound
 }
