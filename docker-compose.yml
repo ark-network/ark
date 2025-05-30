@@ -1,0 +1,31 @@
+services:
+  arkd-wallet:
+    build:
+      context: .
+      dockerfile: pkg/ark-wallet/Dockerfile
+    container_name: arkd-wallet
+    ports:
+      - "6060:6060"
+    environment:
+      - ARK_WALLET_DATADIR=/app/data
+      - ARK_WALLET_NETWORK=mutinynet
+    volumes:
+      - arkd-wallet-volume:/app/data
+
+  arkd:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: arkd
+    depends_on:
+      - arkd-wallet
+    ports:
+      - "7070:7070"
+    environment:
+      - ARK_LOG_LEVEL=5
+      - ARK_NO_MACAROONS=true
+      - ARK_NETWORK=mutinynet
+      - ARK_DATADIR=/app/data
+      - ARK_WALLET_ADDR=arkd-wallet:6060
+    volumes:
+      - arkd-volume:/app/data
