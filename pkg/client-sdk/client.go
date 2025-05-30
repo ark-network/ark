@@ -2032,7 +2032,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				if step != start && step != roundSigningNoncesGenerated {
 					continue
 				}
-				vtxoTree, connectorsTree = a.handleBatchTree(event.(client.BatchTreeEvent), vtxoTree, connectorsTree)
+				vtxoTree, connectorsTree = handleBatchTree(event.(client.BatchTreeEvent), vtxoTree, connectorsTree)
 				continue
 			// the unsigned vtxo tree has been sent, we need to generate nonces
 			case client.RoundSigningStartedEvent:
@@ -2103,27 +2103,6 @@ func (a *covenantlessArkClient) handleRoundStream(
 			}
 		}
 	}
-}
-
-func (a *covenantlessArkClient) handleBatchTree(
-	event client.BatchTreeEvent,
-	vtxoTree, connectorsTree tree.TxTree,
-) (tree.TxTree, tree.TxTree) {
-	if event.BatchIndex == 0 {
-		vtxoTree = a.handleBatchTreeNode(event.Node, vtxoTree)
-	} else {
-		connectorsTree = a.handleBatchTreeNode(event.Node, connectorsTree)
-	}
-	return vtxoTree, connectorsTree
-}
-
-func (a *covenantlessArkClient) handleBatchTreeNode(node tree.Node, tree tree.TxTree) tree.TxTree {
-	level := int(node.Level)
-	index := int(node.LevelIndex)
-	tree = extendArray(tree, level)
-	tree[level] = extendArray(tree[level], index)
-	tree[level][index] = node
-	return tree
 }
 
 func (a *covenantlessArkClient) handleRoundSigningStarted(
@@ -3922,4 +3901,25 @@ func extendArray[T any](arr []T, position int) []T {
 	}
 
 	return arr
+}
+
+func handleBatchTree(
+	event client.BatchTreeEvent,
+	vtxoTree, connectorsTree tree.TxTree,
+) (tree.TxTree, tree.TxTree) {
+	if event.BatchIndex == 0 {
+		vtxoTree = handleBatchTreeNode(event.Node, vtxoTree)
+	} else {
+		connectorsTree = handleBatchTreeNode(event.Node, connectorsTree)
+	}
+	return vtxoTree, connectorsTree
+}
+
+func handleBatchTreeNode(node tree.Node, tree tree.TxTree) tree.TxTree {
+	level := int(node.Level)
+	index := int(node.LevelIndex)
+	tree = extendArray(tree, level)
+	tree[level] = extendArray(tree[level], index)
+	tree[level][index] = node
+	return tree
 }
