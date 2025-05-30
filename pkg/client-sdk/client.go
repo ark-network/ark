@@ -1942,11 +1942,6 @@ func (a *covenantlessArkClient) handleRoundStream(
 	signerSessions []tree.SignerSession,
 	replayEventsCh chan<- client.RoundEvent,
 ) (string, error) {
-	round, err := a.client.GetRound(ctx, "")
-	if err != nil {
-		return "", err
-	}
-
 	eventsCh, close, err := a.client.GetEventStream(ctx, intentID)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
@@ -1995,6 +1990,9 @@ func (a *covenantlessArkClient) handleRoundStream(
 					replayEventsCh <- notify.Event
 				}()
 			}
+			fmt.Printf("notify %+v\n", notify.Event)
+
+			roundID := ""
 
 			switch event := notify.Event; event.(type) {
 			case client.BatchStartedEvent:
@@ -2003,7 +2001,8 @@ func (a *covenantlessArkClient) handleRoundStream(
 					return "", err
 				}
 				if !skipped {
-					log.Info("a batch started, participation confirmed")
+					roundID = event.(client.BatchStartedEvent).ID
+					log.Infof("a batch started, participation confirmed for round %s", roundID)
 					step++
 
 					if !hasOffchainOutput {
@@ -2020,7 +2019,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				log.Infof("round completed %s", event.(client.RoundFinalizedEvent).Txid)
 				return event.(client.RoundFinalizedEvent).Txid, nil
 			case client.RoundFailedEvent:
-				if event.(client.RoundFailedEvent).ID == round.ID {
+				if event.(client.RoundFailedEvent).ID == roundID {
 					return "", fmt.Errorf("round failed: %s", event.(client.RoundFailedEvent).Reason)
 				}
 				continue

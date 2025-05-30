@@ -747,7 +747,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
 
 	outpoints := bip322signature.GetOutpoints()
-
 	if len(outpoints) != len(message.InputTapTrees) {
 		return "", fmt.Errorf("number of outpoints and taptrees do not match")
 	}
@@ -858,7 +857,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 				VtxoKey:    vtxoKey,
 				Tapscripts: tapscripts,
 			}
-			boardingInput, err := newBoardingInput(tx, input, s.serverSigningPubKey, s.boardingExitDelay)
+			boardingInput, err := newBoardingInput(tx, input, s.pubkey, s.boardingExitDelay)
 			if err != nil {
 				return "", err
 			}
@@ -1111,7 +1110,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 			}
 
 			tx := boardingTxs[input.Txid]
-			boardingInput, err := newBoardingInput(tx, input, s.serverSigningPubKey, s.boardingExitDelay)
+			boardingInput, err := newBoardingInput(tx, input, s.pubkey, s.boardingExitDelay)
 			if err != nil {
 				return "", err
 			}
@@ -1722,7 +1721,7 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 
 	// TODO: understand how many tx requests must be popped from the queue and actually registered for the round
 	num := s.txRequests.len()
-	if num == 0 {
+	if num < s.roundMinParticipantsCount {
 		roundAborted = true
 		err := fmt.Errorf("no tx requests registered")
 		log.WithError(err).Debugf("round %s aborted", round.Id)
