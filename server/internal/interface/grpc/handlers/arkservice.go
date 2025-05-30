@@ -665,6 +665,19 @@ func (h *handler) listenToEvents() {
 						},
 					},
 				})
+			case application.BatchTreeSignature:
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_BatchTreeSignature{
+						BatchTreeSignature: &arkv1.BatchTreeSignatureEvent{
+							Id:         e.ID,
+							Topic:      e.Topic,
+							BatchIndex: e.BatchIndex,
+							Level:      e.Level,
+							LevelIndex: e.LevelIndex,
+							Signature:  e.Signature,
+						},
+					},
+				})
 			}
 		}
 

@@ -38,6 +38,7 @@ type eventResponse interface {
 	GetRoundSigning() *arkv1.RoundSigningEvent
 	GetRoundSigningNoncesGenerated() *arkv1.RoundSigningNoncesGeneratedEvent
 	GetBatchTree() *arkv1.BatchTreeEvent
+	GetBatchTreeSignature() *arkv1.BatchTreeSignatureEvent
 }
 
 type event struct {
@@ -102,6 +103,17 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 				LevelIndex: treeTx.GetLevelIndex(),
 				Leaf:       treeTx.GetLeaf(),
 			},
+		}, nil
+	}
+
+	if ee := e.GetBatchTreeSignature(); ee != nil {
+		return client.BatchTreeSignatureEvent{
+			ID:         ee.GetId(),
+			Topic:      ee.GetTopic(),
+			BatchIndex: ee.GetBatchIndex(),
+			Level:      ee.GetLevel(),
+			LevelIndex: ee.GetLevelIndex(),
+			Signature:  ee.GetSignature(),
 		}, nil
 	}
 

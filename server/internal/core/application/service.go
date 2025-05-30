@@ -2287,7 +2287,7 @@ func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	case domain.RoundFinalizationStarted:
 		events = append(
 			events,
-			batchTreeEvents(ev.VtxoTree, 0, round.Id)...,
+			batchTreeSignatureEvents(ev.VtxoTree, 0, round.Id)...,
 		)
 		events = append(
 			events,
@@ -2585,5 +2585,31 @@ func batchTreeEvents(txTree tree.TxTree, batchIndex int32, roundId string) []dom
 		}
 	}
 
+	return events
+}
+
+func batchTreeSignatureEvents(txTree tree.TxTree, batchIndex int32, roundId string) []domain.Event {
+	events := make([]domain.Event, 0)
+
+	for level, lvl := range txTree {
+		for levelIndex, node := range lvl {
+			ptx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+			if err != nil {
+				log.WithError(err).Warn("failed to parse tx")
+				continue
+			}
+
+			sig := ptx.Inputs[0].TaprootKeySpendSig
+
+			events = append(events, BatchTreeSignature{
+				ID:         roundId,
+				Topic:      []string{},
+				BatchIndex: batchIndex,
+				Level:      int32(level),
+				LevelIndex: int32(levelIndex),
+				Signature:  hex.EncodeToString(sig),
+			})
+		}
+	}
 	return events
 }

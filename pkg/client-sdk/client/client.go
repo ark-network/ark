@@ -275,6 +275,17 @@ type BatchTreeEvent struct {
 
 func (e BatchTreeEvent) isRoundEvent() {}
 
+type BatchTreeSignatureEvent struct {
+	ID         string
+	Topic      []string
+	BatchIndex int32
+	Level      int32
+	LevelIndex int32
+	Signature  string
+}
+
+func (e BatchTreeSignatureEvent) isRoundEvent() {}
+
 type TransactionEvent struct {
 	Round  *RoundTransaction
 	Redeem *RedeemTransaction

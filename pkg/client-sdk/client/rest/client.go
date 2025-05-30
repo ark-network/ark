@@ -414,6 +414,16 @@ func (c *restClient) GetEventStream(
 							LevelIndex: e.TreeTx.LevelIndex,
 						},
 					}
+				case resp.Result.BatchTreeSignature != nil:
+					e := resp.Result.BatchTreeSignature
+					event = client.BatchTreeSignatureEvent{
+						ID:         e.ID,
+						Topic:      e.Topic,
+						BatchIndex: e.BatchIndex,
+						Level:      e.Level,
+						LevelIndex: e.LevelIndex,
+						Signature:  e.Signature,
+					}
 				}
 
 				eventsCh <- client.RoundEventChannel{

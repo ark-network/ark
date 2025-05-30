@@ -502,6 +502,35 @@
         }
       }
     },
+    "v1BatchTreeSignatureEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "batchIndex": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "level": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "levelIndex": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "signature": {
+          "type": "string"
+        }
+      }
+    },
     "v1Bip322Signature": {
       "type": "object",
       "properties": {
@@ -583,6 +612,9 @@
         },
         "batchTree": {
           "$ref": "#/definitions/v1BatchTreeEvent"
+        },
+        "batchTreeSignature": {
+          "$ref": "#/definitions/v1BatchTreeSignatureEvent"
         }
       }
     },

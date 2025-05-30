@@ -44,7 +44,17 @@ type BatchTree struct {
 	Node       tree.Node
 }
 
+type BatchTreeSignature struct {
+	ID         string
+	Topic      []string
+	BatchIndex int32
+	Level      int32
+	LevelIndex int32
+	Signature  string
+}
+
 // implement domain.RoundEvent interface
 func (r RoundSigningStarted) GetTopic() string         { return domain.RoundTopic }
 func (r RoundSigningNoncesGenerated) GetTopic() string { return domain.RoundTopic }
 func (r BatchTree) GetTopic() string                   { return domain.RoundTopic }
+func (r BatchTreeSignature) GetTopic() string          { return domain.RoundTopic }

@@ -1991,12 +1991,11 @@ func (a *covenantlessArkClient) handleRoundStream(
 	}
 
 	vtxoTree := make(tree.TxTree, 0)
-	var connectorsTree tree.TxTree
+	connectorsTree := make(tree.TxTree, 0)
 
 	if !hasOffchainOutput {
 		// if none of the outputs are offchain, we should skip the vtxo tree signing steps
 		step = roundSigningNoncesGenerated
-		connectorsTree = make(tree.TxTree, 0)
 	}
 
 	for {
@@ -2034,6 +2033,15 @@ func (a *covenantlessArkClient) handleRoundStream(
 				}
 				vtxoTree, connectorsTree = handleBatchTree(event.(client.BatchTreeEvent), vtxoTree, connectorsTree)
 				continue
+			case client.BatchTreeSignatureEvent:
+				if step != roundSigningNoncesGenerated {
+					continue
+				}
+				vtxoTree, err = handleBatchTreeSignature(event.(client.BatchTreeSignatureEvent), vtxoTree)
+				if err != nil {
+					return "", err
+				}
+				continue
 			// the unsigned vtxo tree has been sent, we need to generate nonces
 			case client.RoundSigningStartedEvent:
 				pingStop()
@@ -2064,9 +2072,6 @@ func (a *covenantlessArkClient) handleRoundStream(
 					return "", err
 				}
 				step++
-				// once the tree is signed, clear the vtxo tree and connectors tree
-				vtxoTree = make(tree.TxTree, 0)
-				connectorsTree = make(tree.TxTree, 0)
 				continue
 			// the vtxo tree is signed and we received both signed tree and connectors tree
 			// we need to sign the forfeits txs (VTXOs) and the round tx (boarding UTXOs)
@@ -3922,4 +3927,46 @@ func handleBatchTreeNode(node tree.Node, tree tree.TxTree) tree.TxTree {
 	tree[level] = extendArray(tree[level], index)
 	tree[level][index] = node
 	return tree
+}
+
+func handleBatchTreeSignature(event client.BatchTreeSignatureEvent, vtxoTree tree.TxTree) (tree.TxTree, error) {
+	if event.BatchIndex != 0 {
+		return vtxoTree, nil
+	}
+
+	decodedSig, err := hex.DecodeString(event.Signature)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode signature: %s", err)
+	}
+
+	sig, err := schnorr.ParseSignature(decodedSig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse signature: %s", err)
+	}
+
+	level := int(event.Level)
+	levelIndex := int(event.LevelIndex)
+
+	if len(vtxoTree) <= level {
+		return nil, fmt.Errorf("level %d not found in vtxo tree", level)
+	}
+
+	if len(vtxoTree[level]) <= levelIndex {
+		return nil, fmt.Errorf("level %d index %d not found in vtxo tree", level, levelIndex)
+	}
+
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(vtxoTree[level][levelIndex].Tx), true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ptx: %s", err)
+	}
+
+	ptx.Inputs[0].TaprootKeySpendSig = sig.Serialize()
+
+	encodedTx, err := ptx.B64Encode()
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode tx: %s", err)
+	}
+
+	vtxoTree[level][levelIndex].Tx = encodedTx
+	return vtxoTree, nil
 }
