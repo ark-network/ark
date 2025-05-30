@@ -1990,7 +1990,6 @@ func (a *covenantlessArkClient) handleRoundStream(
 					replayEventsCh <- notify.Event
 				}()
 			}
-			fmt.Printf("notify %+v\n", notify.Event)
 
 			roundID := ""
 
