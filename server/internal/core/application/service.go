@@ -1723,7 +1723,7 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 	num := s.txRequests.len()
 	if num < s.roundMinParticipantsCount {
 		roundAborted = true
-		err := fmt.Errorf("no tx requests registered")
+		err := fmt.Errorf("not enough tx requests registered %d/%d", num, s.roundMinParticipantsCount)
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
@@ -1745,7 +1745,7 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 		return
 	}
 
-	// TODO : take into account available liquidity
+	// TODO take into account available liquidity
 	requests := s.txRequests.pop(num)
 	poppedRequests = requests
 
