@@ -2049,52 +2049,6 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }
 
-func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree tree.TxTree, cosignersPubkeys []string) {
-	ev := RoundSigningStarted{
-		RoundEvent: domain.RoundEvent{
-			Id:   s.currentRound.Id,
-			Type: domain.EventTypeUndefined,
-		},
-		UnsignedVtxoTree: unsignedVtxoTree,
-		UnsignedRoundTx:  s.currentRound.CommitmentTx,
-		CosignersPubkeys: cosignersPubkeys,
-	}
-
-	s.eventsCh <- ev
-}
-
-func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combinedNonces tree.TreeNonces) {
-	ev := RoundSigningNoncesGenerated{
-		RoundEvent: domain.RoundEvent{
-			Id:   s.currentRound.Id,
-			Type: domain.EventTypeUndefined,
-		},
-		Nonces: combinedNonces,
-	}
-
-	s.eventsCh <- ev
-}
-
-func (s *covenantlessService) propagateBatchStartedEvent(requests []timedTxRequest, forfeitAddr string) {
-	intentIdsHashes := make([][32]byte, 0, len(requests))
-	for _, req := range requests {
-		intentIdsHashes = append(intentIdsHashes, req.hashID())
-	}
-
-	s.confirmationSession = newConfirmationSession(intentIdsHashes)
-
-	ev := BatchStarted{
-		RoundEvent: domain.RoundEvent{
-			Id:   s.currentRound.Id,
-			Type: domain.EventTypeUndefined,
-		},
-		IntentIdsHashes: intentIdsHashes,
-		BatchExpiry:     s.vtxoTreeExpiry.Value,
-		ForfeitAddress:  forfeitAddr,
-	}
-	s.eventsCh <- ev
-}
-
 func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 	defer s.startRound()
 
@@ -2296,6 +2250,52 @@ func (s *covenantlessService) listenToScannerNotifications() {
 func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	lastEvent := round.Events()[len(round.Events())-1]
 	s.eventsCh <- lastEvent
+}
+
+func (s *covenantlessService) propagateBatchStartedEvent(requests []timedTxRequest, forfeitAddr string) {
+	intentIdsHashes := make([][32]byte, 0, len(requests))
+	for _, req := range requests {
+		intentIdsHashes = append(intentIdsHashes, req.hashID())
+	}
+
+	s.confirmationSession = newConfirmationSession(intentIdsHashes)
+
+	ev := BatchStarted{
+		RoundEvent: domain.RoundEvent{
+			Id:   s.currentRound.Id,
+			Type: domain.EventTypeUndefined,
+		},
+		IntentIdsHashes: intentIdsHashes,
+		BatchExpiry:     s.vtxoTreeExpiry.Value,
+		ForfeitAddress:  forfeitAddr,
+	}
+	s.eventsCh <- ev
+}
+
+func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree tree.TxTree, cosignersPubkeys []string) {
+	ev := RoundSigningStarted{
+		RoundEvent: domain.RoundEvent{
+			Id:   s.currentRound.Id,
+			Type: domain.EventTypeUndefined,
+		},
+		UnsignedVtxoTree: unsignedVtxoTree,
+		UnsignedRoundTx:  s.currentRound.CommitmentTx,
+		CosignersPubkeys: cosignersPubkeys,
+	}
+
+	s.eventsCh <- ev
+}
+
+func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combinedNonces tree.TreeNonces) {
+	ev := RoundSigningNoncesGenerated{
+		RoundEvent: domain.RoundEvent{
+			Id:   s.currentRound.Id,
+			Type: domain.EventTypeUndefined,
+		},
+		Nonces: combinedNonces,
+	}
+
+	s.eventsCh <- ev
 }
 
 func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
