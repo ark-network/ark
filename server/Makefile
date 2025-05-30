@@ -72,10 +72,19 @@ sqlc:
 pg:
 	@docker run --name ark-pg -p 5432:5432 -e POSTGRES_USER=root -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=ark-db -d postgres
 
+# pgtest: starts postgres db inside docker container
+pgpgtest:
+	@docker run --name ark-pg-test -p 5432:5432 -e POSTGRES_USER=root -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=ark-db-test -d postgres
+
 # droppg: stop and remove postgres container
 droppg:
 	@docker stop ark-pg
 	@docker rm ark-pg
+
+# droppgtest: stop and remove postgres container
+droppgtest:
+	@docker stop ark-pg-test
+	@docker rm ark-pg-test
 
 # createdb: create db inside docker container
 createdb:
@@ -87,11 +96,11 @@ dropdb:
 
 # createtestdb: create test db inside docker container
 createtestdb:
-	@docker exec ark-pg createdb --username=root --owner=root ark-db-test
+	@docker exec ark-pg-test createdb --username=root --owner=root ark-db-test
 
 # droptestdb: drops test db inside docker container
 droptestdb:
-	@docker exec ark-pg dropdb ark-db-test
+	@docker exec ark-pg-test dropdb ark-db-test
 
 # recreatetestdb: drops and creates test db
 recreatetestdb: droptestdb createtestdb
