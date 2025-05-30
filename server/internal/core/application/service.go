@@ -1082,11 +1082,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 				}
 
 				// validate the vtxo script
-				// TODO: fix in PR #501
-				if err := vtxoScript.Validate(s.pubkey, common.RelativeLocktime{
-					Type:  s.unilateralExitDelay.Type,
-					Value: s.unilateralExitDelay.Value * 2,
-				}); err != nil {
+				if err := vtxoScript.Validate(s.pubkey, s.boardingExitDelay); err != nil {
 					return "", fmt.Errorf("invalid vtxo script: %s", err)
 				}
 
@@ -2325,7 +2321,7 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 		)
 	}
 
-	if err := boardingScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+	if err := boardingScript.Validate(s.pubkey, s.boardingExitDelay); err != nil {
 		return nil, err
 	}
 
