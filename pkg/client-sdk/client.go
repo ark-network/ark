@@ -2090,7 +2090,6 @@ func (a *covenantlessArkClient) handleBatchStarted(
 	for _, idHash := range event.IntentIdHashes {
 		if idHash == intentIDHashStr {
 			if err := a.client.ConfirmRegistration(ctx, intentID); err != nil {
-				fmt.Println("error confirming registration:", err)
 				return false, err
 			}
 			return false, nil
