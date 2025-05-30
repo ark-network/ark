@@ -1675,7 +1675,7 @@ func (s *covenantlessService) startRound() {
 
 	defer func() {
 		roundTiming := newRoundTiming(s.roundInterval)
-		time.Sleep(roundTiming.registrationDuration())
+		<-time.After(roundTiming.registrationDuration())
 		s.startConfirmation(roundTiming)
 	}()
 
