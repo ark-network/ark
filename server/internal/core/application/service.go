@@ -67,6 +67,7 @@ type covenantlessService struct {
 
 	forfeitsBoardingSigsChan chan struct{}
 
+	roundMinParticipantsCount int64
 	roundMaxParticipantsCount int64
 	utxoMaxAmount             int64
 	utxoMinAmount             int64
@@ -84,7 +85,7 @@ func NewService(
 	noteUriPrefix string,
 	marketHourStartTime, marketHourEndTime time.Time,
 	marketHourPeriod, marketHourRoundInterval time.Duration,
-	roundMaxParticipantsCount int64,
+	roundMinParticipantsCount, roundMaxParticipantsCount int64,
 	utxoMaxAmount int64,
 	utxoMinAmount int64,
 	vtxoMaxAmount int64,
@@ -147,6 +148,7 @@ func NewService(
 		serverSigningKey:          serverSigningKey,
 		serverSigningPubKey:       serverSigningKey.PubKey(),
 		forfeitsBoardingSigsChan:  make(chan struct{}, 1),
+		roundMinParticipantsCount: roundMinParticipantsCount,
 		roundMaxParticipantsCount: roundMaxParticipantsCount,
 		utxoMaxAmount:             utxoMaxAmount,
 		utxoMinAmount:             utxoMinAmount,
@@ -1670,41 +1672,15 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 
 	ctx := context.Background()
 
-	notConfirmedRequests := make([]timedTxRequest, 0)
-	requests := make([]timedTxRequest, 0)
+	var poppedRequests []timedTxRequest
+	var registeredRequests []timedTxRequest
 	roundAborted := false
 
 	defer func() {
 		s.confirmationSession = nil
 
-		// readd not confirmed requests to the queue
-		if len(notConfirmedRequests) > 0 {
-			for _, req := range notConfirmedRequests {
-				if err := s.txRequests.push(req.TxRequest, req.boardingInputs, req.musig2Data); err != nil {
-					log.WithError(err).Warn("failed to re-push not confirmed request to the queue")
-				}
-			}
-		}
-
 		if roundAborted {
 			s.startRound()
-			return
-		}
-
-		txRequests := make([]domain.TxRequest, 0, len(requests))
-		numOfBoardingInputs := 0
-		for _, req := range requests {
-			txRequests = append(txRequests, req.TxRequest)
-			numOfBoardingInputs += len(req.boardingInputs)
-		}
-
-		s.numOfBoardingInputsMtx.Lock()
-		s.numOfBoardingInputs = numOfBoardingInputs
-		s.numOfBoardingInputsMtx.Unlock()
-
-		if _, err := round.RegisterTxRequests(txRequests); err != nil {
-			round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
-			log.WithError(err).Warn("failed to register tx requests")
 			return
 		}
 
@@ -1714,7 +1690,7 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 
 		if round.IsFailed() {
 			vtxoKeys := make([]domain.VtxoKey, 0)
-			for _, req := range requests {
+			for _, req := range poppedRequests {
 				for _, in := range req.Inputs {
 					vtxoKeys = append(vtxoKeys, in.VtxoKey)
 				}
@@ -1724,7 +1700,7 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 			return
 		}
 
-		s.startFinalization(roundTiming, requests)
+		s.startFinalization(roundTiming, registeredRequests)
 	}()
 
 	// TODO: understand how many tx requests must be popped from the queue and actually registered for the round
@@ -1753,7 +1729,9 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 		return
 	}
 
-	requests = s.txRequests.pop(num)
+	// TODO : take into account available liquidity
+	requests := s.txRequests.pop(num)
+	poppedRequests = requests
 
 	totAmount := uint64(0)
 	for _, request := range requests {
@@ -1766,61 +1744,71 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 		return
 	}
 
-	numberOfConfirmationAttemps := roundTiming.confirmationAttempts()
-	confirmationInterval := roundTiming.confirmationAttemptDuration()
-	confirmationTicker := time.NewTicker(confirmationInterval)
+	confirmationTimer := time.NewTicker(roundTiming.confirmationDuration())
+	defer confirmationTimer.Stop()
 
 	s.propagateBatchStartedEvent(requests, forfeitAddress)
 
-	for {
-		select {
-		case <-confirmationTicker.C:
-			numberOfConfirmationAttemps--
-			if numberOfConfirmationAttemps == 0 {
-				// no more attempts, abort the round
-				confirmationTicker.Stop()
-				err := fmt.Errorf("confirmation timed out")
-				round.Fail(err)
-				log.WithError(err).Warn("confirmation timed out")
-				return
+	confirmedRequests := make([]timedTxRequest, 0)
+	notConfirmedRequests := make([]timedTxRequest, 0)
+
+	select {
+	case <-confirmationTimer.C:
+		for _, req := range requests {
+			if s.confirmationSession.intentsHashes[req.hashID()] {
+				confirmedRequests = append(confirmedRequests, req)
+				continue
 			}
+			notConfirmedRequests = append(notConfirmedRequests, req)
+		}
+	case <-s.confirmationSession.confirmedC:
+		confirmationTimer.Stop()
+		confirmedRequests = requests
+	}
 
-			// retry with only confirmed requests
-			confirmedRequests := make([]timedTxRequest, 0)
-			toPop := int64(0)
-			for _, req := range requests {
-				if s.confirmationSession.intentsHashes[req.hashID()] {
-					confirmedRequests = append(confirmedRequests, req)
-					continue
-				}
-				notConfirmedRequests = append(notConfirmedRequests, req)
+	repushToQueue := notConfirmedRequests
+	if int64(len(confirmedRequests)) < s.roundMinParticipantsCount {
+		repushToQueue = append(repushToQueue, confirmedRequests...)
+		confirmedRequests = make([]timedTxRequest, 0)
+	}
+
+	// register confirmed requests if we have enough participants
+	if len(confirmedRequests) > 0 {
+		txRequests := make([]domain.TxRequest, 0, len(confirmedRequests))
+		numOfBoardingInputs := 0
+		for _, req := range confirmedRequests {
+			txRequests = append(txRequests, req.TxRequest)
+			numOfBoardingInputs += len(req.boardingInputs)
+		}
+
+		s.numOfBoardingInputsMtx.Lock()
+		s.numOfBoardingInputs = numOfBoardingInputs
+		s.numOfBoardingInputsMtx.Unlock()
+
+		if _, err := round.RegisterTxRequests(txRequests); err != nil {
+			round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
+			log.WithError(err).Warn("failed to register tx requests")
+			return
+		}
+		registeredRequests = confirmedRequests
+	}
+
+	if len(repushToQueue) > 0 {
+
+		for _, req := range repushToQueue {
+			if err := s.txRequests.push(req.TxRequest, req.boardingInputs, req.musig2Data); err != nil {
+				log.WithError(err).Warn("failed to re-push requests to the queue")
+				continue
 			}
-			num = s.txRequests.len()
+		}
 
-			// no more requests in queue, but 0 confirmed requests: fail the round
-			if num == 0 && len(confirmedRequests) == 0 {
-				err := fmt.Errorf("no tx requests confirmed")
-				round.Fail(err)
-				log.WithError(err).Debugf("round %s failed", round.Id)
-				return
-			}
+		// once repush is successful, make the popped requests = the registered ones
+		poppedRequests = registeredRequests
 
-			requests = confirmedRequests
-
-			// try to pop more requests
-			if num < toPop {
-				toPop = num
-			}
-
-			if toPop > 0 {
-				additionalRequests := s.txRequests.pop(toPop)
-				requests = append(requests, additionalRequests...)
-			}
-
-			// resend the event with the new requests
-			s.propagateBatchStartedEvent(requests, forfeitAddress)
-		case <-s.confirmationSession.confirmedC:
-			confirmationTicker.Stop()
+		// make the round fail if we don't register this round
+		if len(confirmedRequests) == 0 {
+			round.Fail(fmt.Errorf("not enough participants confirmed"))
+			log.Warn("not enough participants confirmed")
 			return
 		}
 	}

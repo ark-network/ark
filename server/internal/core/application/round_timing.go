@@ -24,20 +24,10 @@ func (r roundTiming) waitForRegistration() {
 	time.Sleep(sleepingTime)
 }
 
-// number of time the confirmation phase may be retried
-func (r roundTiming) confirmationAttempts() int {
-	return 3
-}
-
 // the total duration of the confirmation phase if all attempts are done
 func (r roundTiming) confirmationDuration() time.Duration {
 	halfOfRemainingDuration := r.remainingDuration() / 2 // 50% of the remaining duration
 	return halfOfRemainingDuration
-}
-
-// the duration of a single confirmation attempt
-func (r roundTiming) confirmationAttemptDuration() time.Duration {
-	return r.confirmationDuration() / time.Duration(r.confirmationAttempts())
 }
 
 // 33% of the remaining duration
