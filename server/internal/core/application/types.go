@@ -22,7 +22,7 @@ type Service interface {
 	GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error)
 	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
-	GetEventsChannel(ctx context.Context) <-chan domain.Event
+	GetEventsChannel(ctx context.Context) <-chan []domain.Event
 	UpdateTxRequestStatus(ctx context.Context, requestID string) error
 	ListVtxos(
 		ctx context.Context, address string,

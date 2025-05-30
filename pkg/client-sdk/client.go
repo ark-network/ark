@@ -1990,6 +1990,9 @@ func (a *covenantlessArkClient) handleRoundStream(
 		}
 	}
 
+	vtxoTree := make(tree.TxTree, 0)
+	connectorsTree := make(tree.TxTree, 0)
+
 	if !hasOffchainOutput {
 		// if none of the outputs are offchain, we should skip the vtxo tree signing steps
 		step = roundSigningNoncesGenerated
@@ -2010,17 +2013,36 @@ func (a *covenantlessArkClient) handleRoundStream(
 				}()
 			}
 			switch event := notify.Event; event.(type) {
+			// the batch session is done
 			case client.RoundFinalizedEvent:
 				if step != roundFinalization {
 					continue
 				}
 				log.Infof("round completed %s", event.(client.RoundFinalizedEvent).Txid)
 				return event.(client.RoundFinalizedEvent).Txid, nil
+			// the batch session failed
 			case client.RoundFailedEvent:
 				if event.(client.RoundFailedEvent).ID == round.ID {
 					return "", fmt.Errorf("round failed: %s", event.(client.RoundFailedEvent).Reason)
 				}
 				continue
+			// we receive a tree's tx, we need to update the batch trees
+			case client.BatchTreeEvent:
+				if step != start && step != roundSigningNoncesGenerated {
+					continue
+				}
+				vtxoTree, connectorsTree = handleBatchTree(event.(client.BatchTreeEvent), vtxoTree, connectorsTree)
+				continue
+			case client.BatchTreeSignatureEvent:
+				if step != roundSigningNoncesGenerated {
+					continue
+				}
+				vtxoTree, err = handleBatchTreeSignature(event.(client.BatchTreeSignatureEvent), vtxoTree)
+				if err != nil {
+					return "", err
+				}
+				continue
+			// the unsigned vtxo tree has been sent, we need to generate nonces
 			case client.RoundSigningStartedEvent:
 				pingStop()
 				if step != start {
@@ -2028,7 +2050,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				}
 				log.Info("a round signing started")
 				skipped, err := a.handleRoundSigningStarted(
-					ctx, signerSessions, event.(client.RoundSigningStartedEvent),
+					ctx, signerSessions, event.(client.RoundSigningStartedEvent), vtxoTree,
 				)
 				if err != nil {
 					return "", err
@@ -2037,6 +2059,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 					step++
 				}
 				continue
+			// receive the combined nonces, we need to sign the vtxo tree tx
 			case client.RoundSigningNoncesGeneratedEvent:
 				if step != roundSigningStarted {
 					continue
@@ -2050,6 +2073,8 @@ func (a *covenantlessArkClient) handleRoundStream(
 				}
 				step++
 				continue
+			// the vtxo tree is signed and we received both signed tree and connectors tree
+			// we need to sign the forfeits txs (VTXOs) and the round tx (boarding UTXOs)
 			case client.RoundFinalizationEvent:
 				if step != roundSigningNoncesGenerated {
 					continue
@@ -2058,7 +2083,9 @@ func (a *covenantlessArkClient) handleRoundStream(
 				log.Info("a round finalization started")
 
 				signedForfeitTxs, signedRoundTx, err := a.handleRoundFinalization(
-					ctx, event.(client.RoundFinalizationEvent), vtxosToSign, boardingUtxos, receivers,
+					ctx, event.(client.RoundFinalizationEvent),
+					vtxosToSign, boardingUtxos, receivers,
+					vtxoTree, connectorsTree,
 				)
 				if err != nil {
 					return "", err
@@ -2084,7 +2111,8 @@ func (a *covenantlessArkClient) handleRoundStream(
 }
 
 func (a *covenantlessArkClient) handleRoundSigningStarted(
-	ctx context.Context, signerSessions []tree.SignerSession, event client.RoundSigningStartedEvent,
+	ctx context.Context, signerSessions []tree.SignerSession,
+	event client.RoundSigningStartedEvent, vtxoTree tree.TxTree,
 ) (bool, error) {
 	foundPubkeys := make([]string, 0, len(signerSessions))
 	for _, session := range signerSessions {
@@ -2128,7 +2156,7 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 	root := sweepTapTree.RootNode.TapHash()
 
 	generateAndSendNonces := func(session tree.SignerSession) error {
-		if err := session.Init(root.CloneBytes(), sharedOutputValue, event.UnsignedTree); err != nil {
+		if err := session.Init(root.CloneBytes(), sharedOutputValue, vtxoTree); err != nil {
 			return err
 		}
 
@@ -2222,8 +2250,9 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 	vtxos []client.TapscriptsVtxo,
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
+	vtxoTree, connectorsTree tree.TxTree,
 ) ([]string, string, error) {
-	if err := a.validateVtxoTree(event, receivers, vtxos); err != nil {
+	if err := a.validateVtxoTree(event, vtxoTree, connectorsTree, receivers, vtxos); err != nil {
 		return nil, "", fmt.Errorf("failed to verify vtxo tree: %s", err)
 	}
 
@@ -2232,7 +2261,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 	if len(vtxos) > 0 {
 		signedForfeits, err := a.createAndSignForfeits(
 			ctx,
-			vtxos, event.Connectors.Leaves(),
+			vtxos, connectorsTree.Leaves(),
 			event.ConnectorsIndex,
 		)
 		if err != nil {
@@ -2312,7 +2341,9 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 }
 
 func (a *covenantlessArkClient) validateVtxoTree(
-	event client.RoundFinalizationEvent, receivers []client.Output, vtxosInput []client.TapscriptsVtxo,
+	event client.RoundFinalizationEvent,
+	vtxoTree, connectorsTree tree.TxTree,
+	receivers []client.Output, vtxosInput []client.TapscriptsVtxo,
 ) error {
 	roundTx := event.Tx
 	ptx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
@@ -2322,20 +2353,20 @@ func (a *covenantlessArkClient) validateVtxoTree(
 
 	if !utils.IsOnchainOnly(receivers) {
 		if err := tree.ValidateVtxoTree(
-			event.Tree, roundTx, a.ServerPubKey, a.VtxoTreeExpiry,
+			vtxoTree, roundTx, a.ServerPubKey, a.VtxoTreeExpiry,
 		); err != nil {
 			return err
 		}
 	}
 
 	if err := a.validateReceivers(
-		ptx, receivers, event.Tree,
+		ptx, receivers, vtxoTree,
 	); err != nil {
 		return err
 	}
 
 	if len(vtxosInput) > 0 {
-		root, err := event.Connectors.Root()
+		root, err := connectorsTree.Root()
 		if err != nil {
 			return err
 		}
@@ -2353,7 +2384,7 @@ func (a *covenantlessArkClient) validateVtxoTree(
 			return fmt.Errorf("root's parent txid is not the same as the round txid: %s != %s", root.ParentTxid, getTxID(roundTx))
 		}
 
-		if err := event.Connectors.Validate(getTxID); err != nil {
+		if err := connectorsTree.Validate(getTxID); err != nil {
 			return err
 		}
 
@@ -3863,4 +3894,79 @@ func finalizeWithNotes(notesWitnesses map[int][]byte) func(ptx *psbt.Packet) err
 
 		return nil
 	}
+}
+
+func extendArray[T any](arr []T, position int) []T {
+	if arr == nil {
+		return make([]T, position+1)
+	}
+
+	if len(arr) <= position {
+		return append(arr, make([]T, position-len(arr)+1)...)
+	}
+
+	return arr
+}
+
+func handleBatchTree(
+	event client.BatchTreeEvent,
+	vtxoTree, connectorsTree tree.TxTree,
+) (tree.TxTree, tree.TxTree) {
+	if event.BatchIndex == 0 {
+		vtxoTree = handleBatchTreeNode(event.Node, vtxoTree)
+	} else {
+		connectorsTree = handleBatchTreeNode(event.Node, connectorsTree)
+	}
+	return vtxoTree, connectorsTree
+}
+
+func handleBatchTreeNode(node tree.Node, tree tree.TxTree) tree.TxTree {
+	level := int(node.Level)
+	index := int(node.LevelIndex)
+	tree = extendArray(tree, level)
+	tree[level] = extendArray(tree[level], index)
+	tree[level][index] = node
+	return tree
+}
+
+func handleBatchTreeSignature(event client.BatchTreeSignatureEvent, vtxoTree tree.TxTree) (tree.TxTree, error) {
+	if event.BatchIndex != 0 {
+		return nil, fmt.Errorf("batch index %d is not 0", event.BatchIndex)
+	}
+
+	decodedSig, err := hex.DecodeString(event.Signature)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode signature: %s", err)
+	}
+
+	sig, err := schnorr.ParseSignature(decodedSig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse signature: %s", err)
+	}
+
+	level := int(event.Level)
+	levelIndex := int(event.LevelIndex)
+
+	if len(vtxoTree) <= level {
+		return nil, fmt.Errorf("level %d not found in vtxo tree", level)
+	}
+
+	if len(vtxoTree[level]) <= levelIndex {
+		return nil, fmt.Errorf("level %d index %d not found in vtxo tree", level, levelIndex)
+	}
+
+	ptx, err := psbt.NewFromRawBytes(strings.NewReader(vtxoTree[level][levelIndex].Tx), true)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ptx: %s", err)
+	}
+
+	ptx.Inputs[0].TaprootKeySpendSig = sig.Serialize()
+
+	encodedTx, err := ptx.B64Encode()
+	if err != nil {
+		return nil, fmt.Errorf("failed to encode tx: %s", err)
+	}
+
+	vtxoTree[level][levelIndex].Tx = encodedTx
+	return vtxoTree, nil
 }

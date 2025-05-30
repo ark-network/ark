@@ -106,6 +106,8 @@ func toTxTree(root node, initialInput *wire.OutPoint, expiry *common.RelativeLoc
 	ins := []*wire.OutPoint{initialInput}
 	nodes := []node{root}
 
+	level := int32(0)
+
 	for len(nodes) > 0 {
 		nextNodes := make([]node, 0)
 		nextInputsArgs := make([]*wire.OutPoint, 0)
@@ -113,7 +115,7 @@ func toTxTree(root node, initialInput *wire.OutPoint, expiry *common.RelativeLoc
 		treeLevel := make([]Node, 0)
 
 		for i, node := range nodes {
-			treeNode, err := getTreeNode(node, ins[i], expiry)
+			treeNode, err := getTreeNode(node, ins[i], expiry, level, int32(i))
 			if err != nil {
 				return nil, err
 			}
@@ -136,6 +138,8 @@ func toTxTree(root node, initialInput *wire.OutPoint, expiry *common.RelativeLoc
 				})
 			}
 		}
+
+		level++
 
 		vtxoTree = append(vtxoTree, treeLevel)
 		nodes = append([]node{}, nextNodes...)
@@ -222,6 +226,7 @@ func getTreeNode(
 	n node,
 	input *wire.OutPoint,
 	expiry *common.RelativeLocktime,
+	level, levelIndex int32,
 ) (Node, error) {
 	partialTx, err := getTx(n, input, expiry)
 	if err != nil {
@@ -239,6 +244,8 @@ func getTreeNode(
 		Txid:       txid,
 		Tx:         tx,
 		ParentTxid: input.Hash.String(),
+		Level:      level,
+		LevelIndex: levelIndex,
 		Leaf:       len(n.getChildren()) == 0,
 	}, nil
 }

@@ -11,6 +11,8 @@ type Node struct {
 	Tx         string
 	ParentTxid string
 	Leaf       bool
+	Level      int32
+	LevelIndex int32
 }
 
 var (

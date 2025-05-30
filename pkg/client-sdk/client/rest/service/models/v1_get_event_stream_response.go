@@ -18,6 +18,12 @@ import (
 // swagger:model v1GetEventStreamResponse
 type V1GetEventStreamResponse struct {
 
+	// batch tree
+	BatchTree *V1BatchTreeEvent `json:"batchTree,omitempty"`
+
+	// batch tree signature
+	BatchTreeSignature *V1BatchTreeSignatureEvent `json:"batchTreeSignature,omitempty"`
+
 	// round failed
 	RoundFailed *V1RoundFailed `json:"roundFailed,omitempty"`
 
@@ -37,6 +43,14 @@ type V1GetEventStreamResponse struct {
 // Validate validates this v1 get event stream response
 func (m *V1GetEventStreamResponse) Validate(formats strfmt.Registry) error {
 	var res []error
+
+	if err := m.validateBatchTree(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateBatchTreeSignature(formats); err != nil {
+		res = append(res, err)
+	}
 
 	if err := m.validateRoundFailed(formats); err != nil {
 		res = append(res, err)
@@ -61,6 +75,44 @@ func (m *V1GetEventStreamResponse) Validate(formats strfmt.Registry) error {
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *V1GetEventStreamResponse) validateBatchTree(formats strfmt.Registry) error {
+	if swag.IsZero(m.BatchTree) { // not required
+		return nil
+	}
+
+	if m.BatchTree != nil {
+		if err := m.BatchTree.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batchTree")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batchTree")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1GetEventStreamResponse) validateBatchTreeSignature(formats strfmt.Registry) error {
+	if swag.IsZero(m.BatchTreeSignature) { // not required
+		return nil
+	}
+
+	if m.BatchTreeSignature != nil {
+		if err := m.BatchTreeSignature.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batchTreeSignature")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batchTreeSignature")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -163,6 +215,14 @@ func (m *V1GetEventStreamResponse) validateRoundSigningNoncesGenerated(formats s
 func (m *V1GetEventStreamResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.contextValidateBatchTree(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateBatchTreeSignature(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.contextValidateRoundFailed(ctx, formats); err != nil {
 		res = append(res, err)
 	}
@@ -186,6 +246,48 @@ func (m *V1GetEventStreamResponse) ContextValidate(ctx context.Context, formats 
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *V1GetEventStreamResponse) contextValidateBatchTree(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.BatchTree != nil {
+
+		if swag.IsZero(m.BatchTree) { // not required
+			return nil
+		}
+
+		if err := m.BatchTree.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batchTree")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batchTree")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1GetEventStreamResponse) contextValidateBatchTreeSignature(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.BatchTreeSignature != nil {
+
+		if swag.IsZero(m.BatchTreeSignature) { // not required
+			return nil
+		}
+
+		if err := m.BatchTreeSignature.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batchTreeSignature")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batchTreeSignature")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 

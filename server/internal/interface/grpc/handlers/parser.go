@@ -150,6 +150,9 @@ func (t vtxoTree) toProto() *arkv1.Tree {
 				Txid:       node.Txid,
 				Tx:         node.Tx,
 				ParentTxid: node.ParentTxid,
+				Level:      node.Level,
+				LevelIndex: node.LevelIndex,
+				Leaf:       node.Leaf,
 			})
 		}
 

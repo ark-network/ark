@@ -91,24 +91,24 @@ func ValidateVtxoTree(
 	}
 
 	// check that root input is connected to the round tx
-	rootPsetB64 := vtxoTree[0][0].Tx
-	rootPset, err := psbt.NewFromRawBytes(strings.NewReader(rootPsetB64), true)
+	rootB64 := vtxoTree[0][0].Tx
+	rootPsbt, err := psbt.NewFromRawBytes(strings.NewReader(rootB64), true)
 	if err != nil {
 		return fmt.Errorf("invalid root transaction: %w", err)
 	}
 
-	if len(rootPset.Inputs) != 1 {
+	if len(rootPsbt.Inputs) != 1 {
 		return ErrNumberOfInputs
 	}
 
-	rootInput := rootPset.UnsignedTx.TxIn[0]
+	rootInput := rootPsbt.UnsignedTx.TxIn[0]
 	if chainhash.Hash(rootInput.PreviousOutPoint.Hash).String() != roundTransaction.UnsignedTx.TxHash().String() ||
 		rootInput.PreviousOutPoint.Index != sharedOutputIndex {
 		return ErrWrongRoundTxid
 	}
 
 	sumRootValue := int64(0)
-	for _, output := range rootPset.UnsignedTx.TxOut {
+	for _, output := range rootPsbt.UnsignedTx.TxOut {
 		sumRootValue += output.Value
 	}
 

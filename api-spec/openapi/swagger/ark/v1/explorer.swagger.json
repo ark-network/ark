@@ -221,6 +221,17 @@
         },
         "parentTxid": {
           "type": "string"
+        },
+        "level": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "levelIndex": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "leaf": {
+          "type": "boolean"
         }
       }
     },
