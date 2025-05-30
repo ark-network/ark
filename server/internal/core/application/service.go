@@ -2062,7 +2062,10 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 
 func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree tree.TxTree, cosignersPubkeys []string) {
 	ev := RoundSigningStarted{
-		Id:               s.currentRound.Id,
+		RoundEvent: domain.RoundEvent{
+			Id:   s.currentRound.Id,
+			Type: domain.EventTypeUndefined,
+		},
 		UnsignedVtxoTree: unsignedVtxoTree,
 		UnsignedRoundTx:  s.currentRound.CommitmentTx,
 		CosignersPubkeys: cosignersPubkeys,
@@ -2073,7 +2076,10 @@ func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree
 
 func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combinedNonces tree.TreeNonces) {
 	ev := RoundSigningNoncesGenerated{
-		Id:     s.currentRound.Id,
+		RoundEvent: domain.RoundEvent{
+			Id:   s.currentRound.Id,
+			Type: domain.EventTypeUndefined,
+		},
 		Nonces: combinedNonces,
 	}
 
@@ -2089,7 +2095,10 @@ func (s *covenantlessService) propagateBatchStartedEvent(requests []timedTxReque
 	s.confirmationSession = newConfirmationSession(intentIdsHashes)
 
 	ev := BatchStarted{
-		Id:              s.currentRound.Id,
+		RoundEvent: domain.RoundEvent{
+			Id:   s.currentRound.Id,
+			Type: domain.EventTypeUndefined,
+		},
 		IntentIdsHashes: intentIdsHashes,
 		BatchExpiry:     s.vtxoTreeExpiry.Value,
 		ForfeitAddress:  forfeitAddr,

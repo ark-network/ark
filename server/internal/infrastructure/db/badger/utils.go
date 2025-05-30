@@ -83,57 +83,58 @@ func serializeEvent(event domain.Event) ([]byte, error) {
 }
 
 func deserializeEvent(buf []byte) (domain.Event, error) {
-	{
-		var event = domain.RoundFailed{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.Err) > 0 {
-			return event, nil
-		}
+	var eventType struct {
+		Type domain.EventType
 	}
-	{
-		var event = domain.RoundFinalized{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.Txid) > 0 {
-			return event, nil
-		}
+
+	if err := json.Unmarshal(buf, &eventType); err != nil {
+		return nil, err
 	}
-	{
-		var event = domain.RoundFinalizationStarted{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.RoundTx) > 0 {
-			return event, nil
-		}
-	}
-	{
-		var event = domain.TxRequestsRegistered{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.TxRequests) > 0 {
-			return event, nil
-		}
-	}
-	{
+
+	switch eventType.Type {
+	case domain.EventTypeRoundStarted:
 		var event = domain.RoundStarted{}
-		if err := json.Unmarshal(buf, &event); err == nil && event.Timestamp > 0 {
+		if err := json.Unmarshal(buf, &event); err == nil {
 			return event, nil
 		}
-	}
-	{
+	case domain.EventTypeRoundFinalizationStarted:
+		var event = domain.RoundFinalizationStarted{}
+		if err := json.Unmarshal(buf, &event); err == nil {
+			return event, nil
+		}
+	case domain.EventTypeRoundFinalized:
+		var event = domain.RoundFinalized{}
+		if err := json.Unmarshal(buf, &event); err == nil {
+			return event, nil
+		}
+	case domain.EventTypeRoundFailed:
+		var event = domain.RoundFailed{}
+		if err := json.Unmarshal(buf, &event); err == nil {
+			return event, nil
+		}
+	case domain.EventTypeTxRequestsRegistered:
+		var event = domain.TxRequestsRegistered{}
+		if err := json.Unmarshal(buf, &event); err == nil {
+			return event, nil
+		}
+	case domain.EventTypeOffchainTxRequested:
 		var event = domain.OffchainTxRequested{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.VirtualTx) > 0 {
+		if err := json.Unmarshal(buf, &event); err == nil {
 			return event, nil
 		}
-	}
-	{
+	case domain.EventTypeOffchainTxAccepted:
 		var event = domain.OffchainTxAccepted{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.CommitmentTxids) > 0 {
+		if err := json.Unmarshal(buf, &event); err == nil {
 			return event, nil
 		}
-	}
-	{
+	case domain.EventTypeOffchainTxFinalized:
 		var event = domain.OffchainTxFinalized{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.FinalCheckpointTxs) > 0 {
+		if err := json.Unmarshal(buf, &event); err == nil {
 			return event, nil
 		}
-	}
-	{
+	case domain.EventTypeOffchainTxFailed:
 		var event = domain.OffchainTxFailed{}
-		if err := json.Unmarshal(buf, &event); err == nil && len(event.Reason) > 0 {
+		if err := json.Unmarshal(buf, &event); err == nil {
 			return event, nil
 		}
 	}

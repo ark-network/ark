@@ -15,7 +15,7 @@ import (
 
 // the user should react to this event by confirming the registration using sha256(intent_id)
 type BatchStarted struct {
-	Id              string
+	domain.RoundEvent
 	IntentIdsHashes [][32]byte
 	BatchExpiry     uint32
 	ForfeitAddress  string
@@ -23,7 +23,7 @@ type BatchStarted struct {
 
 // signer should react to this event by generating a musig2 nonce for each transaction in the tree
 type RoundSigningStarted struct {
-	Id               string
+	domain.RoundEvent
 	UnsignedVtxoTree tree.TxTree
 	UnsignedRoundTx  string
 	CosignersPubkeys []string
@@ -32,7 +32,7 @@ type RoundSigningStarted struct {
 // signer should react to this event by partially signing the vtxo tree transactions
 // then, delete its ephemeral key
 type RoundSigningNoncesGenerated struct {
-	Id     string
+	domain.RoundEvent
 	Nonces tree.TreeNonces // aggregated nonces
 }
 
@@ -45,8 +45,3 @@ func (e RoundSigningNoncesGenerated) SerializeNonces() (string, error) {
 
 	return hex.EncodeToString(serialized.Bytes()), nil
 }
-
-// implement domain.RoundEvent interface
-func (r RoundSigningStarted) GetTopic() string         { return domain.RoundTopic }
-func (r RoundSigningNoncesGenerated) GetTopic() string { return domain.RoundTopic }
-func (r BatchStarted) GetTopic() string                { return domain.RoundTopic }
