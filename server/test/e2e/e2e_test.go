@@ -155,6 +155,7 @@ func TestSettleInSameRound(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, vtxos)
 	}()
+	time.Sleep(1 * time.Second)
 	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobOffchainAddr, 5000)}, false)
 	require.NoError(t, err)
 
@@ -168,6 +169,7 @@ func TestSettleInSameRound(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, vtxos)
 	}()
+	time.Sleep(1 * time.Second)
 	_, err = bob.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(aliceOffchainAddr, 3000)}, false)
 	require.NoError(t, err)
 
