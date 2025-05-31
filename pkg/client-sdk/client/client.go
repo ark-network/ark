@@ -37,6 +37,7 @@ type TransportClient interface {
 		ctx context.Context, signature, message string,
 	) (string, error)
 	DeleteIntent(ctx context.Context, requestID, signature, message string) error
+	ConfirmRegistration(ctx context.Context, intentID string) error
 	RegisterOutputsForNextRound(
 		ctx context.Context, requestID string, outputs []Output, musig2 *tree.Musig2,
 	) error
@@ -49,10 +50,7 @@ type TransportClient interface {
 	SubmitSignedForfeitTxs(
 		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
 	) error
-	GetEventStream(
-		ctx context.Context, requestID string,
-	) (<-chan RoundEventChannel, func(), error)
-	Ping(ctx context.Context, requestID string) error
+	GetEventStream(ctx context.Context) (<-chan RoundEventChannel, func(), error)
 	SubmitOffchainTx(
 		ctx context.Context, virtualTx string, checkpointsTxs []string,
 	) (signedCheckpointsTxs []string, signedVirtualTx, virtualTxid string, err error)
@@ -268,6 +266,15 @@ type RoundSigningNoncesGeneratedEvent struct {
 }
 
 func (e RoundSigningNoncesGeneratedEvent) isRoundEvent() {}
+
+type BatchStartedEvent struct {
+	ID             string
+	IntentIdHashes []string
+	BatchExpiry    int64
+	ForfeitAddress string
+}
+
+func (e BatchStartedEvent) isRoundEvent() {}
 
 type TransactionEvent struct {
 	Round  *RoundTransaction

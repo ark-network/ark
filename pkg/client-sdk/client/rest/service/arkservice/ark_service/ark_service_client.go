@@ -54,6 +54,8 @@ type ClientOption func(*runtime.ClientOperation)
 
 // ClientService is the interface for Client methods
 type ClientService interface {
+	ArkServiceConfirmRegistration(params *ArkServiceConfirmRegistrationParams, opts ...ClientOption) (*ArkServiceConfirmRegistrationOK, error)
+
 	ArkServiceDeleteIntent(params *ArkServiceDeleteIntentParams, opts ...ClientOption) (*ArkServiceDeleteIntentOK, error)
 
 	ArkServiceFinalizeOffchainTx(params *ArkServiceFinalizeOffchainTxParams, opts ...ClientOption) (*ArkServiceFinalizeOffchainTxOK, error)
@@ -65,8 +67,6 @@ type ClientService interface {
 	ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...ClientOption) (*ArkServiceGetInfoOK, error)
 
 	ArkServiceGetTransactionsStream(params *ArkServiceGetTransactionsStreamParams, opts ...ClientOption) (*ArkServiceGetTransactionsStreamOK, error)
-
-	ArkServicePing(params *ArkServicePingParams, opts ...ClientOption) (*ArkServicePingOK, error)
 
 	ArkServiceRegisterInputsForNextRound(params *ArkServiceRegisterInputsForNextRoundParams, opts ...ClientOption) (*ArkServiceRegisterInputsForNextRoundOK, error)
 
@@ -83,6 +83,43 @@ type ClientService interface {
 	ArkServiceSubmitTreeSignatures(params *ArkServiceSubmitTreeSignaturesParams, opts ...ClientOption) (*ArkServiceSubmitTreeSignaturesOK, error)
 
 	SetTransport(transport runtime.ClientTransport)
+}
+
+/*
+ArkServiceConfirmRegistration ark service confirm registration API
+*/
+func (a *Client) ArkServiceConfirmRegistration(params *ArkServiceConfirmRegistrationParams, opts ...ClientOption) (*ArkServiceConfirmRegistrationOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceConfirmRegistrationParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_ConfirmRegistration",
+		Method:             "POST",
+		PathPattern:        "/v1/batch/ack",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceConfirmRegistrationReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceConfirmRegistrationOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceConfirmRegistrationDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
 /*
@@ -304,43 +341,6 @@ func (a *Client) ArkServiceGetTransactionsStream(params *ArkServiceGetTransactio
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceGetTransactionsStreamDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServicePing ark service ping API
-*/
-func (a *Client) ArkServicePing(params *ArkServicePingParams, opts ...ClientOption) (*ArkServicePingOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServicePingParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_Ping",
-		Method:             "GET",
-		PathPattern:        "/v1/round/ping/{requestId}",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServicePingReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServicePingOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServicePingDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

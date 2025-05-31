@@ -18,6 +18,9 @@ import (
 // swagger:model v1GetEventStreamResponse
 type V1GetEventStreamResponse struct {
 
+	// batch started
+	BatchStarted *V1BatchStartedEvent `json:"batchStarted,omitempty"`
+
 	// round failed
 	RoundFailed *V1RoundFailed `json:"roundFailed,omitempty"`
 
@@ -37,6 +40,10 @@ type V1GetEventStreamResponse struct {
 // Validate validates this v1 get event stream response
 func (m *V1GetEventStreamResponse) Validate(formats strfmt.Registry) error {
 	var res []error
+
+	if err := m.validateBatchStarted(formats); err != nil {
+		res = append(res, err)
+	}
 
 	if err := m.validateRoundFailed(formats); err != nil {
 		res = append(res, err)
@@ -61,6 +68,25 @@ func (m *V1GetEventStreamResponse) Validate(formats strfmt.Registry) error {
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *V1GetEventStreamResponse) validateBatchStarted(formats strfmt.Registry) error {
+	if swag.IsZero(m.BatchStarted) { // not required
+		return nil
+	}
+
+	if m.BatchStarted != nil {
+		if err := m.BatchStarted.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batchStarted")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batchStarted")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -163,6 +189,10 @@ func (m *V1GetEventStreamResponse) validateRoundSigningNoncesGenerated(formats s
 func (m *V1GetEventStreamResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.contextValidateBatchStarted(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.contextValidateRoundFailed(ctx, formats); err != nil {
 		res = append(res, err)
 	}
@@ -186,6 +216,27 @@ func (m *V1GetEventStreamResponse) ContextValidate(ctx context.Context, formats 
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *V1GetEventStreamResponse) contextValidateBatchStarted(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.BatchStarted != nil {
+
+		if swag.IsZero(m.BatchStarted) { // not required
+			return nil
+		}
+
+		if err := m.BatchStarted.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batchStarted")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batchStarted")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 

@@ -32,5 +32,12 @@ jobs:
       - name: integration testing
         run: make integrationtest
       
+      - name: Capture arkd logs
+        if: failure()
+        run: |
+          echo "=== Arkd Logs ==="
+          docker logs arkd
+          echo "=== End Arkd Logs ==="
+      
       - name: Tear down
         run: make -C .. docker-stop

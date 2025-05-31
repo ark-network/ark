@@ -23,12 +23,12 @@ type ArkServiceClient interface {
 	RegisterIntent(ctx context.Context, in *RegisterIntentRequest, opts ...grpc.CallOption) (*RegisterIntentResponse, error)
 	DeleteIntent(ctx context.Context, in *DeleteIntentRequest, opts ...grpc.CallOption) (*DeleteIntentResponse, error)
 	RegisterInputsForNextRound(ctx context.Context, in *RegisterInputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterInputsForNextRoundResponse, error)
+	ConfirmRegistration(ctx context.Context, in *ConfirmRegistrationRequest, opts ...grpc.CallOption) (*ConfirmRegistrationResponse, error)
 	RegisterOutputsForNextRound(ctx context.Context, in *RegisterOutputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterOutputsForNextRoundResponse, error)
 	SubmitTreeNonces(ctx context.Context, in *SubmitTreeNoncesRequest, opts ...grpc.CallOption) (*SubmitTreeNoncesResponse, error)
 	SubmitTreeSignatures(ctx context.Context, in *SubmitTreeSignaturesRequest, opts ...grpc.CallOption) (*SubmitTreeSignaturesResponse, error)
 	SubmitSignedForfeitTxs(ctx context.Context, in *SubmitSignedForfeitTxsRequest, opts ...grpc.CallOption) (*SubmitSignedForfeitTxsResponse, error)
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
-	Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error)
 	SubmitOffchainTx(ctx context.Context, in *SubmitOffchainTxRequest, opts ...grpc.CallOption) (*SubmitOffchainTxResponse, error)
 	FinalizeOffchainTx(ctx context.Context, in *FinalizeOffchainTxRequest, opts ...grpc.CallOption) (*FinalizeOffchainTxResponse, error)
 	GetTransactionsStream(ctx context.Context, in *GetTransactionsStreamRequest, opts ...grpc.CallOption) (ArkService_GetTransactionsStreamClient, error)
@@ -81,6 +81,15 @@ func (c *arkServiceClient) DeleteIntent(ctx context.Context, in *DeleteIntentReq
 func (c *arkServiceClient) RegisterInputsForNextRound(ctx context.Context, in *RegisterInputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterInputsForNextRoundResponse, error) {
 	out := new(RegisterInputsForNextRoundResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/RegisterInputsForNextRound", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *arkServiceClient) ConfirmRegistration(ctx context.Context, in *ConfirmRegistrationRequest, opts ...grpc.CallOption) (*ConfirmRegistrationResponse, error) {
+	out := new(ConfirmRegistrationResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/ConfirmRegistration", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -155,15 +164,6 @@ func (x *arkServiceGetEventStreamClient) Recv() (*GetEventStreamResponse, error)
 	return m, nil
 }
 
-func (c *arkServiceClient) Ping(ctx context.Context, in *PingRequest, opts ...grpc.CallOption) (*PingResponse, error) {
-	out := new(PingResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/Ping", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *arkServiceClient) SubmitOffchainTx(ctx context.Context, in *SubmitOffchainTxRequest, opts ...grpc.CallOption) (*SubmitOffchainTxResponse, error) {
 	out := new(SubmitOffchainTxResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SubmitOffchainTx", in, out, opts...)
@@ -223,12 +223,12 @@ type ArkServiceServer interface {
 	RegisterIntent(context.Context, *RegisterIntentRequest) (*RegisterIntentResponse, error)
 	DeleteIntent(context.Context, *DeleteIntentRequest) (*DeleteIntentResponse, error)
 	RegisterInputsForNextRound(context.Context, *RegisterInputsForNextRoundRequest) (*RegisterInputsForNextRoundResponse, error)
+	ConfirmRegistration(context.Context, *ConfirmRegistrationRequest) (*ConfirmRegistrationResponse, error)
 	RegisterOutputsForNextRound(context.Context, *RegisterOutputsForNextRoundRequest) (*RegisterOutputsForNextRoundResponse, error)
 	SubmitTreeNonces(context.Context, *SubmitTreeNoncesRequest) (*SubmitTreeNoncesResponse, error)
 	SubmitTreeSignatures(context.Context, *SubmitTreeSignaturesRequest) (*SubmitTreeSignaturesResponse, error)
 	SubmitSignedForfeitTxs(context.Context, *SubmitSignedForfeitTxsRequest) (*SubmitSignedForfeitTxsResponse, error)
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
-	Ping(context.Context, *PingRequest) (*PingResponse, error)
 	SubmitOffchainTx(context.Context, *SubmitOffchainTxRequest) (*SubmitOffchainTxResponse, error)
 	FinalizeOffchainTx(context.Context, *FinalizeOffchainTxRequest) (*FinalizeOffchainTxResponse, error)
 	GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error
@@ -253,6 +253,9 @@ func (UnimplementedArkServiceServer) DeleteIntent(context.Context, *DeleteIntent
 func (UnimplementedArkServiceServer) RegisterInputsForNextRound(context.Context, *RegisterInputsForNextRoundRequest) (*RegisterInputsForNextRoundResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterInputsForNextRound not implemented")
 }
+func (UnimplementedArkServiceServer) ConfirmRegistration(context.Context, *ConfirmRegistrationRequest) (*ConfirmRegistrationResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfirmRegistration not implemented")
+}
 func (UnimplementedArkServiceServer) RegisterOutputsForNextRound(context.Context, *RegisterOutputsForNextRoundRequest) (*RegisterOutputsForNextRoundResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterOutputsForNextRound not implemented")
 }
@@ -267,9 +270,6 @@ func (UnimplementedArkServiceServer) SubmitSignedForfeitTxs(context.Context, *Su
 }
 func (UnimplementedArkServiceServer) GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetEventStream not implemented")
-}
-func (UnimplementedArkServiceServer) Ping(context.Context, *PingRequest) (*PingResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method Ping not implemented")
 }
 func (UnimplementedArkServiceServer) SubmitOffchainTx(context.Context, *SubmitOffchainTxRequest) (*SubmitOffchainTxResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitOffchainTx not implemented")
@@ -382,6 +382,24 @@ func _ArkService_RegisterInputsForNextRound_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ArkService_ConfirmRegistration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmRegistrationRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ArkServiceServer).ConfirmRegistration(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.ArkService/ConfirmRegistration",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ArkServiceServer).ConfirmRegistration(ctx, req.(*ConfirmRegistrationRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _ArkService_RegisterOutputsForNextRound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RegisterOutputsForNextRoundRequest)
 	if err := dec(in); err != nil {
@@ -475,24 +493,6 @@ func (x *arkServiceGetEventStreamServer) Send(m *GetEventStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _ArkService_Ping_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(PingRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).Ping(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/Ping",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).Ping(ctx, req.(*PingRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ArkService_SubmitOffchainTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(SubmitOffchainTxRequest)
 	if err := dec(in); err != nil {
@@ -578,6 +578,10 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ArkService_RegisterInputsForNextRound_Handler,
 		},
 		{
+			MethodName: "ConfirmRegistration",
+			Handler:    _ArkService_ConfirmRegistration_Handler,
+		},
+		{
 			MethodName: "RegisterOutputsForNextRound",
 			Handler:    _ArkService_RegisterOutputsForNextRound_Handler,
 		},
@@ -592,10 +596,6 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SubmitSignedForfeitTxs",
 			Handler:    _ArkService_SubmitSignedForfeitTxs_Handler,
-		},
-		{
-			MethodName: "Ping",
-			Handler:    _ArkService_Ping_Handler,
 		},
 		{
 			MethodName: "SubmitOffchainTx",

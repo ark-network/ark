@@ -511,10 +511,7 @@ func (w *bitcoinWallet) getArkAddresses(
 	boardingVtxoScript := tree.NewDefaultVtxoScript(
 		w.walletData.PubKey,
 		data.ServerPubKey,
-		common.RelativeLocktime{
-			Type:  data.BoardingExitDelay.Type,
-			Value: data.BoardingExitDelay.Value,
-		},
+		data.BoardingExitDelay,
 	)
 
 	boardingTapKey, _, err := boardingVtxoScript.TapTree()
