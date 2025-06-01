@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/hdkeychain"
@@ -116,7 +115,7 @@ func (s *service) signPsbt(packet *psbt.Packet, inputsToSign []int) ([]uint32, e
 
 			// if arkscript is present, the key must be tweaked before signing
 			// so we signal to btcwallet using the unknown PSBT field
-			arkscript := bitcointree.GetArkScript(*in)
+			arkscript := tree.GetArkScript(*in)
 			if len(arkscript) > 0 {
 				packet.Inputs[idx].Unknowns = append(packet.Inputs[idx].Unknowns, &psbt.Unknown{
 					Key:   PsbtKeyTypeInputSignatureTweakSingle,

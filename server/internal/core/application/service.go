@@ -324,7 +324,7 @@ func (s *covenantlessService) SubmitRedeemTx(
 			return "", "", fmt.Errorf("failed to parse vtxo script: %s", err)
 		}
 
-		arkScript := bitcointree.GetArkScript(input)
+		arkScript := tree.GetArkScript(input)
 
 		// validate the vtxo script
 		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay, arkScript); err != nil {
@@ -737,7 +737,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 				if err := vtxoScript.Validate(s.pubkey, common.RelativeLocktime{
 					Type:  s.boardingExitDelay.Type,
 					Value: s.boardingExitDelay.Value,
-				}); err != nil {
+				}, nil); err != nil {
 					return "", fmt.Errorf("invalid vtxo script: %s", err)
 				}
 
@@ -822,7 +822,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 		}
 
 		// validate the vtxo script
-		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay, nil); err != nil {
 			return "", fmt.Errorf("invalid vtxo script: %s", err)
 		}
 
@@ -861,10 +861,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 	}
 
 	if bip322signature.ContainsOutputs() {
-		if err != nil {
-			return "", fmt.Errorf("unable to verify outputs amount, failed to get dust: %s", err)
-		}
-
 		hasOffChainReceiver := false
 		receivers := make([]domain.Receiver, 0)
 
