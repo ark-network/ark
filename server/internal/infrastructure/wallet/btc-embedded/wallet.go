@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -706,7 +705,7 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 
 				switch closure.(type) {
 				case *tree.ConditionMultisigClosure:
-					witness, err := bitcointree.GetConditionWitness(in)
+					witness, err := tree.GetConditionWitness(in)
 					if err != nil {
 						return "", err
 					}

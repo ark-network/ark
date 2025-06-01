@@ -1,0 +1,1008 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "ark/v1/indexer.proto",
+    "version": "version not set"
+  },
+  "tags": [
+    {
+      "name": "IndexerService"
+    }
+  ],
+  "consumes": [
+    "application/json"
+  ],
+  "produces": [
+    "application/json"
+  ],
+  "paths": {
+    "/v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/tree": {
+      "get": {
+        "operationId": "IndexerService_GetVtxoTree",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetVtxoTreeResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "batchOutpoint.txid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "batchOutpoint.vout",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/tree/leaves": {
+      "get": {
+        "operationId": "IndexerService_GetVtxoTreeLeaves",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetVtxoTreeLeavesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "batchOutpoint.txid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "batchOutpoint.vout",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/commitmentTx/{txid}": {
+      "get": {
+        "operationId": "IndexerService_GetCommitmentTx",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetCommitmentTxResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "txid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/commitmentTx/{txid}/connectors": {
+      "get": {
+        "operationId": "IndexerService_GetConnectors",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetConnectorsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "txid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/commitmentTx/{txid}/forfeitTxs": {
+      "get": {
+        "operationId": "IndexerService_GetForfeitTxs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetForfeitTxsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "txid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/commitmentTx/{txid}/leaves": {
+      "get": {
+        "operationId": "IndexerService_GetCommitmentTxLeaves",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetCommitmentTxLeavesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "txid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/commitmentTx/{txid}/swept": {
+      "get": {
+        "operationId": "IndexerService_GetSweptCommitmentTx",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetSweptCommitmentTxResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "txid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/getVtxos/{addresses}": {
+      "get": {
+        "operationId": "IndexerService_GetVtxos",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetVtxosResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "addresses",
+            "in": "path",
+            "required": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "csv",
+            "minItems": 1
+          },
+          {
+            "name": "spendableOnly",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "spentOnly",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/getVtxosByOutpoint/{outpoints}": {
+      "get": {
+        "operationId": "IndexerService_GetVtxosByOutpoint",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetVtxosByOutpointResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "outpoints",
+            "in": "path",
+            "required": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "csv",
+            "minItems": 1
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/history/{address}": {
+      "get": {
+        "operationId": "IndexerService_GetTransactionHistory",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetTransactionHistoryResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "address",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "startTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "endTime",
+            "in": "query",
+            "required": false,
+            "type": "string",
+            "format": "int64"
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/virtualTx/{txids}": {
+      "get": {
+        "operationId": "IndexerService_GetVirtualTxs",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetVirtualTxsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "txids",
+            "in": "path",
+            "required": true,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "csv",
+            "minItems": 1
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/vtxo/{outpoint.txid}/{outpoint.vout}/chain": {
+      "get": {
+        "operationId": "IndexerService_GetVtxoChain",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetVtxoChainResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "outpoint.txid",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "name": "outpoint.vout",
+            "in": "path",
+            "required": true,
+            "type": "integer",
+            "format": "int64"
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    }
+  },
+  "definitions": {
+    "protobufAny": {
+      "type": "object",
+      "properties": {
+        "@type": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": {}
+    },
+    "rpcStatus": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/protobufAny"
+          }
+        }
+      }
+    },
+    "v1GetCommitmentTxLeavesResponse": {
+      "type": "object",
+      "properties": {
+        "leaves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerOutpoint"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1GetCommitmentTxResponse": {
+      "type": "object",
+      "properties": {
+        "startedAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "endedAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "batches": {
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/definitions/v1IndexerBatch"
+          }
+        },
+        "totalInputAmount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "totalInputVtxos": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "totalOutputAmount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "totalOutputVtxos": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1GetConnectorsResponse": {
+      "type": "object",
+      "properties": {
+        "connectors": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerNode"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1GetForfeitTxsResponse": {
+      "type": "object",
+      "properties": {
+        "txids": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1GetSweptCommitmentTxResponse": {
+      "type": "object",
+      "properties": {
+        "sweptBy": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "v1GetTransactionHistoryResponse": {
+      "type": "object",
+      "properties": {
+        "history": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerTxHistoryRecord"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1GetVirtualTxsResponse": {
+      "type": "object",
+      "properties": {
+        "txs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1GetVtxoChainResponse": {
+      "type": "object",
+      "properties": {
+        "chain": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerChain"
+          }
+        },
+        "depth": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "rootCommitmentTxid": {
+          "type": "string"
+        },
+        "page": {
+          "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1GetVtxoTreeLeavesResponse": {
+      "type": "object",
+      "properties": {
+        "leaves": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerOutpoint"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1GetVtxoTreeResponse": {
+      "type": "object",
+      "properties": {
+        "vtxoTree": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerNode"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1GetVtxosByOutpointResponse": {
+      "type": "object",
+      "properties": {
+        "vtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerVtxo"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1GetVtxosResponse": {
+      "type": "object",
+      "properties": {
+        "vtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerVtxo"
+          }
+        },
+        "page": {
+          "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1IndexerBatch": {
+      "type": "object",
+      "properties": {
+        "totalOutputAmount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "totalOutputVtxos": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "swept": {
+          "type": "boolean"
+        }
+      }
+    },
+    "v1IndexerChain": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "spends": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerChainedTx"
+          }
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "int64"
+        }
+      }
+    },
+    "v1IndexerChainedTx": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/v1IndexerChainedTxType"
+        }
+      }
+    },
+    "v1IndexerChainedTxType": {
+      "type": "string",
+      "enum": [
+        "INDEXER_CHAINED_TX_TYPE_UNSPECIFIED",
+        "INDEXER_CHAINED_TX_TYPE_VIRTUAL",
+        "INDEXER_CHAINED_TX_TYPE_COMMITMENT"
+      ],
+      "default": "INDEXER_CHAINED_TX_TYPE_UNSPECIFIED"
+    },
+    "v1IndexerNode": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "parentTxid": {
+          "type": "string"
+        },
+        "level": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "levelIndex": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1IndexerOutpoint": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
+        }
+      }
+    },
+    "v1IndexerPageRequest": {
+      "type": "object",
+      "properties": {
+        "size": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "index": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1IndexerPageResponse": {
+      "type": "object",
+      "properties": {
+        "current": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "next": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "total": {
+          "type": "integer",
+          "format": "int32"
+        }
+      }
+    },
+    "v1IndexerTxHistoryRecord": {
+      "type": "object",
+      "properties": {
+        "commitmentTxid": {
+          "type": "string"
+        },
+        "virtualTxid": {
+          "type": "string"
+        },
+        "type": {
+          "$ref": "#/definitions/v1IndexerTxType"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "isSettled": {
+          "type": "boolean"
+        },
+        "settledBy": {
+          "type": "string"
+        }
+      }
+    },
+    "v1IndexerTxType": {
+      "type": "string",
+      "enum": [
+        "INDEXER_TX_TYPE_UNSPECIFIED",
+        "INDEXER_TX_TYPE_RECEIVED",
+        "INDEXER_TX_TYPE_SENT"
+      ],
+      "default": "INDEXER_TX_TYPE_UNSPECIFIED"
+    },
+    "v1IndexerVtxo": {
+      "type": "object",
+      "properties": {
+        "outpoint": {
+          "$ref": "#/definitions/v1IndexerOutpoint"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "expiresAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
+        },
+        "script": {
+          "type": "string"
+        },
+        "isLeaf": {
+          "type": "boolean"
+        },
+        "isSwept": {
+          "type": "boolean"
+        },
+        "isSpent": {
+          "type": "boolean"
+        },
+        "spentBy": {
+          "type": "string"
+        },
+        "commitmentTxid": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

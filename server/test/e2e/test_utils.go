@@ -7,9 +7,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-
-	"github.com/nbd-wtf/go-nostr"
-	"github.com/nbd-wtf/go-nostr/nip19"
 )
 
 const (
@@ -37,23 +34,12 @@ type ArkReceive struct {
 }
 
 func GenerateBlock() error {
-	if _, err := RunCommand("nigiri", "rpc", "--liquid", "generatetoaddress", "1", "el1qqwk722tghgkgmh3r2ph4d2apwj0dy9xnzlenzklx8jg3z299fpaw56trre9gpk6wmw0u4qycajqeva3t7lzp7wnacvwxha59r"); err != nil {
-		return err
-	}
-	if _, err := RunCommand("nigiri", "rpc", "generatetoaddress", "1", "bcrt1qe8eelqalnch946nzhefd5ajhgl2afjw5aegc59"); err != nil {
-		return err
-	}
-	return nil
+	_, err := RunCommand("nigiri", "rpc", "generatetoaddress", "1", "bcrt1qe8eelqalnch946nzhefd5ajhgl2afjw5aegc59")
+	return err
 }
 
-func GetBlockHeight(isLiquid bool) (uint32, error) {
-	var out string
-	var err error
-	if isLiquid {
-		out, err = RunCommand("nigiri", "rpc", "--liquid", "getblockcount")
-	} else {
-		out, err = RunCommand("nigiri", "rpc", "getblockcount")
-	}
+func GetBlockHeight() (uint32, error) {
+	out, err := RunCommand("nigiri", "rpc", "getblockcount")
 	if err != nil {
 		return 0, err
 	}
@@ -129,23 +115,4 @@ func RunCommand(name string, arg ...string) (string, error) {
 func newCommand(name string, arg ...string) *exec.Cmd {
 	cmd := exec.Command(name, arg...)
 	return cmd
-}
-
-// nostr
-// use nak utils https://github.com/fiatjaf/nak
-
-func GetNostrKeys() (secretKey, pubkey string, npub string, err error) {
-	secretKey = NostrTestingSecretKey
-
-	pubkey, err = nostr.GetPublicKey(secretKey)
-	if err != nil {
-		return
-	}
-
-	npub, err = nip19.EncodePublicKey(pubkey)
-	if err != nil {
-		return
-	}
-
-	return
 }

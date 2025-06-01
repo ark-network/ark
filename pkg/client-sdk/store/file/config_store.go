@@ -60,6 +60,7 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 		VtxoTreeExpiry:             fmt.Sprintf("%d", data.VtxoTreeExpiry.Value),
 		RoundInterval:              fmt.Sprintf("%d", data.RoundInterval),
 		UnilateralExitDelay:        fmt.Sprintf("%d", data.UnilateralExitDelay.Value),
+		BoardingExitDelay:          fmt.Sprintf("%d", data.BoardingExitDelay.Value),
 		Dust:                       fmt.Sprintf("%d", data.Dust),
 		BoardingDescriptorTemplate: data.BoardingDescriptorTemplate,
 		ExplorerURL:                data.ExplorerURL,
@@ -69,6 +70,10 @@ func (s *configStore) AddData(ctx context.Context, data types.Config) error {
 		MarketHourEndTime:          fmt.Sprintf("%d", data.MarketHourEndTime),
 		MarketHourPeriod:           fmt.Sprintf("%d", data.MarketHourPeriod),
 		MarketHourRoundInterval:    fmt.Sprintf("%d", data.MarketHourRoundInterval),
+		UtxoMinAmount:              fmt.Sprintf("%d", data.UtxoMinAmount),
+		UtxoMaxAmount:              fmt.Sprintf("%d", data.UtxoMaxAmount),
+		VtxoMinAmount:              fmt.Sprintf("%d", data.VtxoMinAmount),
+		VtxoMaxAmount:              fmt.Sprintf("%d", data.VtxoMaxAmount),
 	}
 
 	if err := s.write(sd); err != nil {

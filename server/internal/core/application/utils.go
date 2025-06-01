@@ -12,8 +12,6 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
-	"github.com/nbd-wtf/go-nostr"
-	"github.com/nbd-wtf/go-nostr/nip19"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -29,6 +27,7 @@ type timedTxRequest struct {
 	timestamp      time.Time
 	pingTimestamp  time.Time
 	musig2Data     *tree.Musig2
+	recoveredVtxos []domain.Vtxo
 }
 
 type txRequestsQueue struct {
@@ -73,13 +72,15 @@ func (m *txRequestsQueue) pushWithNotes(request domain.TxRequest, notes []note.N
 		}
 	}
 
-	m.requests[request.Id] = &timedTxRequest{request, make([]ports.BoardingInput, 0), notes, time.Now(), time.Time{}, nil}
+	m.requests[request.Id] = &timedTxRequest{request, make([]ports.BoardingInput, 0), notes, time.Now(), time.Time{}, nil, make([]domain.Vtxo, 0)}
 	return nil
 }
 
 func (m *txRequestsQueue) push(
 	request domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
+	recoveredVtxos []domain.Vtxo,
+	musig2Data *tree.Musig2,
 ) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -91,8 +92,8 @@ func (m *txRequestsQueue) push(
 	for _, input := range request.Inputs {
 		for _, pay := range m.requests {
 			for _, pInput := range pay.Inputs {
-				if input.VtxoKey.Txid == pInput.VtxoKey.Txid && input.VtxoKey.VOut == pInput.VtxoKey.VOut {
-					return fmt.Errorf("duplicated input, %s:%d already used by tx request %s", input.VtxoKey.Txid, input.VtxoKey.VOut, pay.Id)
+				if input.Txid == pInput.Txid && input.VOut == pInput.VOut {
+					return fmt.Errorf("duplicated input, %s:%d already used by tx request %s", input.Txid, input.VOut, pay.Id)
 				}
 			}
 		}
@@ -108,12 +109,22 @@ func (m *txRequestsQueue) push(
 		}
 	}
 
+	for _, vtxo := range recoveredVtxos {
+		for _, request := range m.requests {
+			for _, pVtxo := range request.recoveredVtxos {
+				if vtxo.Txid == pVtxo.Txid && vtxo.VOut == pVtxo.VOut {
+					return fmt.Errorf("duplicated vtxo recovery, %s:%d already used by tx request %s", vtxo.Txid, vtxo.VOut, request.Id)
+				}
+			}
+		}
+	}
+
 	now := time.Now()
-	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, make([]note.Note, 0), now, now, nil}
+	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, make([]note.Note, 0), now, now, musig2Data, recoveredVtxos}
 	return nil
 }
 
-func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []note.Note, []*tree.Musig2) {
+func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []note.Note, []*tree.Musig2, []domain.Vtxo) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -152,14 +163,16 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 	boardingInputs := make([]ports.BoardingInput, 0)
 	notes := make([]note.Note, 0)
 	musig2Data := make([]*tree.Musig2, 0)
+	recoveredVtxos := make([]domain.Vtxo, 0)
 	for _, p := range requestsByTime[:num] {
 		boardingInputs = append(boardingInputs, p.boardingInputs...)
 		requests = append(requests, p.TxRequest)
 		musig2Data = append(musig2Data, p.musig2Data)
 		notes = append(notes, p.notes...)
+		recoveredVtxos = append(recoveredVtxos, p.recoveredVtxos...)
 		delete(m.requests, p.Id)
 	}
-	return requests, boardingInputs, notes, musig2Data
+	return requests, boardingInputs, notes, musig2Data, recoveredVtxos
 }
 
 func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musig2) error {
@@ -171,7 +184,7 @@ func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musi
 		return errTxRequestNotFound{request.Id}
 	}
 
-	// sum inputs = vtxos + boarding utxos + notes
+	// sum inputs = vtxos + boarding utxos + notes + recovered vtxos
 	sumOfInputs := uint64(0)
 	for _, input := range request.Inputs {
 		sumOfInputs += input.Amount
@@ -183,6 +196,10 @@ func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musi
 
 	for _, note := range r.notes {
 		sumOfInputs += uint64(note.Value)
+	}
+
+	for _, vtxo := range r.recoveredVtxos {
+		sumOfInputs += vtxo.Amount
 	}
 
 	// sum outputs = receivers VTXOs
@@ -350,6 +367,9 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 		return nil
 	}
 
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
 	if len(m.vtxos) == 0 || len(m.connectors) == 0 {
 		return fmt.Errorf("forfeit txs map not initialized")
 	}
@@ -359,9 +379,6 @@ func (m *forfeitTxsMap) sign(txs []string) error {
 	if err != nil {
 		return err
 	}
-
-	m.lock.Lock()
-	defer m.lock.Unlock()
 
 	for vtxoKey, txs := range validTxs {
 		if _, ok := m.forfeitTxs[vtxoKey]; !ok {
@@ -409,6 +426,54 @@ func (m *forfeitTxsMap) allSigned() bool {
 	}
 
 	return true
+}
+
+type outpointMap struct {
+	lock      *sync.RWMutex
+	outpoints map[string]struct{}
+}
+
+func newOutpointMap() *outpointMap {
+	return &outpointMap{
+		lock:      &sync.RWMutex{},
+		outpoints: make(map[string]struct{}),
+	}
+}
+
+func (r *outpointMap) add(outpoints []domain.VtxoKey) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	for _, out := range outpoints {
+		r.outpoints[out.String()] = struct{}{}
+	}
+}
+
+func (r *outpointMap) remove(outpoints []domain.VtxoKey) {
+	r.lock.Lock()
+	defer r.lock.Unlock()
+	for _, out := range outpoints {
+		delete(r.outpoints, out.String())
+	}
+}
+
+func (r *outpointMap) includes(outpoint domain.VtxoKey) bool {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+	_, exists := r.outpoints[outpoint.String()]
+	return exists
+}
+
+func (r *outpointMap) includesAny(outpoints []domain.VtxoKey) (bool, string) {
+	r.lock.RLock()
+	defer r.lock.RUnlock()
+
+	for _, out := range outpoints {
+		if _, exists := r.outpoints[out.String()]; exists {
+			return true, out.String()
+		}
+	}
+
+	return false, ""
 }
 
 // onchainOutputs iterates over all the nodes' outputs in the vtxo tree and checks their onchain state
@@ -494,81 +559,4 @@ func getSpentVtxos(requests map[string]domain.TxRequest) []domain.VtxoKey {
 		}
 	}
 	return vtxos
-}
-
-func validateProofs(ctx context.Context, vtxoRepo domain.VtxoRepository, proofs []SignedVtxoOutpoint) error {
-	for _, signedVtxo := range proofs {
-		vtxos, err := vtxoRepo.GetVtxos(ctx, []domain.VtxoKey{signedVtxo.Outpoint})
-		if err != nil {
-			return fmt.Errorf("vtxo not found: %s (%s)", signedVtxo.Outpoint, err)
-		}
-
-		if len(vtxos) < 1 {
-			return fmt.Errorf("vtxo not found: %s", signedVtxo.Outpoint)
-		}
-
-		vtxo := vtxos[0]
-
-		if err := signedVtxo.Proof.validate(vtxo); err != nil {
-			return fmt.Errorf("invalid proof for vtxo %s (%s)", signedVtxo.Outpoint, err)
-		}
-	}
-
-	return nil
-}
-
-// nip19toNostrProfile decodes a NIP-19 string and returns a nostr profile
-// if nprofile => returns nostrRecipient
-// if npub => craft nprofile from npub and defaultRelays
-func nip19toNostrProfile(nostrRecipient string, defaultRelays []string) (string, error) {
-	prefix, result, err := nip19.Decode(nostrRecipient)
-	if err != nil {
-		return "", fmt.Errorf("failed to decode NIP-19 string: %s", err)
-	}
-
-	var nprofileRecipient string
-
-	switch prefix {
-	case "nprofile":
-		recipient, ok := result.(nostr.ProfilePointer)
-		if !ok {
-			return "", fmt.Errorf("invalid NIP-19 result: %v", result)
-		}
-
-		// validate public key
-		if !nostr.IsValidPublicKey(recipient.PublicKey) {
-			return "", fmt.Errorf("invalid nostr public key: %s", recipient.PublicKey)
-		}
-
-		// validate relays
-		if len(recipient.Relays) == 0 {
-			return "", fmt.Errorf("invalid nostr profile: at least one relay is required")
-		}
-
-		for _, relay := range recipient.Relays {
-			if !nostr.IsValidRelayURL(relay) {
-				return "", fmt.Errorf("invalid relay URL: %s", relay)
-			}
-		}
-
-		nprofileRecipient = nostrRecipient
-	case "npub":
-		recipientPubkey, ok := result.(string)
-		if !ok {
-			return "", fmt.Errorf("invalid NIP-19 result: %v", result)
-		}
-
-		nprofileRecipient, err = nip19.EncodeProfile(recipientPubkey, defaultRelays)
-		if err != nil {
-			return "", fmt.Errorf("failed to encode nostr profile: %s", err)
-		}
-	default:
-		return "", fmt.Errorf("invalid NIP-19 prefix: %s", prefix)
-	}
-
-	if nprofileRecipient == "" {
-		return "", fmt.Errorf("invalid nostr recipient")
-	}
-
-	return nprofileRecipient, nil
 }

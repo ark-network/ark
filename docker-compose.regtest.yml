@@ -1,47 +1,24 @@
 services:
-  oceand:
-    container_name: oceand
-    image: ghcr.io/vulpemventures/oceand:latest
-    restart: unless-stopped
-    user: 0:0
-    environment:
-      - OCEAN_LOG_LEVEL=5
-      - OCEAN_NO_TLS=true
-      - OCEAN_NO_PROFILER=true
-      - OCEAN_ELECTRUM_URL=tcp://electrs-liquid:50001
-      - OCEAN_NETWORK=regtest
-      - OCEAN_UTXO_EXPIRY_DURATION_IN_SECONDS=60
-      - OCEAN_DB_TYPE=badger
-      - OCEAN_DATADIR=/app/data
-    ports:
-      - "18000:18000"
-    volumes:
-      - type: tmpfs
-        target: /app/data
   arkd:
-    container_name: arkd
+    container_name: arkd 
     build: 
       context: .
       dockerfile: Dockerfile
     restart: unless-stopped
-    depends_on:
-      - oceand
     environment:
-      - ARK_WALLET_ADDR=oceand:18000
       - ARK_ROUND_INTERVAL=10
-      - ARK_NETWORK=liquidregtest
+      - ARK_NETWORK=regtest
       - ARK_LOG_LEVEL=5
-      - ARK_ESPLORA_URL=http://chopsticks-liquid:3000
       - ARK_VTXO_TREE_EXPIRY=20
+      - ARK_TX_BUILDER_TYPE=covenantless
+      - ARK_ESPLORA_URL=http://chopsticks:3000
+      - ARK_NEUTRINO_PEER=bitcoin:18444
       - ARK_SCHEDULER_TYPE=block
-      - ARK_DB_TYPE=sqlite
-      - ARK_TX_BUILDER_TYPE=covenant
-      - ARK_PORT=6060
       - ARK_NO_TLS=true
       - ARK_NO_MACAROONS=true
       - ARK_DATADIR=/app/data
     ports:
-      - "6060:6060"
+      - "7070:7070"
     volumes:
       - type: tmpfs
         target: /app/data

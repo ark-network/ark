@@ -6,7 +6,6 @@ package browser
 import (
 	"context"
 	"fmt"
-	"strings"
 	"syscall/js"
 
 	arksdk "github.com/ark-network/ark/pkg/client-sdk"
@@ -40,7 +39,7 @@ func init() {
 	js.Global().Set("log", LogWrapper())
 	js.Global().Set("dump", DumpWrapper())
 	js.Global().Set("redeemNotes", RedeemNotesWrapper())
-	js.Global().Set("setNostrNotificationRecipient", SetNostrNotificationRecipientWrapper())
+	js.Global().Set("recoverSweptVtxos", RecoverSweptVtxosWrapper())
 	js.Global().Set("listVtxos", ListVtxosWrapper())
 	js.Global().Set("signTransaction", SignTransactionWrapper())
 	js.Global().Set("notifyIncomingFunds", NotifyIncomingFundsWrapper())
@@ -57,42 +56,7 @@ func init() {
 	js.Global().Set("getVersion", GetVersionWrapper())
 }
 
-func NewCovenantClient(
-	ctx context.Context, storeSvc types.Store,
-) error {
-	var err error
-
-	data, err := storeSvc.ConfigStore().GetData(ctx)
-	if err != nil {
-		return err
-	}
-
-	if data == nil {
-		arkSdkClient, err = arksdk.NewCovenantClient(storeSvc)
-	} else {
-		var walletSvc wallet.WalletService
-		switch data.WalletType {
-		case arksdk.SingleKeyWallet:
-			walletSvc, err = getSingleKeyWallet(storeSvc.ConfigStore(), data.Network.Name)
-			if err != nil {
-				return err
-			}
-		// TODO: Support HD wallet
-		default:
-			return fmt.Errorf("unknown wallet type")
-		}
-		arkSdkClient, err = arksdk.LoadCovenantClientWithWallet(storeSvc, walletSvc)
-	}
-	if err != nil {
-		js.Global().Get("console").Call("error", err.Error())
-		return err
-	}
-	store = storeSvc
-
-	select {}
-}
-
-func NewCovenantlessClient(
+func NewArkClient(
 	ctx context.Context, storeSvc types.Store, v string,
 ) error {
 	var err error
@@ -103,12 +67,12 @@ func NewCovenantlessClient(
 	}
 
 	if data == nil {
-		arkSdkClient, err = arksdk.NewCovenantlessClient(storeSvc)
+		arkSdkClient, err = arksdk.NewArkClient(storeSvc)
 	} else {
 		var walletSvc wallet.WalletService
 		switch data.WalletType {
 		case arksdk.SingleKeyWallet:
-			walletSvc, err = getSingleKeyWallet(storeSvc.ConfigStore(), data.Network.Name)
+			walletSvc, err = getSingleKeyWallet(storeSvc.ConfigStore())
 			if err != nil {
 				return err
 			}
@@ -116,7 +80,7 @@ func NewCovenantlessClient(
 		default:
 			return fmt.Errorf("unknown wallet type")
 		}
-		arkSdkClient, err = arksdk.LoadCovenantlessClientWithWallet(storeSvc, walletSvc)
+		arkSdkClient, err = arksdk.LoadArkClientWithWallet(storeSvc, walletSvc)
 	}
 	if err != nil {
 		js.Global().Get("console").Call("error", err.Error())
@@ -136,15 +100,10 @@ func getWalletStore(storeType string) (walletstore.WalletStore, error) {
 	return nil, fmt.Errorf("unknown wallet store type")
 }
 
-func getSingleKeyWallet(
-	configStore types.ConfigStore, network string,
-) (wallet.WalletService, error) {
+func getSingleKeyWallet(configStore types.ConfigStore) (wallet.WalletService, error) {
 	walletStore, err := getWalletStore(configStore.GetType())
 	if err != nil {
 		return nil, err
-	}
-	if strings.Contains(network, "liquid") {
-		return singlekeywallet.NewLiquidWallet(configStore, walletStore)
 	}
 	return singlekeywallet.NewBitcoinWallet(configStore, walletStore)
 }

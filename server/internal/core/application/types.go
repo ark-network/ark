@@ -4,6 +4,7 @@ import (
 	"context"
 	"time"
 
+	"github.com/ark-network/ark/common/bip322"
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
@@ -15,6 +16,7 @@ type Service interface {
 	Start() error
 	Stop()
 	SpendNotes(ctx context.Context, notes []note.Note) (string, error)
+	RegisterIntent(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) (string, error)
 	SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error)
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
@@ -42,8 +44,6 @@ type Service interface {
 		pubkey *secp256k1.PublicKey, signatures string,
 	) error
 	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
-	SetNostrRecipient(ctx context.Context, nostrRecipient string, signedVtxoOutpoints []SignedVtxoOutpoint) error
-	DeleteNostrRecipient(ctx context.Context, signedVtxoOutpoints []SignedVtxoOutpoint) error
 	GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error)
 	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
 	GetTxRequestQueue(ctx context.Context, requestIds ...string) ([]TxRequestInfo, error)
@@ -54,6 +54,7 @@ type ServiceInfo struct {
 	PubKey              string
 	VtxoTreeExpiry      int64
 	UnilateralExitDelay int64
+	BoardingExitDelay   int64
 	RoundInterval       int64
 	Network             string
 	Dust                uint64
@@ -76,11 +77,6 @@ type WalletStatus struct {
 	IsInitialized bool
 	IsUnlocked    bool
 	IsSynced      bool
-}
-
-type SignedVtxoOutpoint struct {
-	Outpoint domain.VtxoKey
-	Proof    OwnershipProof
 }
 
 type txOutpoint struct {
@@ -143,4 +139,127 @@ type TxRequestInfo struct {
 	SigningType    string
 	Cosigners      []string
 	LastPing       time.Time
+}
+
+type VtxoChainResp struct {
+	Chain              []ChainWithExpiry
+	Page               PageResp
+	Depth              int32
+	RootCommitmentTxid string
+}
+
+type VOut int
+
+type CommitmentTxResp struct {
+	StartedAt         int64
+	EndAt             int64
+	Batches           map[VOut]Batch
+	TotalInputAmount  uint64
+	TotalInputtVtxos  int32
+	TotalOutputAmount uint64
+	TotalOutputVtxos  int32
+}
+
+type CommitmentTxLeavesResp struct {
+	Leaves []domain.Vtxo
+	Page   PageResp
+}
+
+type Batch struct {
+	TotalOutputAmount uint64
+	TotalOutputVtxos  int32
+	ExpiresAt         int64
+	Swept             bool
+}
+
+type VtxoTreeResp struct {
+	Nodes []Node
+	Page  PageResp
+}
+
+type VtxoTreeLeavesResp struct {
+	Leaves []domain.Vtxo
+	Page   PageResp
+}
+
+type Node struct {
+	Txid       string
+	Tx         string
+	ParentTxid string
+	Level      int32
+	LevelIndex int32
+}
+
+type ForfeitTxsResp struct {
+	Txs  []string
+	Page PageResp
+}
+
+type ConnectorResp struct {
+	Connectors []Node
+	Page       PageResp
+}
+
+type GetVtxosResp struct {
+	Vtxos []domain.Vtxo
+	Page  PageResp
+}
+
+type VirtualTxsResp struct {
+	Transactions []string
+	Page         PageResp
+}
+
+type SweptCommitmentTxResp struct {
+	SweptBy []string
+}
+
+type Outpoint struct {
+	Txid string
+	Vout uint32
+}
+
+type TxType int
+
+const (
+	TxUnspecified TxType = iota
+	TxReceived
+	TxSent
+)
+
+type TxHistoryResp struct {
+	Records []TxHistoryRecord
+	Page    PageResp
+}
+
+type TxHistoryRecord struct {
+	CommitmentTxid string
+	VirtualTxid    string
+	Type           TxType
+	Amount         uint64
+	CreatedAt      time.Time
+	Settled        bool
+	SettledBy      string
+}
+
+type Page struct {
+	PageSize int32
+	PageNum  int32
+}
+
+type PageResp struct {
+	Current int32
+	Next    int32
+	Total   int32
+}
+
+type ChainTx struct {
+	Txid string
+	Type string
+}
+
+type ChainWithExpiry struct {
+	Txid      string
+	Txs       []ChainTx
+	ExpiresAt int64
 }

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -13,13 +14,10 @@ import (
 	"github.com/ark-network/ark/server/internal/infrastructure/db"
 	blockscheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/block"
 	timescheduler "github.com/ark-network/ark/server/internal/infrastructure/scheduler/gocron"
-	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenant"
-	cltxbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
+	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
 	envunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/env"
 	fileunlocker "github.com/ark-network/ark/server/internal/infrastructure/unlocker/file"
 	btcwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/btc-embedded"
-	liquidwallet "github.com/ark-network/ark/server/internal/infrastructure/wallet/liquid-standalone"
-	"github.com/nbd-wtf/go-nostr"
 	log "github.com/sirupsen/logrus"
 	"github.com/spf13/viper"
 )
@@ -39,7 +37,6 @@ var (
 		"block":  {},
 	}
 	supportedTxBuilders = supportedType{
-		"covenant":     {},
 		"covenantless": {},
 	}
 	supportedUnlockers = supportedType{
@@ -52,9 +49,6 @@ var (
 		common.BitcoinSigNet.Name:    {},
 		common.BitcoinMutinyNet.Name: {},
 		common.BitcoinRegTest.Name:   {},
-		common.Liquid.Name:           {},
-		common.LiquidTestNet.Name:    {},
-		common.LiquidRegTest.Name:    {},
 	}
 )
 
@@ -80,7 +74,6 @@ type Config struct {
 	VtxoTreeExpiry      common.RelativeLocktime
 	UnilateralExitDelay common.RelativeLocktime
 	BoardingExitDelay   common.RelativeLocktime
-	NostrDefaultRelays  []string
 	NoteUriPrefix       string
 
 	MarketHourStartTime     time.Time
@@ -136,7 +129,6 @@ var (
 	BoardingExitDelay   = "BOARDING_EXIT_DELAY"
 	EsploraURL          = "ESPLORA_URL"
 	NeutrinoPeer        = "NEUTRINO_PEER"
-	NostrDefaultRelays  = "NOSTR_DEFAULT_RELAYS"
 	// #nosec G101
 	BitcoindRpcUser = "BITCOIND_RPC_USER"
 	// #nosec G101
@@ -179,7 +171,6 @@ var (
 	defaultBoardingExitDelay   = 7776000 // 3 months
 	defaultNoMacaroons         = false
 	defaultNoTLS               = true
-	defaultNostrDefaultRelays  = []string{"wss://relay.primal.net", "wss://relay.damus.io"}
 	defaultMarketHourStartTime = time.Now()
 	defaultMarketHourEndTime   = defaultMarketHourStartTime.Add(time.Hour)
 	defaultMarketHourPeriod    = 24 * time.Hour
@@ -212,7 +203,6 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(EsploraURL, defaultEsploraURL)
 	viper.SetDefault(NoMacaroons, defaultNoMacaroons)
 	viper.SetDefault(BoardingExitDelay, defaultBoardingExitDelay)
-	viper.SetDefault(NostrDefaultRelays, defaultNostrDefaultRelays)
 	viper.SetDefault(MarketHourStartTime, defaultMarketHourStartTime)
 	viper.SetDefault(MarketHourEndTime, defaultMarketHourEndTime)
 	viper.SetDefault(MarketHourPeriod, defaultMarketHourPeriod)
@@ -265,7 +255,6 @@ func LoadConfig() (*Config, error) {
 		UnlockerType:              viper.GetString(UnlockerType),
 		UnlockerFilePath:          viper.GetString(UnlockerFilePath),
 		UnlockerPassword:          viper.GetString(UnlockerPassword),
-		NostrDefaultRelays:        viper.GetStringSlice(NostrDefaultRelays),
 		NoteUriPrefix:             viper.GetString(NoteUriPrefix),
 		MarketHourStartTime:       viper.GetTime(MarketHourStartTime),
 		MarketHourEndTime:         viper.GetTime(MarketHourEndTime),
@@ -295,12 +284,6 @@ func makeDirectoryIfNotExists(path string) error {
 
 func getNetwork() (common.Network, error) {
 	switch strings.ToLower(viper.GetString(Network)) {
-	case common.Liquid.Name:
-		return common.Liquid, nil
-	case common.LiquidTestNet.Name:
-		return common.LiquidTestNet, nil
-	case common.LiquidRegTest.Name:
-		return common.LiquidRegTest, nil
 	case common.Bitcoin.Name:
 		return common.Bitcoin, nil
 	case common.BitcoinTestNet.Name:
@@ -395,16 +378,6 @@ func (c *Config) Validate() error {
 		)
 	}
 
-	if len(c.NostrDefaultRelays) == 0 {
-		return fmt.Errorf("missing nostr default relays")
-	}
-
-	for _, relay := range c.NostrDefaultRelays {
-		if !nostr.IsValidRelayURL(relay) {
-			return fmt.Errorf("invalid nostr relay url: %s", relay)
-		}
-	}
-
 	if err := c.repoManager(); err != nil {
 		return err
 	}
@@ -450,6 +423,15 @@ func (c *Config) UnlockerService() ports.Unlocker {
 	return c.unlocker
 }
 
+func (c *Config) IndexerService() (application.IndexerService, error) {
+	pubKey, err := c.wallet.GetPubkey(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	return application.NewIndexerService(pubKey, c.repo), nil
+}
+
 func (c *Config) repoManager() error {
 	var svc ports.RepoManager
 	var err error
@@ -488,16 +470,6 @@ func (c *Config) repoManager() error {
 }
 
 func (c *Config) walletService() error {
-	if common.IsLiquid(c.Network) {
-		svc, err := liquidwallet.NewService(c.WalletAddr, c.EsploraURL)
-		if err != nil {
-			return fmt.Errorf("failed to connect to wallet: %s", err)
-		}
-
-		c.wallet = svc
-		return nil
-	}
-
 	// Check if both Neutrino peer and Bitcoind RPC credentials are provided
 	if c.NeutrinoPeer != "" && (c.BitcoindRpcUser != "" || c.BitcoindRpcPass != "") {
 		return fmt.Errorf("cannot use both Neutrino peer and Bitcoind RPC credentials")
@@ -540,12 +512,8 @@ func (c *Config) txBuilderService() error {
 	var svc ports.TxBuilder
 	var err error
 	switch c.TxBuilderType {
-	case "covenant":
-		svc = txbuilder.NewTxBuilder(
-			c.wallet, c.Network, c.VtxoTreeExpiry, c.BoardingExitDelay,
-		)
 	case "covenantless":
-		svc = cltxbuilder.NewTxBuilder(
+		svc = txbuilder.NewTxBuilder(
 			c.wallet, c.Network, c.VtxoTreeExpiry, c.BoardingExitDelay,
 		)
 	default:
@@ -584,23 +552,8 @@ func (c *Config) schedulerService() error {
 }
 
 func (c *Config) appService() error {
-	if common.IsLiquid(c.Network) {
-		svc, err := application.NewCovenantService(
-			c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
-			c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
-			c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
-			c.RoundMaxParticipantsCount, c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount,
-		)
-		if err != nil {
-			return err
-		}
-
-		c.svc = svc
-		return nil
-	}
-
-	svc, err := application.NewCovenantlessService(
-		c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay, c.NostrDefaultRelays,
+	svc, err := application.NewService(
+		c.Network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 		c.AllowZeroFees, c.RoundMaxParticipantsCount, c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount,

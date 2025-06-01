@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,6 +18,11 @@ const vtxoStoreDir = "vtxos"
 
 type vtxoRepository struct {
 	store *badgerhold.Store
+}
+
+func (r *vtxoRepository) GetSpendableVtxosWithPubKey(ctx context.Context, pubkey string) ([]domain.Vtxo, error) {
+	// TODO implement
+	return nil, nil
 }
 
 func NewVtxoRepository(config ...interface{}) (domain.VtxoRepository, error) {
@@ -97,7 +103,14 @@ func (r *vtxoRepository) GetVtxosForRound(
 	return r.findVtxos(ctx, query)
 }
 
-func (r *vtxoRepository) GetAllVtxos(
+func (r *vtxoRepository) GetLeafVtxosForRound(
+	ctx context.Context, txid string,
+) ([]domain.Vtxo, error) {
+	query := badgerhold.Where("RoundTx").Eq(txid).And("RedeemTx").Eq("")
+	return r.findVtxos(ctx, query)
+}
+
+func (r *vtxoRepository) GetAllNonRedeemedVtxos(
 	ctx context.Context, pubkey string,
 ) ([]domain.Vtxo, []domain.Vtxo, error) {
 	query := badgerhold.Where("Redeemed").Eq(false)
@@ -124,6 +137,10 @@ func (r *vtxoRepository) GetAllVtxos(
 func (r *vtxoRepository) GetAllSweepableVtxos(ctx context.Context) ([]domain.Vtxo, error) {
 	query := badgerhold.Where("Redeemed").Eq(false).And("Swept").Eq(false)
 	return r.findVtxos(ctx, query)
+}
+
+func (r *vtxoRepository) GetAll(ctx context.Context) ([]domain.Vtxo, error) {
+	return r.findVtxos(ctx, &badgerhold.Query{})
 }
 
 func (r *vtxoRepository) SweepVtxos(
@@ -172,7 +189,70 @@ func (r *vtxoRepository) UpdateExpireAt(ctx context.Context, vtxos []domain.Vtxo
 	return err
 }
 
+func (r *vtxoRepository) GetAllVtxosWithPubKey(
+	ctx context.Context, pubkey string,
+) ([]domain.Vtxo, []domain.Vtxo, error) {
+	query := badgerhold.Where("PubKey").Eq(pubkey)
+	vtxos, err := r.findVtxos(ctx, query)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	spentVtxos := make([]domain.Vtxo, 0, len(vtxos))
+	unspentVtxos := make([]domain.Vtxo, 0, len(vtxos))
+	for _, vtxo := range vtxos {
+		if vtxo.Spent || vtxo.Swept {
+			spentVtxos = append(spentVtxos, vtxo)
+		} else {
+			unspentVtxos = append(unspentVtxos, vtxo)
+		}
+	}
+	return unspentVtxos, spentVtxos, nil
+}
+
+func (r *vtxoRepository) GetAllVtxosWithPubKeys(
+	ctx context.Context, pubkeys []string, spendableOnly, spentOnly bool,
+) ([]domain.Vtxo, error) {
+	if spendableOnly && spendableOnly == spentOnly {
+		return nil, fmt.Errorf("spendable and spent only can't be true at the same time")
+	}
+
+	allVtxos := make([]domain.Vtxo, 0)
+	for _, pubkey := range pubkeys {
+		query := badgerhold.Where("PubKey").Eq(pubkey)
+		vtxos, err := r.findVtxos(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		sort.SliceStable(vtxos, func(i, j int) bool {
+			return vtxos[i].CreatedAt > vtxos[j].CreatedAt
+		})
+
+		if spendableOnly {
+			spendableVtxos := make([]domain.Vtxo, 0, len(vtxos))
+			for _, vtxo := range vtxos {
+				if !vtxo.Spent && !vtxo.Swept && !vtxo.Redeemed {
+					spendableVtxos = append(spendableVtxos, vtxo)
+				}
+			}
+			vtxos = spendableVtxos
+		}
+		if spentOnly {
+			spentVtxos := make([]domain.Vtxo, 0, len(vtxos))
+			for _, vtxo := range vtxos {
+				if vtxo.Spent || vtxo.Swept || vtxo.Redeemed {
+					spentVtxos = append(spentVtxos, vtxo)
+				}
+			}
+			vtxos = spentVtxos
+		}
+		allVtxos = append(allVtxos, vtxos...)
+	}
+	return allVtxos, nil
+}
+
 func (r *vtxoRepository) Close() {
+	// nolint:all
 	r.store.Close()
 }
 
@@ -180,7 +260,7 @@ func (r *vtxoRepository) addVtxos(
 	ctx context.Context, vtxos []domain.Vtxo,
 ) error {
 	for _, vtxo := range vtxos {
-		vtxoKey := vtxo.VtxoKey.Hash()
+		vtxoKey := vtxo.Hash()
 		var insertFn func() error
 		if ctx.Value("tx") != nil {
 			tx := ctx.Value("tx").(*badger.Txn)
@@ -298,11 +378,11 @@ func (r *vtxoRepository) updateVtxo(ctx context.Context, vtxo *domain.Vtxo) erro
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
 		updateFn = func() error {
-			return r.store.TxUpdate(tx, vtxo.VtxoKey.Hash(), *vtxo)
+			return r.store.TxUpdate(tx, vtxo.Hash(), *vtxo)
 		}
 	} else {
 		updateFn = func() error {
-			return r.store.Update(vtxo.VtxoKey.Hash(), *vtxo)
+			return r.store.Update(vtxo.Hash(), *vtxo)
 		}
 	}
 

@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/bitcointree"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
@@ -209,7 +208,7 @@ func (s *bitcoinWallet) SignTransaction(
 
 				switch c := closure.(type) {
 				case *tree.CSVMultisigClosure:
-					for _, key := range c.MultisigClosure.PubKeys {
+					for _, key := range c.PubKeys {
 						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
 							sign = true
 							break
@@ -223,14 +222,14 @@ func (s *bitcoinWallet) SignTransaction(
 						}
 					}
 				case *tree.CLTVMultisigClosure:
-					for _, key := range c.MultisigClosure.PubKeys {
+					for _, key := range c.PubKeys {
 						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
 							sign = true
 							break
 						}
 					}
 				case *tree.ConditionMultisigClosure:
-					for _, key := range c.MultisigClosure.PubKeys {
+					for _, key := range c.PubKeys {
 						if bytes.Equal(schnorr.SerializePubKey(key), myPubkey) {
 							sign = true
 							break
@@ -287,7 +286,7 @@ func (s *bitcoinWallet) SignTransaction(
 
 func (w *bitcoinWallet) NewVtxoTreeSigner(
 	ctx context.Context, derivationPath string,
-) (bitcointree.SignerSession, error) {
+) (tree.SignerSession, error) {
 	if w.IsLocked() {
 		return nil, fmt.Errorf("wallet is locked")
 	}
@@ -329,7 +328,7 @@ func (w *bitcoinWallet) NewVtxoTreeSigner(
 	}
 
 	derivedPrivKey := secp256k1.PrivKeyFromBytes(currentKey.Key)
-	return bitcointree.NewTreeSignerSession(derivedPrivKey), nil
+	return tree.NewTreeSignerSession(derivedPrivKey), nil
 }
 
 func (w *bitcoinWallet) SignMessage(
@@ -370,7 +369,7 @@ func (w *bitcoinWallet) getAddress(
 
 	netParams := utils.ToBitcoinNetwork(data.Network)
 
-	defaultVtxoScript := bitcointree.NewDefaultVtxoScript(
+	defaultVtxoScript := tree.NewDefaultVtxoScript(
 		w.walletData.PubKey,
 		data.ServerPubKey,
 		data.UnilateralExitDelay,
@@ -387,12 +386,12 @@ func (w *bitcoinWallet) getAddress(
 		VtxoTapKey: vtxoTapKey,
 	}
 
-	boardingVtxoScript := bitcointree.NewDefaultVtxoScript(
+	boardingVtxoScript := tree.NewDefaultVtxoScript(
 		w.walletData.PubKey,
 		data.ServerPubKey,
 		common.RelativeLocktime{
-			Type:  data.UnilateralExitDelay.Type,
-			Value: data.UnilateralExitDelay.Value * 2,
+			Type:  data.BoardingExitDelay.Type,
+			Value: data.BoardingExitDelay.Value,
 		},
 	)
 
