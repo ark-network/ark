@@ -701,19 +701,22 @@ func (s *service) SignTransaction(ctx context.Context, partialTx string, extract
 				if err != nil {
 					return "", err
 				}
+				args := make(map[string]any)
 
-				conditionWitness, err := tree.GetConditionWitness(in)
-				if err != nil {
-					return "", err
-				}
-
-				args := make(map[string][]byte)
-				if len(conditionWitness) > 0 {
-					var conditionWitnessBytes bytes.Buffer
-					if err := psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness); err != nil {
+				switch closure.(type) {
+				case *tree.ConditionMultisigClosure:
+					witness, err := tree.GetConditionWitness(in)
+					if err != nil {
 						return "", err
 					}
-					args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
+
+					if len(witness) > 0 {
+						var conditionWitnessBytes bytes.Buffer
+						if err := psbt.WriteTxWitness(&conditionWitnessBytes, witness); err != nil {
+							return "", err
+						}
+						args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
+					}
 				}
 
 				for _, sig := range in.TaprootScriptSpendSig {

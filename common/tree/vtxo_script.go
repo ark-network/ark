@@ -76,8 +76,16 @@ func (v *TapscriptsVtxoScript) Decode(scripts []string) error {
 	return nil
 }
 
-func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minLocktime common.RelativeLocktime) error {
-	serverXonly := schnorr.SerializePubKey(server)
+func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minLocktime common.RelativeLocktime, arkScript []byte) error {
+	mandatoryKey := server
+
+	if len(arkScript) > 0 {
+		arkScriptHash := ArkScriptHash(arkScript)
+		mandatoryKey = ComputeArkScriptKey(server, arkScriptHash)
+	}
+
+	xonlyKey := schnorr.SerializePubKey(mandatoryKey)
+
 	for _, forfeit := range v.ForfeitClosures() {
 		keys := make([]*secp256k1.PublicKey, 0)
 		switch c := forfeit.(type) {
@@ -96,7 +104,7 @@ func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minLocktime
 		// must contain server pubkey
 		found := false
 		for _, pubkey := range keys {
-			if bytes.Equal(schnorr.SerializePubKey(pubkey), serverXonly) {
+			if bytes.Equal(schnorr.SerializePubKey(pubkey), xonlyKey) {
 				found = true
 				break
 			}

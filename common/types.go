@@ -11,4 +11,5 @@ type VtxoInput struct {
 	Tapscript          *waddrmgr.Tapscript
 	WitnessSize        int
 	RevealedTapscripts []string
+	ArkScript          []byte
 }
