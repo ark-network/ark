@@ -1027,9 +1027,13 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 		}
 	}
 
+	log.Debugf("request %s processed, pushing to queue", request.Id)
+
 	if err := s.txRequests.push(*request, boardingInputs, message.Musig2Data); err != nil {
 		return "", err
 	}
+
+	log.Debugf("pushed request %s to queue", request.Id)
 
 	// prevent the vtxos from being spent in a concurrent intent
 	s.roundInputs.add(vtxoKeysInputs)
