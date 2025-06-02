@@ -1546,14 +1546,8 @@ func TestSweep(t *testing.T) {
 	require.NotZero(t, balance.Offchain.Total) // funds should be recovered
 }
 
-//func runArkCommand(arg ...string) (string, error) {
-//	args := append([]string{"ark"}, arg...)
-//	return utils.RunDockerExec("arkd", args...)
-//}
-
 func runArkCommand(arg ...string) (string, error) {
-	args := append([]string{"go"}, "run ./../../../client/main.go")
-	args = append(args, arg...)
+	args := append([]string{"ark"}, arg...)
 	return utils.RunDockerExec("arkd", args...)
 }
 
