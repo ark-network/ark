@@ -3,6 +3,7 @@ package arksdk
 import (
 	"context"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 )
@@ -25,6 +26,20 @@ type ArkClient interface {
 		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver,
 		withZeroFees bool,
 	) (string, error)
+	CreateRegisterIntent(
+		ctx context.Context,
+		vtxos []client.Vtxo,
+		boardingUtxos []types.Utxo,
+		notes []string,
+		outputs []client.Output,
+		musig2Data *tree.Musig2,
+	) (signature, message string, err error)
+	CreateDeleteIntent(
+		ctx context.Context,
+		vtxos []client.Vtxo,
+		boardingUtxos []types.Utxo,
+		notes []string,
+	) (signature, message string, err error)
 	Settle(ctx context.Context, opts ...Option) (string, error)
 	CollaborativeExit(
 		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,

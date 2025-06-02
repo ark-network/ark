@@ -183,7 +183,7 @@ func (h *handler) DeleteIntent(
 		return nil, status.Error(codes.InvalidArgument, "missing BIP0322 message")
 	}
 
-	var message tree.IntentMessage
+	var message tree.DeleteIntentMessage
 	if err := message.Decode(intentMessage); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 message")
 	}

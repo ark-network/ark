@@ -1505,6 +1505,69 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestDeleteIntent(t *testing.T) {
+	ctx := context.Background()
+	alice, grpcAlice := setupArkSDK(t)
+	defer alice.Stop()
+	defer grpcAlice.Close()
+
+	// faucet offchain address
+	_, offchainAddr, boardingAddr, err := alice.Receive(ctx)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", boardingAddr, "0.0002")
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := alice.NotifyIncomingFunds(ctx, offchainAddr)
+		require.NoError(t, err)
+		require.NotEmpty(t, vtxos)
+	}()
+
+	_, err = alice.Settle(ctx)
+	require.NoError(t, err)
+
+	wg.Wait()
+
+	aliceVtxos, _, err := alice.ListVtxos(ctx)
+	require.NoError(t, err)
+	require.NotEmpty(t, aliceVtxos)
+
+	registerIntent, registerIntentMessage, err := alice.CreateRegisterIntent(ctx, aliceVtxos, []types.Utxo{}, nil, nil, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, registerIntent)
+	require.NotEmpty(t, registerIntentMessage)
+
+	_, err = grpcAlice.RegisterIntent(ctx, registerIntent, registerIntentMessage)
+	require.NoError(t, err)
+
+	// should fail because previous intent spend same vtxos
+	_, err = grpcAlice.RegisterIntent(ctx, registerIntent, registerIntentMessage)
+	require.Error(t, err)
+
+	deleteIntent, deleteIntentMessage, err := alice.CreateDeleteIntent(ctx, aliceVtxos, []types.Utxo{}, nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, deleteIntent)
+	require.NotEmpty(t, deleteIntentMessage)
+
+	// should delete the intent
+	err = grpcAlice.DeleteIntent(ctx, "", deleteIntent, deleteIntentMessage)
+	require.NoError(t, err)
+
+	// should not fail because intent is deleted
+	id, err := grpcAlice.RegisterIntent(ctx, registerIntent, registerIntentMessage)
+	require.NoError(t, err)
+
+	// delete again but using the intent ID
+	err = grpcAlice.DeleteIntent(ctx, id, "", "")
+	require.NoError(t, err)
+}
+
 func TestSweep(t *testing.T) {
 	var receive utils.ArkReceive
 	receiveStr, err := runArkCommand("receive")
