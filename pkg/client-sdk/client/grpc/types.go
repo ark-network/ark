@@ -33,6 +33,7 @@ func (o outs) toProto() []*arkv1.Output {
 // wrapper for GetEventStreamResponse and PingResponse
 type eventResponse interface {
 	GetRoundFailed() *arkv1.RoundFailed
+	GetBatchStarted() *arkv1.BatchStartedEvent
 	GetRoundFinalization() *arkv1.RoundFinalizationEvent
 	GetRoundFinalized() *arkv1.RoundFinalizedEvent
 	GetRoundSigning() *arkv1.RoundSigningEvent
@@ -52,6 +53,16 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 			Reason: ee.GetReason(),
 		}, nil
 	}
+
+	if ee := e.GetBatchStarted(); ee != nil {
+		return client.BatchStartedEvent{
+			ID:             ee.GetId(),
+			IntentIdHashes: ee.GetIntentIdHashes(),
+			BatchExpiry:    ee.GetBatchExpiry(),
+			ForfeitAddress: ee.GetForfeitAddress(),
+		}, nil
+	}
+
 	if ee := e.GetRoundFinalization(); ee != nil {
 		connectorsIndex := connectorsIndexFromProto{ee.GetConnectorsIndex()}.parse()
 

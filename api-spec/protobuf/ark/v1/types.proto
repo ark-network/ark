@@ -120,7 +120,6 @@ message TxRequestInfo {
   repeated RequestInput boarding_inputs = 5;
   string signing_type = 6;
   repeated string cosigners_public_keys = 7;
-  int64 last_ping = 8;
 }
 
 message RequestInput {
@@ -130,6 +129,13 @@ message RequestInput {
 }
 
 /* Events */
+
+message BatchStartedEvent {
+  string id = 1;
+  repeated string intent_id_hashes = 2;
+  int64 batch_expiry = 3;
+  string forfeit_address = 4;
+}
 
 message RoundFinalizationEvent {
   string id = 1;

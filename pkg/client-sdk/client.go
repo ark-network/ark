@@ -1907,17 +1907,17 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 	retryCount := 0
 	var roundErr error
 	for retryCount < maxRetry {
-		requestID, err := a.client.RegisterIntent(
+		intentID, err := a.client.RegisterIntent(
 			ctx, bip322Signature, bip322Message,
 		)
 		if err != nil {
 			return "", err
 		}
 
-		log.Infof("registered inputs and outputs with request id: %s", requestID)
+		log.Infof("registered inputs and outputs with request id: %s", intentID)
 
 		roundTxID, err := a.handleRoundStream(
-			ctx, requestID, selectedCoins, selectedBoardingCoins, outputs, signerSessions, options.EventsCh,
+			ctx, intentID, selectedCoins, selectedBoardingCoins, outputs, signerSessions, options.EventsCh,
 		)
 		if err != nil {
 			log.WithError(err).Warn("round failed, retrying...")
@@ -1935,19 +1935,14 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 
 func (a *covenantlessArkClient) handleRoundStream(
 	ctx context.Context,
-	requestID string,
+	intentID string,
 	vtxos []client.TapscriptsVtxo,
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
 	signerSessions []tree.SignerSession,
 	replayEventsCh chan<- client.RoundEvent,
 ) (string, error) {
-	round, err := a.client.GetRound(ctx, "")
-	if err != nil {
-		return "", err
-	}
-
-	eventsCh, close, err := a.client.GetEventStream(ctx, requestID)
+	eventsCh, close, err := a.client.GetEventStream(ctx)
 	if err != nil {
 		if errors.Is(err, io.EOF) {
 			close()
@@ -1955,16 +1950,6 @@ func (a *covenantlessArkClient) handleRoundStream(
 		}
 		return "", err
 	}
-
-	var pingStop func()
-	for pingStop == nil {
-		pingStop = a.ping(ctx, requestID)
-	}
-
-	defer func() {
-		pingStop()
-		close()
-	}()
 
 	vtxosToSign := make([]client.TapscriptsVtxo, 0)
 	for _, vtxo := range vtxos {
@@ -1976,6 +1961,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 
 	const (
 		start = iota
+		batchStarted
 		roundSigningStarted
 		roundSigningNoncesGenerated
 		roundFinalization
@@ -2003,17 +1989,36 @@ func (a *covenantlessArkClient) handleRoundStream(
 		case <-ctx.Done():
 			return "", fmt.Errorf("context done %s", ctx.Err())
 		case notify := <-eventsCh:
-
 			if notify.Err != nil {
 				return "", notify.Err
 			}
+
 			if replayEventsCh != nil {
 				go func() {
 					replayEventsCh <- notify.Event
 				}()
 			}
+
+			roundID := ""
+
 			switch event := notify.Event; event.(type) {
-			// the batch session is done
+			case client.BatchStartedEvent:
+				skipped, err := a.handleBatchStarted(ctx, intentID, event.(client.BatchStartedEvent))
+				if err != nil {
+					return "", err
+				}
+				if !skipped {
+					roundID = event.(client.BatchStartedEvent).ID
+					log.Infof("a batch started, participation confirmed for round %s", roundID)
+					step++
+
+					if !hasOffchainOutput {
+						// if none of the outputs are offchain, we should skip the vtxo tree signing steps
+						step = roundSigningNoncesGenerated
+					}
+					continue
+				}
+				log.Info("intent id not found in batch proposal, waiting for next one...")
 			case client.RoundFinalizedEvent:
 				if step != roundFinalization {
 					continue
@@ -2022,7 +2027,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				return event.(client.RoundFinalizedEvent).Txid, nil
 			// the batch session failed
 			case client.RoundFailedEvent:
-				if event.(client.RoundFailedEvent).ID == round.ID {
+				if event.(client.RoundFailedEvent).ID == roundID {
 					return "", fmt.Errorf("round failed: %s", event.(client.RoundFailedEvent).Reason)
 				}
 				continue
@@ -2044,8 +2049,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				continue
 			// the unsigned vtxo tree has been sent, we need to generate nonces
 			case client.RoundSigningStartedEvent:
-				pingStop()
-				if step != start {
+				if step != batchStarted {
 					continue
 				}
 				log.Info("a round signing started")
@@ -2064,7 +2068,6 @@ func (a *covenantlessArkClient) handleRoundStream(
 				if step != roundSigningStarted {
 					continue
 				}
-				pingStop()
 				log.Info("round combined nonces generated")
 				if err := a.handleRoundSigningNoncesGenerated(
 					ctx, event.(client.RoundSigningNoncesGeneratedEvent), signerSessions,
@@ -2079,7 +2082,6 @@ func (a *covenantlessArkClient) handleRoundStream(
 				if step != roundSigningNoncesGenerated {
 					continue
 				}
-				pingStop()
 				log.Info("a round finalization started")
 
 				signedForfeitTxs, signedRoundTx, err := a.handleRoundFinalization(
@@ -2108,6 +2110,24 @@ func (a *covenantlessArkClient) handleRoundStream(
 			}
 		}
 	}
+}
+
+func (a *covenantlessArkClient) handleBatchStarted(
+	ctx context.Context, intentID string, event client.BatchStartedEvent,
+) (bool, error) {
+	intentIDHash := sha256.Sum256([]byte(intentID))
+	intentIDHashStr := hex.EncodeToString(intentIDHash[:])
+
+	for _, idHash := range event.IntentIdHashes {
+		if idHash == intentIDHashStr {
+			if err := a.client.ConfirmRegistration(ctx, intentID); err != nil {
+				return false, err
+			}
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 func (a *covenantlessArkClient) handleRoundSigningStarted(

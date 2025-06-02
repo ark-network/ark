@@ -216,6 +216,16 @@ func (a *restClient) DeleteIntent(_ context.Context, requestID, signature, messa
 	return err
 }
 
+func (a *restClient) ConfirmRegistration(ctx context.Context, intentID string) error {
+	body := &models.V1ConfirmRegistrationRequest{
+		IntentID: intentID,
+	}
+	_, err := a.svc.ArkServiceConfirmRegistration(
+		ark_service.NewArkServiceConfirmRegistrationParams().WithBody(body),
+	)
+	return err
+}
+
 func (a *restClient) RegisterOutputsForNextRound(
 	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
 ) error {
@@ -309,9 +319,7 @@ func (a *restClient) SubmitSignedForfeitTxs(
 	return err
 }
 
-func (c *restClient) GetEventStream(
-	ctx context.Context, requestID string,
-) (<-chan client.RoundEventChannel, func(), error) {
+func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEventChannel, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
 	eventsCh := make(chan client.RoundEventChannel)
 	chunkCh := make(chan chunk)
@@ -365,6 +373,19 @@ func (c *restClient) GetEventStream(
 					event = client.RoundFailedEvent{
 						ID:     e.ID,
 						Reason: e.Reason,
+					}
+				case resp.Result.BatchStarted != nil:
+					e := resp.Result.BatchStarted
+					batchExpiry, err := strconv.ParseUint(e.BatchExpiry, 10, 32)
+					if err != nil {
+						_err = err
+						break
+					}
+					event = client.BatchStartedEvent{
+						ID:             e.ID,
+						IntentIdHashes: e.IntentIDHashes,
+						BatchExpiry:    int64(batchExpiry),
+						ForfeitAddress: e.ForfeitAddress,
 					}
 				case resp.Result.RoundFinalization != nil:
 					e := resp.Result.RoundFinalization
@@ -435,15 +456,6 @@ func (c *restClient) GetEventStream(
 	}(ctx, eventsCh, chunkCh)
 
 	return eventsCh, cancel, nil
-}
-
-func (a *restClient) Ping(
-	ctx context.Context, requestID string,
-) error {
-	r := ark_service.NewArkServicePingParams()
-	r.SetRequestID(requestID)
-	_, err := a.svc.ArkServicePing(r)
-	return err
 }
 
 func (a *restClient) SubmitOffchainTx(
