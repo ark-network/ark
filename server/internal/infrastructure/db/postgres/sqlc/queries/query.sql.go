@@ -782,7 +782,9 @@ FROM round
          LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
          LEFT OUTER JOIN request_receiver_vw ON round_request_vw.id=request_receiver_vw.request_id
          LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
-WHERE round_tx_vw.txid = $1
+WHERE round.id = (
+    SELECT round_id FROM round_tx_vw tx WHERE tx.txid = $1 and tx.type = 'commitment'
+)
 `
 
 type SelectRoundWithRoundTxIdRow struct {
