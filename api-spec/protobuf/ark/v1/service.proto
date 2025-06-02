@@ -134,8 +134,10 @@ message RegisterIntentResponse {
 }
 
 message DeleteIntentRequest {
-  string request_id = 1;
-  Bip322Signature bip322_signature = 2;
+  oneof proof {
+    string intent_id = 1;
+    Bip322Signature bip322_signature = 2;
+  }
 }
 message DeleteIntentResponse {}
 

@@ -533,7 +533,7 @@
     "v1DeleteIntentRequest": {
       "type": "object",
       "properties": {
-        "requestId": {
+        "intentId": {
           "type": "string"
         },
         "bip322Signature": {
