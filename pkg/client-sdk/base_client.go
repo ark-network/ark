@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"time"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
@@ -20,7 +19,6 @@ import (
 	filestore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/file"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -405,25 +403,6 @@ func (a *arkClient) init(
 	a.indexer = indexerSvc
 
 	return nil
-}
-
-func (a *arkClient) ping(
-	ctx context.Context, requestID string,
-) func() {
-	ticker := time.NewTicker(5 * time.Second)
-
-	go func(t *time.Ticker) {
-		if err := a.client.Ping(ctx, requestID); err != nil {
-			logrus.Warnf("failed to ping server: %s", err)
-		}
-		for range t.C {
-			if err := a.client.Ping(ctx, requestID); err != nil {
-				logrus.Warnf("failed to ping server: %s", err)
-			}
-		}
-	}(ticker)
-
-	return ticker.Stop
 }
 
 func (a *arkClient) safeCheck() error {

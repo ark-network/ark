@@ -81,6 +81,7 @@ type Config struct {
 	UnlockerFilePath string // file unlocker
 	UnlockerPassword string // env unlocker
 
+	RoundMinParticipantsCount int64
 	RoundMaxParticipantsCount int64
 	UtxoMaxAmount             int64
 	UtxoMinAmount             int64
@@ -126,6 +127,7 @@ var (
 	MarketHourRoundInterval   = "MARKET_HOUR_ROUND_INTERVAL"
 	OtelCollectorEndpoint     = "OTEL_COLLECTOR_ENDPOINT"
 	RoundMaxParticipantsCount = "ROUND_MAX_PARTICIPANTS_COUNT"
+	RoundMinParticipantsCount = "ROUND_MIN_PARTICIPANTS_COUNT"
 	UtxoMaxAmount             = "UTXO_MAX_AMOUNT"
 	VtxoMaxAmount             = "VTXO_MAX_AMOUNT"
 	UtxoMinAmount             = "UTXO_MIN_AMOUNT"
@@ -155,6 +157,7 @@ var (
 	defaultVtxoMaxAmount       = -1 // -1 means no limit (default)
 
 	defaultRoundMaxParticipantsCount = 128
+	defaultRoundMinParticipantsCount = 1
 )
 
 func LoadConfig() (*Config, error) {
@@ -180,6 +183,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(MarketHourPeriod, defaultMarketHourPeriod)
 	viper.SetDefault(MarketHourRoundInterval, defaultMarketHourInterval)
 	viper.SetDefault(RoundMaxParticipantsCount, defaultRoundMaxParticipantsCount)
+	viper.SetDefault(RoundMinParticipantsCount, defaultRoundMinParticipantsCount)
 	viper.SetDefault(UtxoMaxAmount, defaultUtxoMaxAmount)
 	viper.SetDefault(UtxoMinAmount, defaultUtxoMinAmount)
 	viper.SetDefault(VtxoMaxAmount, defaultVtxoMaxAmount)
@@ -221,6 +225,7 @@ func LoadConfig() (*Config, error) {
 		MarketHourRoundInterval:   viper.GetDuration(MarketHourRoundInterval),
 		OtelCollectorEndpoint:     viper.GetString(OtelCollectorEndpoint),
 		RoundMaxParticipantsCount: viper.GetInt64(RoundMaxParticipantsCount),
+		RoundMinParticipantsCount: viper.GetInt64(RoundMinParticipantsCount),
 		UtxoMaxAmount:             viper.GetInt64(UtxoMaxAmount),
 		UtxoMinAmount:             viper.GetInt64(UtxoMinAmount),
 		VtxoMaxAmount:             viper.GetInt64(VtxoMaxAmount),
@@ -471,7 +476,8 @@ func (c *Config) appService() error {
 		*c.network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
-		c.RoundMaxParticipantsCount, c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount,
+		c.RoundMinParticipantsCount, c.RoundMaxParticipantsCount,
+		c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount,
 	)
 	if err != nil {
 		return err
