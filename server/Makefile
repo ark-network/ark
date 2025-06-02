@@ -73,7 +73,7 @@ pg:
 	@docker run --name ark-pg -p 5432:5432 -e POSTGRES_USER=root -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=ark-db -d postgres
 
 # pgtest: starts postgres db inside docker container
-pgpgtest:
+pgtest:
 	@docker run --name ark-pg-test -p 5432:5432 -e POSTGRES_USER=root -e POSTGRES_PASSWORD=secret -e POSTGRES_DB=ark-db-test -d postgres
 
 # droppg: stop and remove postgres container
@@ -117,7 +117,7 @@ psql:
 
 # pgmigrate: creates pg migration file (e.g. make FILE=init pgmigrate)
 pgmigrate:
-	@migrate create -ext sql -dir ./internal/infrastructure/db/postgres/migration/ $(FILE)
+	@docker run --rm -v /internal/infrastructure/db/postgres/migration:/migration migrate/migrate create -ext sql -dir /migration $(FILE)
 
 # pgmigrate-up: applies all Postgres migrations to the running ark-pg container
 pgmigrate-up: dropdb createdb
@@ -130,4 +130,4 @@ pgmigrate-up: dropdb createdb
 
 # pgsqlc: generate sql code for postgres
 pgsqlc:
-	@cd internal/infrastructure/db/postgres; sqlc generate
+	@docker run --rm -v $(PWD)/internal/infrastructure/db/postgres:/src -w /src sqlc/sqlc generate

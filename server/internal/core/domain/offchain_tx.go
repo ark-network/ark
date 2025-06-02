@@ -160,10 +160,6 @@ func (s *OffchainTx) Fail(err error) Event {
 	return event
 }
 
-func (s *OffchainTx) RootCommitmentTxid() string {
-	return s.RootCommitmentTxId
-}
-
 func (s *OffchainTx) Events() []Event {
 	return s.changes
 }

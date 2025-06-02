@@ -37,7 +37,7 @@ func (r *marketHourRepository) Get(ctx context.Context) (*domain.MarketHour, err
 		return nil, nil
 	}
 	if err != nil {
-		return nil, fmt.Errorf("failed to get market hour: %w", err)
+		return nil, err
 	}
 
 	return &domain.MarketHour{
@@ -50,49 +50,13 @@ func (r *marketHourRepository) Get(ctx context.Context) (*domain.MarketHour, err
 }
 
 func (r *marketHourRepository) Upsert(ctx context.Context, marketHour domain.MarketHour) error {
-	latest, err := r.querier.GetLatestMarketHour(ctx)
-	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return fmt.Errorf("failed to get latest market hour: %w", err)
-	}
-
-	var upsertFn func() error
-	if errors.Is(err, sql.ErrNoRows) {
-		upsertFn = func() error {
-			_, err = r.querier.InsertMarketHour(ctx, queries.InsertMarketHourParams{
-				StartTime:     marketHour.StartTime.Unix(),
-				EndTime:       marketHour.EndTime.Unix(),
-				Period:        int64(marketHour.Period),
-				RoundInterval: int64(marketHour.RoundInterval),
-				UpdatedAt:     marketHour.UpdatedAt.Unix(),
-			})
-			return err
-		}
-
-	} else {
-		upsertFn = func() error {
-			_, err = r.querier.UpdateMarketHour(ctx, queries.UpdateMarketHourParams{
-				StartTime:     marketHour.StartTime.Unix(),
-				EndTime:       marketHour.EndTime.Unix(),
-				Period:        int64(marketHour.Period),
-				RoundInterval: int64(marketHour.RoundInterval),
-				UpdatedAt:     marketHour.UpdatedAt.Unix(),
-				ID:            latest.ID,
-			})
-			return err
-		}
-	}
-	if err := upsertFn(); err != nil {
-		if isConflictError(err) {
-			attempts := 1
-			for isConflictError(err) && attempts <= maxRetries {
-				time.Sleep(100 * time.Millisecond)
-				err = upsertFn()
-				attempts++
-			}
-		}
-		return err
-	}
-	return nil
+	return r.querier.UpsertMarketHour(ctx, queries.UpsertMarketHourParams{
+		StartTime:     marketHour.StartTime.Unix(),
+		EndTime:       marketHour.EndTime.Unix(),
+		Period:        int64(marketHour.Period),
+		RoundInterval: int64(marketHour.RoundInterval),
+		UpdatedAt:     marketHour.UpdatedAt.Unix(),
+	})
 }
 
 func (r *marketHourRepository) Close() {

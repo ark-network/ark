@@ -76,7 +76,6 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 				Ended:              round.Stage.Ended,
 				Failed:             round.Stage.Failed,
 				StageCode:          int32(round.Stage.Code),
-				Txid:               round.Txid,
 				ConnectorAddress:   round.ConnectorAddress,
 				Version:            int32(round.Version),
 				Swept:              round.Swept,
@@ -218,7 +217,11 @@ func (r *roundRepository) GetRoundWithId(ctx context.Context, id string) (*domai
 }
 
 func (r *roundRepository) GetRoundWithTxid(ctx context.Context, txid string) (*domain.Round, error) {
-	rows, err := r.querier.SelectRoundWithRoundTxId(ctx, txid)
+	txidNullString := sql.NullString{
+		String: txid,
+		Valid:  true,
+	}
+	rows, err := r.querier.SelectRoundWithRoundTxId(ctx, txidNullString)
 	if err != nil {
 		return nil, err
 	}
@@ -313,8 +316,8 @@ func (r *roundRepository) GetRoundForfeitTxs(ctx context.Context, roundTxid stri
 	forfeits := make([]domain.ForfeitTx, 0, len(rows))
 	for _, row := range rows {
 		forfeits = append(forfeits, domain.ForfeitTx{
-			Txid: row.Txid.String,
-			Tx:   row.Tx.String,
+			Txid: row.Txid,
+			Tx:   row.Tx,
 		})
 	}
 
@@ -332,11 +335,11 @@ func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid s
 	for _, tx := range rows {
 		level := tx.TreeLevel
 		vtxoTree = extendArray(vtxoTree, int(level.Int32))
-		vtxoTree[int(level.Int32)] = extendArray(vtxoTree[int(level.Int32)], int(tx.Position.Int32))
-		if vtxoTree[int(level.Int32)][tx.Position.Int32] == (tree.Node{}) {
-			vtxoTree[int(level.Int32)][tx.Position.Int32] = tree.Node{
-				Tx:         tx.Tx.String,
-				Txid:       tx.Txid.String,
+		vtxoTree[int(level.Int32)] = extendArray(vtxoTree[int(level.Int32)], int(tx.Position))
+		if vtxoTree[int(level.Int32)][tx.Position] == (tree.Node{}) {
+			vtxoTree[int(level.Int32)][tx.Position] = tree.Node{
+				Tx:         tx.Tx,
+				Txid:       tx.Txid,
 				ParentTxid: tx.ParentTxid.String,
 				Leaf:       tx.IsLeaf.Bool,
 			}
@@ -365,11 +368,11 @@ func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) 
 	for _, tx := range rows {
 		level := tx.TreeLevel
 		vtxoTree = extendArray(vtxoTree, int(level.Int32))
-		vtxoTree[int(level.Int32)] = extendArray(vtxoTree[int(level.Int32)], int(tx.Position.Int32))
-		if vtxoTree[int(level.Int32)][tx.Position.Int32] == (tree.Node{}) {
-			vtxoTree[int(level.Int32)][tx.Position.Int32] = tree.Node{
-				Tx:         tx.Tx.String,
-				Txid:       tx.Txid.String,
+		vtxoTree[int(level.Int32)] = extendArray(vtxoTree[int(level.Int32)], int(tx.Position))
+		if vtxoTree[int(level.Int32)][tx.Position] == (tree.Node{}) {
+			vtxoTree[int(level.Int32)][tx.Position] = tree.Node{
+				Tx:         tx.Tx,
+				Txid:       tx.Txid,
 				ParentTxid: tx.ParentTxid.String,
 				Leaf:       tx.IsLeaf.Bool,
 			}
@@ -404,7 +407,7 @@ func (r *roundRepository) GetExistingRounds(ctx context.Context, txids []string)
 
 	resp := make(map[string]any)
 	for _, row := range rows {
-		resp[row] = nil
+		resp[row.Txid] = nil
 	}
 	return resp, nil
 }
@@ -443,7 +446,6 @@ func rowsToRounds(rows []combinedRow) ([]*domain.Round, error) {
 					Failed: v.round.Failed,
 					Code:   int(v.round.StageCode),
 				},
-				Txid:               v.round.Txid,
 				ConnectorAddress:   v.round.ConnectorAddress,
 				Version:            uint(v.round.Version),
 				Swept:              v.round.Swept,
@@ -520,6 +522,7 @@ func rowsToRounds(rows []combinedRow) ([]*domain.Round, error) {
 			position := v.tx.Position
 			switch v.tx.Type.String {
 			case "commitment":
+				round.Txid = v.tx.Txid.String
 				round.CommitmentTx = v.tx.Tx.String
 			case "forfeit":
 				round.ForfeitTxs = extendArray(round.ForfeitTxs, int(position.Int32))
@@ -572,14 +575,14 @@ func combinedRowToVtxo(row queries.RequestVtxoVw) domain.Vtxo {
 			Txid: row.Txid.String,
 			VOut: uint32(row.Vout.Int32),
 		},
-		Amount:    uint64(row.Amount.Int64),
-		PubKey:    row.Pubkey.String,
-		RoundTxid: row.RoundTx.String,
-		SpentBy:   row.SpentBy.String,
-		Spent:     row.Spent.Bool,
-		Redeemed:  row.Redeemed.Bool,
-		Swept:     row.Swept.Bool,
-		ExpireAt:  row.ExpireAt.Int64,
+		Amount:         uint64(row.Amount.Int64),
+		PubKey:         row.Pubkey.String,
+		CommitmentTxid: row.CommitmentTxid.String,
+		SpentBy:        row.SpentBy.String,
+		Spent:          row.Spent.Bool,
+		Redeemed:       row.Redeemed.Bool,
+		Swept:          row.Swept.Bool,
+		ExpireAt:       row.ExpireAt.Int64,
 	}
 }
 

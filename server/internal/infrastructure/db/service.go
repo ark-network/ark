@@ -171,7 +171,7 @@ func NewService(config ServiceConfig, txDecoder ports.TxDecoder) (ports.RepoMana
 		if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
 			return nil, fmt.Errorf("failed to run postgres migrations: %s", err)
 		}
-		
+
 		roundStore, err = roundStoreFactory(db)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open round store: %s", err)
@@ -383,12 +383,12 @@ func (s *service) updateProjectionsAfterOffchainTxEvents(events []domain.Event) 
 					Txid: txid,
 					VOut: uint32(outIndex),
 				},
-				PubKey:    hex.EncodeToString(out.PkScript[2:]),
-				Amount:    uint64(out.Amount),
-				ExpireAt:  offchainTx.ExpiryTimestamp,
-				RoundTxid: offchainTx.RootCommitmentTxid(),
-				RedeemTx:  offchainTx.VirtualTx,
-				CreatedAt: offchainTx.EndingTimestamp,
+				PubKey:         hex.EncodeToString(out.PkScript[2:]),
+				Amount:         uint64(out.Amount),
+				ExpireAt:       offchainTx.ExpiryTimestamp,
+				CommitmentTxid: offchainTx.RootCommitmentTxId,
+				RedeemTx:       offchainTx.VirtualTx,
+				CreatedAt:      offchainTx.EndingTimestamp,
 			})
 		}
 
@@ -437,12 +437,12 @@ func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
 
 			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
 			vtxos = append(vtxos, domain.Vtxo{
-				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-				PubKey:    vtxoPubkey,
-				Amount:    uint64(out.Value),
-				RoundTxid: round.Txid,
-				CreatedAt: round.EndingTimestamp,
-				ExpireAt:  round.ExpiryTimestamp(),
+				VtxoKey:        domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+				PubKey:         vtxoPubkey,
+				Amount:         uint64(out.Value),
+				CommitmentTxid: round.Txid,
+				CreatedAt:      round.EndingTimestamp,
+				ExpireAt:       round.ExpiryTimestamp(),
 			})
 		}
 	}

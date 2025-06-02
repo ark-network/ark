@@ -133,7 +133,7 @@ func testAcceptOffchainTx(t *testing.T) {
 			event, err := offchainTx.Request(txid, virtualTx, unsignedCheckpointTxs)
 			require.NoError(t, err)
 			require.NotNil(t, event)
-			require.Empty(t, offchainTx.RootCommitmentTxid())
+			require.Empty(t, offchainTx.RootCommitmentTxId)
 
 			event, err = offchainTx.Accept(
 				finalVirtualTx,
@@ -151,7 +151,7 @@ func testAcceptOffchainTx(t *testing.T) {
 			require.Equal(t, finalVirtualTx, offchainTx.VirtualTx)
 			require.Equal(t, signedCheckpointTxs, offchainTx.CheckpointTxs)
 			require.Equal(t, commitmentTxsByCheckpointTxid, offchainTx.CommitmentTxids)
-			require.Equal(t, rootCommitmentTxid, offchainTx.RootCommitmentTxid())
+			require.Equal(t, rootCommitmentTxid, offchainTx.RootCommitmentTxId)
 
 			events := offchainTx.Events()
 			require.Len(t, events, 2)

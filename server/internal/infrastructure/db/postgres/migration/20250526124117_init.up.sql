@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS round (
     ended BOOLEAN NOT NULL,
     failed BOOLEAN NOT NULL,
     stage_code INTEGER NOT NULL,
-    txid VARCHAR NOT NULL,
     connector_address VARCHAR NOT NULL,
     version INTEGER NOT NULL,
     swept BOOLEAN NOT NULL,
@@ -44,7 +43,7 @@ CREATE TABLE IF NOT EXISTS vtxo (
     vout INTEGER NOT NULL,
     pubkey VARCHAR NOT NULL,
     amount BIGINT NOT NULL,
-    round_tx VARCHAR NOT NULL,
+    commitment_txid VARCHAR NOT NULL,
     spent_by VARCHAR NOT NULL,
     spent BOOLEAN NOT NULL,
     redeemed BOOLEAN NOT NULL,
@@ -52,7 +51,6 @@ CREATE TABLE IF NOT EXISTS vtxo (
     expire_at BIGINT NOT NULL,
     created_at BIGINT NOT NULL,
     request_id VARCHAR,
-    redeem_tx TEXT,
     PRIMARY KEY (txid, vout),
     FOREIGN KEY (request_id) REFERENCES tx_request(id)
 );
@@ -81,12 +79,10 @@ CREATE TABLE IF NOT EXISTS checkpoint_tx (
     txid VARCHAR PRIMARY KEY,
     tx TEXT NOT NULL,
     commitment_txid TEXT NOT NULL,
-    is_root_commitment_tx BOOLEAN NOT NULL DEFAULT FALSE,
+    is_root_commitment_txid BOOLEAN NOT NULL DEFAULT FALSE,
     virtual_txid VARCHAR NOT NULL,
     FOREIGN KEY (virtual_txid) REFERENCES virtual_tx(txid)
 );
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_round_txid ON round(txid);
 
 CREATE VIEW round_request_vw AS
 SELECT tx_request.*
@@ -99,6 +95,12 @@ SELECT tx.*
 FROM round
 LEFT OUTER JOIN tx
 ON round.id=tx.round_id;
+
+CREATE VIEW round_commitment_tx_vw AS
+SELECT round.*,tx.*
+FROM round
+INNER JOIN tx
+ON round.id=tx.round_id AND tx.type='commitment';
 
 CREATE VIEW request_receiver_vw AS
 SELECT receiver.*
@@ -118,8 +120,16 @@ SELECT
     checkpoint_tx.txid AS checkpoint_txid,
     checkpoint_tx.tx AS checkpoint_tx,
     checkpoint_tx.commitment_txid,
-    checkpoint_tx.is_root_commitment_tx,
+    checkpoint_tx.is_root_commitment_txid,
     checkpoint_tx.virtual_txid
 FROM virtual_tx
 LEFT JOIN checkpoint_tx
 ON virtual_tx.txid = checkpoint_tx.virtual_txid;
+
+CREATE VIEW vtxo_virtual_tx_vw AS
+SELECT
+    vtxo.*,
+    virtual_tx.tx AS redeem_tx
+FROM vtxo
+LEFT JOIN virtual_tx
+ON vtxo.txid = virtual_tx.txid;

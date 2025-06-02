@@ -52,11 +52,11 @@ func (v *offchainTxRepository) AddOrUpdateOffchainTx(
 			}
 			isRoot := commitmentTxid == offchainTx.RootCommitmentTxId
 			err := querierWithTx.UpsertCheckpointTx(ctx, queries.UpsertCheckpointTxParams{
-				Txid:               checkpointTxid,
-				Tx:                 checkpointTx,
-				CommitmentTxid:     commitmentTxid,
-				IsRootCommitmentTx: isRoot,
-				VirtualTxid:        offchainTx.VirtualTxid,
+				Txid:                 checkpointTxid,
+				Tx:                   checkpointTx,
+				CommitmentTxid:       commitmentTxid,
+				IsRootCommitmentTxid: isRoot,
+				VirtualTxid:          offchainTx.VirtualTxid,
 			})
 			if err != nil {
 				return err
@@ -84,7 +84,7 @@ func (v *offchainTxRepository) GetOffchainTx(ctx context.Context, txid string) (
 		if vw.CheckpointTxid.Valid && vw.CheckpointTx.Valid {
 			checkpointTxs[vw.CheckpointTxid.String] = vw.CheckpointTx.String
 			commitmentTxids[vw.CheckpointTxid.String] = vw.CommitmentTxid.String
-			if vw.IsRootCommitmentTx.Valid && vw.IsRootCommitmentTx.Bool {
+			if vw.IsRootCommitmentTxid.Valid && vw.IsRootCommitmentTxid.Bool {
 				rootCommitmentTxId = vw.CommitmentTxid.String
 			}
 		}

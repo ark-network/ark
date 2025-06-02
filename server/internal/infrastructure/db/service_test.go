@@ -372,10 +372,10 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 									Txid: randomString(32),
 									VOut: 0,
 								},
-								RoundTxid: randomString(32),
-								ExpireAt:  7980322,
-								PubKey:    randomString(32),
-								Amount:    300,
+								CommitmentTxid: randomString(32),
+								ExpireAt:       7980322,
+								PubKey:         randomString(32),
+								Amount:         300,
 							},
 						},
 						Receivers: []domain.Receiver{{
@@ -392,10 +392,10 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 									Txid: randomString(32),
 									VOut: 0,
 								},
-								RoundTxid: randomString(32),
-								ExpireAt:  7980322,
-								PubKey:    randomString(32),
-								Amount:    600,
+								CommitmentTxid: randomString(32),
+								ExpireAt:       7980322,
+								PubKey:         randomString(32),
+								Amount:         600,
 							},
 						},
 						Receivers: []domain.Receiver{
@@ -648,7 +648,7 @@ func testOffchainTxRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.NotNil(t, offchainTx)
 		require.True(t, gotOffchainTx.IsAccepted())
-		require.Equal(t, rootCommitmentTxid, gotOffchainTx.RootCommitmentTxid())
+		require.Equal(t, rootCommitmentTxid, gotOffchainTx.RootCommitmentTxId)
 		require.Condition(t, offchainTxMatch(*offchainTx, *gotOffchainTx))
 
 		newEvents := []domain.Event{

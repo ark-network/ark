@@ -578,14 +578,14 @@ func combinedRowToVtxo(row queries.RequestVtxoVw) domain.Vtxo {
 			Txid: row.Txid.String,
 			VOut: uint32(row.Vout.Int64),
 		},
-		Amount:    uint64(row.Amount.Int64),
-		PubKey:    row.Pubkey.String,
-		RoundTxid: row.RoundTx.String,
-		SpentBy:   row.SpentBy.String,
-		Spent:     row.Spent.Bool,
-		Redeemed:  row.Redeemed.Bool,
-		Swept:     row.Swept.Bool,
-		ExpireAt:  row.ExpireAt.Int64,
+		Amount:         uint64(row.Amount.Int64),
+		PubKey:         row.Pubkey.String,
+		CommitmentTxid: row.RoundTx.String,
+		SpentBy:        row.SpentBy.String,
+		Spent:          row.Spent.Bool,
+		Redeemed:       row.Redeemed.Bool,
+		Swept:          row.Swept.Bool,
+		ExpireAt:       row.ExpireAt.Int64,
 	}
 }
 

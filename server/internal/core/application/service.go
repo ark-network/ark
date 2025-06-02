@@ -373,7 +373,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 	commitmentTxsByCheckpointTxid := make(map[string]string)
 	for _, vtxo := range spentVtxos {
 		indexedSpentVtxos[vtxo.VtxoKey] = vtxo
-		commitmentTxsByCheckpointTxid[checkpointTxsByVtxoKey[vtxo.VtxoKey]] = vtxo.RoundTxid
+		commitmentTxsByCheckpointTxid[checkpointTxsByVtxoKey[vtxo.VtxoKey]] = vtxo.CommitmentTxid
 	}
 
 	for _, checkpointPsbt := range checkpointPsbts {
@@ -659,7 +659,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 		return nil, "", "", fmt.Errorf("failed to accept offchain tx: %s", err)
 	}
 	changes = append(changes, change)
-	s.offchainTxs.add(*domain.NewOffchainTxFromEvents(changes))
+	s.offchainTxs.add(*offchainTx)
 
 	finalVirtualTx = signedRedeemTx
 	signedCheckpoints = make([]string, 0)
@@ -2334,12 +2334,12 @@ func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
 
 			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
 			vtxos = append(vtxos, domain.Vtxo{
-				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-				PubKey:    vtxoPubkey,
-				Amount:    uint64(out.Value),
-				RoundTxid: round.Txid,
-				CreatedAt: createdAt,
-				ExpireAt:  expireAt,
+				VtxoKey:        domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+				PubKey:         vtxoPubkey,
+				Amount:         uint64(out.Value),
+				CommitmentTxid: round.Txid,
+				CreatedAt:      createdAt,
+				ExpireAt:       expireAt,
 			})
 		}
 	}

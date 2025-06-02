@@ -583,12 +583,12 @@ func decodeTx(offchainTx domain.OffchainTx) (string, []domain.VtxoKey, []domain.
 				Txid: txid,
 				VOut: uint32(outIndex),
 			},
-			PubKey:    hex.EncodeToString(out.PkScript[2:]),
-			Amount:    uint64(out.Value),
-			ExpireAt:  offchainTx.ExpiryTimestamp,
-			RoundTxid: offchainTx.RootCommitmentTxid(),
-			RedeemTx:  offchainTx.VirtualTx,
-			CreatedAt: offchainTx.EndingTimestamp,
+			PubKey:         hex.EncodeToString(out.PkScript[2:]),
+			Amount:         uint64(out.Value),
+			ExpireAt:       offchainTx.ExpiryTimestamp,
+			CommitmentTxid: offchainTx.RootCommitmentTxId,
+			RedeemTx:       offchainTx.VirtualTx,
+			CreatedAt:      offchainTx.EndingTimestamp,
 		})
 	}
 
@@ -598,7 +598,7 @@ func decodeTx(offchainTx domain.OffchainTx) (string, []domain.VtxoKey, []domain.
 func findFirstRoundToExpire(vtxos []domain.Vtxo) (expiration int64, roundTxid string) {
 	for i, vtxo := range vtxos {
 		if i == 0 || vtxo.ExpireAt < expiration {
-			roundTxid = vtxo.RoundTxid
+			roundTxid = vtxo.CommitmentTxid
 			expiration = vtxo.ExpireAt
 		}
 	}
