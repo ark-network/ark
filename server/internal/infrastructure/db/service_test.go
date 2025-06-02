@@ -293,8 +293,6 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 							Id:   "virtualTxid",
 							Type: domain.EventTypeOffchainTxAccepted,
 						},
-						CommitmentTxids: []string{randomString(32)},
-						FinalVirtualTx:  "fully signed virtual tx",
 						Id: "virtualTxid",
 						CommitmentTxids: map[string]string{
 							"0": randomString(32),
@@ -322,8 +320,6 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 							Id:   "virtualTxid 2",
 							Type: domain.EventTypeOffchainTxAccepted,
 						},
-						CommitmentTxids: []string{randomString(32)},
-						FinalVirtualTx:  "fully signed virtual tx",
 						Id: "virtualTxid 2",
 						CommitmentTxids: map[string]string{
 							"0": randomString(32),
@@ -679,9 +675,6 @@ func testOffchainTxRepository(t *testing.T, svc ports.RepoManager) {
 					Id:   virtualTxid,
 					Type: domain.EventTypeOffchainTxAccepted,
 				},
-				CommitmentTxids:     nil,
-				FinalVirtualTx:      "",
-				SignedCheckpointTxs: nil,
 				Id: virtualTxid,
 				CommitmentTxids: map[string]string{
 					checkpointTxid1: rootCommitmentTxid,

@@ -709,12 +709,12 @@ func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
 
 			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
 			vtxos = append(vtxos, domain.Vtxo{
-				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-				PubKey:    vtxoPubkey,
-				Amount:    uint64(out.Value),
-				RoundTxid: round.Txid,
-				CreatedAt: createdAt,
-				ExpireAt:  expireAt,
+				VtxoKey:        domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+				PubKey:         vtxoPubkey,
+				Amount:         uint64(out.Value),
+				CommitmentTxid: round.Txid,
+				CreatedAt:      createdAt,
+				ExpireAt:       expireAt,
 			})
 		}
 	}
