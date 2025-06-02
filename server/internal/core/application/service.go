@@ -1459,12 +1459,16 @@ func (s *covenantlessService) DeleteTxRequests(
 
 // DeleteTxRequestsByProof deletes transaction requests matching the BIP322 proof.
 func (s *covenantlessService) DeleteTxRequestsByProof(
-	ctx context.Context, sig bip322.Signature, message tree.IntentMessage,
+	ctx context.Context, sig bip322.Signature, message tree.DeleteIntentMessage,
 ) error {
-	outpoints := sig.GetOutpoints()
-	if len(outpoints) != len(message.InputTapTrees) {
-		return fmt.Errorf("number of outpoints and taptrees do not match")
+	if message.ExpireAt > 0 {
+		expireAt := time.Unix(message.ExpireAt, 0)
+		if time.Now().After(expireAt) {
+			return fmt.Errorf("proof of ownership expired")
+		}
 	}
+
+	outpoints := sig.GetOutpoints()
 
 	boardingTxs := make(map[string]wire.MsgTx)
 	prevouts := make(map[wire.OutPoint]*wire.TxOut)
@@ -1553,6 +1557,10 @@ func (s *covenantlessService) DeleteTxRequestsByProof(
 	idsToDelete := make([]string, 0, len(idsToDeleteMap))
 	for id := range idsToDeleteMap {
 		idsToDelete = append(idsToDelete, id)
+	}
+
+	if len(idsToDelete) == 0 {
+		return fmt.Errorf("no matching tx requests found for BIP322 proof")
 	}
 
 	return s.txRequests.delete(idsToDelete)

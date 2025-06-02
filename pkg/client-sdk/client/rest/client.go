@@ -202,14 +202,21 @@ func (a *restClient) RegisterIntent(
 	return resp.Payload.RequestID, nil
 }
 
-func (a *restClient) DeleteIntent(_ context.Context, requestID, signature, message string) error {
-	body := &models.V1DeleteIntentRequest{
-		Bip322Signature: &models.V1Bip322Signature{
-			Message:   message,
-			Signature: signature,
-		},
-		RequestID: requestID,
+func (a *restClient) DeleteIntent(_ context.Context, intentID, signature, message string) error {
+	var body *models.V1DeleteIntentRequest
+	if intentID != "" {
+		body = &models.V1DeleteIntentRequest{
+			IntentID: intentID,
+		}
+	} else {
+		body = &models.V1DeleteIntentRequest{
+			Bip322Signature: &models.V1Bip322Signature{
+				Message:   message,
+				Signature: signature,
+			},
+		}
 	}
+
 	_, err := a.svc.ArkServiceDeleteIntent(
 		ark_service.NewArkServiceDeleteIntentParams().WithBody(body),
 	)
