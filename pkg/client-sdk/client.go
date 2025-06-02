@@ -2033,7 +2033,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 				continue
 			// we receive a tree's tx, we need to update the batch trees
 			case client.BatchTreeEvent:
-				if step != start && step != roundSigningNoncesGenerated {
+				if step != batchStarted && step != roundSigningNoncesGenerated {
 					continue
 				}
 				vtxoTree, connectorsTree = handleBatchTree(event.(client.BatchTreeEvent), vtxoTree, connectorsTree)
