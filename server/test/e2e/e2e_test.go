@@ -819,7 +819,7 @@ func TestChainOffchainTransactions(t *testing.T) {
 	require.NotZero(t, balance.Offchain.Total)
 }
 
-func TestSubdustVtxoTransaction(t *testing.T) {
+func TestSubDustVtxoTransaction(t *testing.T) {
 	ctx := context.Background()
 	bob, grpcBob := setupArkSDK(t)
 	defer bob.Stop()
@@ -870,7 +870,7 @@ func TestSubdustVtxoTransaction(t *testing.T) {
 	require.Error(t, err)
 
 	// bob should fail to settle the subdust
-	_, err = bob.Settle(ctx)
+	_, err = bob.Settle(ctx, arksdk.WithSubDustVtxos)
 	require.Error(t, err)
 
 	// resend some funds to bob so he can settle
