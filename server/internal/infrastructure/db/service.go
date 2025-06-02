@@ -317,7 +317,7 @@ func (s *service) updateProjectionsAfterOffchainTxEvents(events []domain.Event) 
 				continue
 			}
 
-			isDust := common.IsDustReturnScript(out.PkScript)
+			isDust := common.IsSubDustScript(out.PkScript)
 
 			newVtxos = append(newVtxos, domain.Vtxo{
 				VtxoKey: domain.VtxoKey{

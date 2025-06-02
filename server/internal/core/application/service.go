@@ -584,7 +584,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 
 		if out.Value < int64(dust) {
 			// if the output is below dust limit, it must be using OP_RETURN-style vtxo pkscript
-			if !common.IsDustReturnScript(out.PkScript) {
+			if !common.IsSubDustScript(out.PkScript) {
 				return nil, "", "", fmt.Errorf("output #%d amount is less than dust limit but is not using OP_RETURN output script", outIndex)
 			}
 		}
@@ -2445,7 +2445,7 @@ func (s *covenantlessService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string
 		var script []byte
 
 		if vtxo.Amount < dustLimit {
-			script, err = common.DustReturnScript(vtxoTapKey)
+			script, err = common.SubDustScript(vtxoTapKey)
 		} else {
 			script, err = common.P2TRScript(vtxoTapKey)
 		}

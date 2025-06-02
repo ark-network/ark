@@ -3526,7 +3526,7 @@ func buildOffchainTx(
 		var newVtxoScript []byte
 
 		if receiver.Amount() < dustLimit {
-			newVtxoScript, err = common.DustReturnScript(addr.VtxoTapKey)
+			newVtxoScript, err = common.SubDustScript(addr.VtxoTapKey)
 		} else {
 			newVtxoScript, err = common.P2TRScript(addr.VtxoTapKey)
 		}

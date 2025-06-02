@@ -10,11 +10,11 @@ func P2TRScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
 	return txscript.NewScriptBuilder().AddOp(txscript.OP_1).AddData(schnorr.SerializePubKey(taprootKey)).Script()
 }
 
-func DustReturnScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
+func SubDustScript(taprootKey *secp256k1.PublicKey) ([]byte, error) {
 	return txscript.NewScriptBuilder().AddOp(txscript.OP_RETURN).AddData(schnorr.SerializePubKey(taprootKey)).Script()
 }
 
-func IsDustReturnScript(script []byte) bool {
+func IsSubDustScript(script []byte) bool {
 	return len(script) == 32+1+1 &&
 		script[0] == txscript.OP_RETURN &&
 		script[1] == 0x20
