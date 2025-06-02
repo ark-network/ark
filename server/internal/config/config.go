@@ -328,6 +328,14 @@ func (c *Config) Validate() error {
 		)
 	}
 
+	if c.VtxoMinAmount == 0 {
+		return fmt.Errorf("vtxo min amount must be greater than 0")
+	}
+
+	if c.UtxoMinAmount == 0 {
+		return fmt.Errorf("utxo min amount must be greater than 0")
+	}
+
 	if err := c.repoManager(); err != nil {
 		return err
 	}
