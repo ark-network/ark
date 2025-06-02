@@ -1027,13 +1027,9 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 		}
 	}
 
-	log.Debugf("request %s processed, pushing to queue", request.Id)
-
 	if err := s.txRequests.push(*request, boardingInputs, message.Musig2Data); err != nil {
 		return "", err
 	}
-
-	log.Debugf("pushed request %s to queue", request.Id)
 
 	// prevent the vtxos from being spent in a concurrent intent
 	s.roundInputs.add(vtxoKeysInputs)
@@ -1249,10 +1245,7 @@ func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string
 		return err
 	}
 
-	go func() {
-		round := s.getCurrentRound()
-		s.checkForfeitsAndBoardingSigsSent(round)
-	}()
+	go s.checkForfeitsAndBoardingSigsSent()
 
 	return nil
 }
@@ -1266,19 +1259,18 @@ func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx str
 		return nil
 	}
 
-	round := s.getCurrentRound()
+	s.currentRoundLock.Lock()
+	defer s.currentRoundLock.Unlock()
+	currentRound := s.currentRound
 
-	combined, err := s.builder.VerifyAndCombinePartialTx(round.CommitmentTx, signedRoundTx)
+	combined, err := s.builder.VerifyAndCombinePartialTx(currentRound.CommitmentTx, signedRoundTx)
 	if err != nil {
 		return fmt.Errorf("failed to verify and combine partial tx: %s", err)
 	}
 
 	s.currentRound.CommitmentTx = combined
 
-	go func() {
-		round := s.getCurrentRound()
-		s.checkForfeitsAndBoardingSigsSent(round)
-	}()
+	go s.checkForfeitsAndBoardingSigsSent()
 
 	return nil
 }
@@ -2315,7 +2307,9 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 	}
 }
 
-func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *domain.Round) {
+func (s *covenantlessService) checkForfeitsAndBoardingSigsSent() {
+	currentRound := s.getCurrentRound()
+
 	roundTx, _ := psbt.NewFromRawBytes(strings.NewReader(currentRound.CommitmentTx), true)
 	numOfInputsSigned := 0
 	for _, v := range roundTx.Inputs {
