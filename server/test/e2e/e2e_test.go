@@ -1538,29 +1538,23 @@ func TestDeleteIntent(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, aliceVtxos)
 
-	registerIntent, registerIntentMessage, err := alice.CreateRegisterIntent(ctx, aliceVtxos, []types.Utxo{}, nil, nil, nil)
-	require.NoError(t, err)
-	require.NotEmpty(t, registerIntent)
-	require.NotEmpty(t, registerIntentMessage)
-
-	_, err = grpcAlice.RegisterIntent(ctx, registerIntent, registerIntentMessage)
+	_, err = alice.RegisterIntent(ctx, aliceVtxos, []types.Utxo{}, nil, nil, nil)
 	require.NoError(t, err)
 
 	// should fail because previous intent spend same vtxos
-	_, err = grpcAlice.RegisterIntent(ctx, registerIntent, registerIntentMessage)
+	_, err = alice.RegisterIntent(ctx, aliceVtxos, []types.Utxo{}, nil, nil, nil)
 	require.Error(t, err)
 
-	deleteIntent, deleteIntentMessage, err := alice.CreateDeleteIntent(ctx, aliceVtxos, []types.Utxo{}, nil)
-	require.NoError(t, err)
-	require.NotEmpty(t, deleteIntent)
-	require.NotEmpty(t, deleteIntentMessage)
-
 	// should delete the intent
-	err = grpcAlice.DeleteIntent(ctx, "", deleteIntent, deleteIntentMessage)
+	err = alice.DeleteIntent(ctx, aliceVtxos, []types.Utxo{}, nil)
 	require.NoError(t, err)
+
+	// should fail becasue no intent is associated with the vtxos
+	err = alice.DeleteIntent(ctx, aliceVtxos, []types.Utxo{}, nil)
+	require.Error(t, err)
 
 	// should not fail because intent is deleted
-	id, err := grpcAlice.RegisterIntent(ctx, registerIntent, registerIntentMessage)
+	id, err := alice.RegisterIntent(ctx, aliceVtxos, []types.Utxo{}, nil, nil, nil)
 	require.NoError(t, err)
 
 	// delete again but using the intent ID

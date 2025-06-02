@@ -26,20 +26,20 @@ type ArkClient interface {
 		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver,
 		withZeroFees bool,
 	) (string, error)
-	CreateRegisterIntent(
+	RegisterIntent(
 		ctx context.Context,
 		vtxos []client.Vtxo,
 		boardingUtxos []types.Utxo,
 		notes []string,
 		outputs []client.Output,
 		musig2Data *tree.Musig2,
-	) (signature, message string, err error)
-	CreateDeleteIntent(
+	) (intentID string, err error)
+	DeleteIntent(
 		ctx context.Context,
 		vtxos []client.Vtxo,
 		boardingUtxos []types.Utxo,
 		notes []string,
-	) (signature, message string, err error)
+	) error
 	Settle(ctx context.Context, opts ...Option) (string, error)
 	CollaborativeExit(
 		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,

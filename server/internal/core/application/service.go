@@ -1551,6 +1551,10 @@ func (s *covenantlessService) DeleteTxRequestsByProof(
 		idsToDelete = append(idsToDelete, id)
 	}
 
+	if len(idsToDelete) == 0 {
+		return fmt.Errorf("no matching tx requests found for BIP322 proof")
+	}
+
 	return s.txRequests.delete(idsToDelete)
 }
 

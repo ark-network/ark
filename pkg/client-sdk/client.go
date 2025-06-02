@@ -1060,22 +1060,22 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 	return history, nil
 }
 
-func (a *covenantlessArkClient) CreateRegisterIntent(
+func (a *covenantlessArkClient) RegisterIntent(
 	ctx context.Context,
 	vtxos []client.Vtxo,
 	boardingUtxos []types.Utxo,
 	notes []string,
 	outputs []client.Output,
 	musig2Data *tree.Musig2,
-) (string, string, error) {
+) (string, error) {
 	vtxosWithTapscripts, err := a.populateVtxosWithTapscripts(ctx, vtxos)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	inputs, exitLeaves, tapscripts, notesWitnesses, err := toBIP322Inputs(boardingUtxos, vtxosWithTapscripts, notes)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
 	bip322Signature, bip322Message, err := a.makeRegisterIntentBIP322Signature(
@@ -1083,36 +1083,36 @@ func (a *covenantlessArkClient) CreateRegisterIntent(
 		outputs, musig2Data, notesWitnesses,
 	)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
 
-	return bip322Signature, bip322Message, nil
+	return a.client.RegisterIntent(ctx, bip322Signature, bip322Message)
 }
 
-func (a *covenantlessArkClient) CreateDeleteIntent(
+func (a *covenantlessArkClient) DeleteIntent(
 	ctx context.Context,
 	vtxos []client.Vtxo,
 	boardingUtxos []types.Utxo,
 	notes []string,
-) (string, string, error) {
+) error {
 	vtxosWithTapscripts, err := a.populateVtxosWithTapscripts(ctx, vtxos)
 	if err != nil {
-		return "", "", err
+		return err
 	}
 
 	inputs, exitLeaves, _, notesWitnesses, err := toBIP322Inputs(boardingUtxos, vtxosWithTapscripts, notes)
 	if err != nil {
-		return "", "", err
+		return err
 	}
 
 	bip322Signature, bip322Message, err := a.makeDeleteIntentBIP322Signature(
 		inputs, exitLeaves, notesWitnesses,
 	)
 	if err != nil {
-		return "", "", err
+		return err
 	}
 
-	return bip322Signature, bip322Message, nil
+	return a.client.DeleteIntent(ctx, "", bip322Signature, bip322Message)
 }
 
 func (a *covenantlessArkClient) listenForArkTxs(ctx context.Context) {
