@@ -196,7 +196,10 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 				id:    "42dd81f7-cadd-482c-bf69-8e9209aae9f3",
 				events: []domain.Event{
 					domain.RoundStarted{
-						Id:        "42dd81f7-cadd-482c-bf69-8e9209aae9f3",
+						RoundEvent: domain.RoundEvent{
+							Id:   "42dd81f7-cadd-482c-bf69-8e9209aae9f3",
+							Type: domain.EventTypeRoundStarted,
+						},
 						Timestamp: 1701190270,
 					},
 				},
@@ -215,11 +218,17 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 				id:    "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
 				events: []domain.Event{
 					domain.RoundStarted{
-						Id:        "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
+						RoundEvent: domain.RoundEvent{
+							Id:   "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
+							Type: domain.EventTypeRoundStarted,
+						},
 						Timestamp: 1701190270,
 					},
 					domain.RoundFinalizationStarted{
-						Id:         "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
+						RoundEvent: domain.RoundEvent{
+							Id:   "1ea610ff-bf3e-4068-9bfd-b6c3f553467e",
+							Type: domain.EventTypeRoundFinalizationStarted,
+						},
 						VtxoTree:   vtxoTree,
 						Connectors: connectorsTree,
 						RoundTx:    emptyTx,
@@ -239,17 +248,26 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 				id:    "7578231e-428d-45ae-aaa4-e62c77ad5cec",
 				events: []domain.Event{
 					domain.RoundStarted{
-						Id:        "7578231e-428d-45ae-aaa4-e62c77ad5cec",
+						RoundEvent: domain.RoundEvent{
+							Id:   "7578231e-428d-45ae-aaa4-e62c77ad5cec",
+							Type: domain.EventTypeRoundStarted,
+						},
 						Timestamp: 1701190270,
 					},
 					domain.RoundFinalizationStarted{
-						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
+						RoundEvent: domain.RoundEvent{
+							Id:   "7578231e-428d-45ae-aaa4-e62c77ad5cec",
+							Type: domain.EventTypeRoundFinalizationStarted,
+						},
 						VtxoTree:   vtxoTree,
 						Connectors: connectorsTree,
 						RoundTx:    emptyTx,
 					},
 					domain.RoundFinalized{
-						Id:         "7578231e-428d-45ae-aaa4-e62c77ad5cec",
+						RoundEvent: domain.RoundEvent{
+							Id:   "7578231e-428d-45ae-aaa4-e62c77ad5cec",
+							Type: domain.EventTypeRoundFinalized,
+						},
 						Txid:       randomString(32),
 						ForfeitTxs: []domain.ForfeitTx{f1Tx(), f2Tx(), f3Tx(), f4Tx()},
 						Timestamp:  1701190300,
@@ -271,6 +289,12 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 				id:    "virtualTxid",
 				events: []domain.Event{
 					domain.OffchainTxAccepted{
+						OffchainTxEvent: domain.OffchainTxEvent{
+							Id:   "virtualTxid",
+							Type: domain.EventTypeOffchainTxAccepted,
+						},
+						CommitmentTxids: []string{randomString(32)},
+						FinalVirtualTx:  "fully signed virtual tx",
 						Id: "virtualTxid",
 						CommitmentTxids: map[string]string{
 							"0": randomString(32),
@@ -294,6 +318,12 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 				id:    "virtualTxid 2",
 				events: []domain.Event{
 					domain.OffchainTxAccepted{
+						OffchainTxEvent: domain.OffchainTxEvent{
+							Id:   "virtualTxid 2",
+							Type: domain.EventTypeOffchainTxAccepted,
+						},
+						CommitmentTxids: []string{randomString(32)},
+						FinalVirtualTx:  "fully signed virtual tx",
 						Id: "virtualTxid 2",
 						CommitmentTxids: map[string]string{
 							"0": randomString(32),
@@ -306,7 +336,10 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 						},
 					},
 					domain.OffchainTxFinalized{
-						Id: "virtualTxid 2",
+						OffchainTxEvent: domain.OffchainTxEvent{
+							Id:   "virtualTxid 2",
+							Type: domain.EventTypeOffchainTxFinalized,
+						},
 						FinalCheckpointTxs: map[string]string{
 							"0": "list of fully-signed txs",
 							"1": "indexed by txid",
@@ -347,7 +380,10 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 
 		events := []domain.Event{
 			domain.RoundStarted{
-				Id:        roundId,
+				RoundEvent: domain.RoundEvent{
+					Id:   roundId,
+					Type: domain.EventTypeRoundStarted,
+				},
 				Timestamp: now.Unix(),
 			},
 		}
@@ -362,7 +398,10 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 
 		newEvents := []domain.Event{
 			domain.TxRequestsRegistered{
-				Id: roundId,
+				RoundEvent: domain.RoundEvent{
+					Id:   roundId,
+					Type: domain.EventTypeTxRequestsRegistered,
+				},
 				TxRequests: []domain.TxRequest{
 					{
 						Id: uuid.New().String(),
@@ -412,7 +451,10 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 				},
 			},
 			domain.RoundFinalizationStarted{
-				Id:         roundId,
+				RoundEvent: domain.RoundEvent{
+					Id:   roundId,
+					Type: domain.EventTypeRoundFinalizationStarted,
+				},
 				VtxoTree:   vtxoTree,
 				Connectors: connectorsTree,
 				RoundTx:    emptyTx,
@@ -436,7 +478,10 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		txid := randomString(32)
 		newEvents = []domain.Event{
 			domain.RoundFinalized{
-				Id:                roundId,
+				RoundEvent: domain.RoundEvent{
+					Id:   roundId,
+					Type: domain.EventTypeRoundFinalized,
+				},
 				Txid:              txid,
 				ForfeitTxs:        []domain.ForfeitTx{f1Tx(), f2Tx(), f3Tx(), f4Tx()},
 				FinalCommitmentTx: emptyTx,
@@ -621,12 +666,22 @@ func testOffchainTxRepository(t *testing.T, svc ports.RepoManager) {
 		commitmentTxid := "0000000000000000000000000000000000000000000000000000000000000004"
 		events := []domain.Event{
 			domain.OffchainTxRequested{
-				Id:                    virtualTxid,
+				OffchainTxEvent: domain.OffchainTxEvent{
+					Id:   virtualTxid,
+					Type: domain.EventTypeOffchainTxRequested,
+				},
 				VirtualTx:             "",
 				UnsignedCheckpointTxs: nil,
 				StartingTimestamp:     now.Unix(),
 			},
 			domain.OffchainTxAccepted{
+				OffchainTxEvent: domain.OffchainTxEvent{
+					Id:   virtualTxid,
+					Type: domain.EventTypeOffchainTxAccepted,
+				},
+				CommitmentTxids:     nil,
+				FinalVirtualTx:      "",
+				SignedCheckpointTxs: nil,
 				Id: virtualTxid,
 				CommitmentTxids: map[string]string{
 					checkpointTxid1: rootCommitmentTxid,
@@ -653,7 +708,10 @@ func testOffchainTxRepository(t *testing.T, svc ports.RepoManager) {
 
 		newEvents := []domain.Event{
 			domain.OffchainTxFinalized{
-				Id:                 virtualTxid,
+				OffchainTxEvent: domain.OffchainTxEvent{
+					Id:   virtualTxid,
+					Type: domain.EventTypeOffchainTxFinalized,
+				},
 				FinalCheckpointTxs: nil,
 				Timestamp:          endTimestamp,
 			},

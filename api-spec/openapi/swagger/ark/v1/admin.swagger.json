@@ -569,10 +569,6 @@
           "items": {
             "type": "string"
           }
-        },
-        "lastPing": {
-          "type": "string",
-          "format": "int64"
         }
       }
     },

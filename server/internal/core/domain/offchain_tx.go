@@ -82,7 +82,10 @@ func (s *OffchainTx) Request(
 	}
 
 	event := OffchainTxRequested{
-		Id:                    virtualTxid,
+		OffchainTxEvent: OffchainTxEvent{
+			Id:   virtualTxid,
+			Type: EventTypeOffchainTxRequested,
+		},
 		VirtualTx:             virtualTx,
 		UnsignedCheckpointTxs: unsignedCheckpointTxs,
 		StartingTimestamp:     time.Now().Unix(),
@@ -117,7 +120,10 @@ func (s *OffchainTx) Accept(
 		return nil, fmt.Errorf("missing expiry timestamp")
 	}
 	event := OffchainTxAccepted{
-		Id:                  s.VirtualTxid,
+		OffchainTxEvent: OffchainTxEvent{
+			Id:   s.VirtualTxid,
+			Type: EventTypeOffchainTxAccepted,
+		},
 		FinalVirtualTx:      finalVirtualTx,
 		SignedCheckpointTxs: signedCheckpointTxs,
 		CommitmentTxids:     commitmentTxsByCheckpointTxid,
@@ -142,7 +148,10 @@ func (s *OffchainTx) Finalize(
 	}
 
 	event := OffchainTxFinalized{
-		Id:                 s.VirtualTxid,
+		OffchainTxEvent: OffchainTxEvent{
+			Id:   s.VirtualTxid,
+			Type: EventTypeOffchainTxFinalized,
+		},
 		FinalCheckpointTxs: finalCheckpointTxs,
 		Timestamp:          time.Now().Unix(),
 	}
@@ -152,7 +161,10 @@ func (s *OffchainTx) Finalize(
 
 func (s *OffchainTx) Fail(err error) Event {
 	event := OffchainTxFailed{
-		Id:        s.VirtualTxid,
+		OffchainTxEvent: OffchainTxEvent{
+			Id:   s.VirtualTxid,
+			Type: EventTypeOffchainTxFailed,
+		},
 		Reason:    err.Error(),
 		Timestamp: time.Now().Unix(),
 	}

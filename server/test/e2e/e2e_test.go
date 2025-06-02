@@ -722,9 +722,6 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			finalCheckpoints = append(finalCheckpoints, finalCheckpoint)
 		}
 
-		err = grpcTransportClient.FinalizeOffchainTx(ctx, bobTxid, finalCheckpoints)
-		require.NoError(t, err)
-
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
@@ -732,6 +729,9 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, vtxos)
 		}()
+
+		err = grpcTransportClient.FinalizeOffchainTx(ctx, bobTxid, finalCheckpoints)
+		require.NoError(t, err)
 
 		wg.Wait()
 

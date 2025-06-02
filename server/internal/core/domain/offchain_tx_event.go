@@ -2,19 +2,23 @@ package domain
 
 const OffchainTxTopic = "offchain_tx"
 
-func (s OffchainTxRequested) GetTopic() string { return OffchainTxTopic }
-func (s OffchainTxAccepted) GetTopic() string  { return OffchainTxTopic }
-func (s OffchainTxFinalized) GetTopic() string { return OffchainTxTopic }
-func (s OffchainTxFailed) GetTopic() string    { return OffchainTxTopic }
+type OffchainTxEvent struct {
+	Id   string
+	Type EventType
+}
+
+func (s OffchainTxEvent) GetTopic() string   { return OffchainTxTopic }
+func (s OffchainTxEvent) GetType() EventType { return s.Type }
 
 type OffchainTxRequested struct {
-	Id                    string
+	OffchainTxEvent
 	VirtualTx             string
 	UnsignedCheckpointTxs map[string]string
 	StartingTimestamp     int64
 }
 
 type OffchainTxAccepted struct {
+	OffchainTxEvent
 	Id                  string
 	CommitmentTxids     map[string]string
 	RootCommitmentTxid  string
@@ -24,13 +28,13 @@ type OffchainTxAccepted struct {
 }
 
 type OffchainTxFinalized struct {
-	Id                 string
+	OffchainTxEvent
 	FinalCheckpointTxs map[string]string
 	Timestamp          int64
 }
 
 type OffchainTxFailed struct {
-	Id        string
+	OffchainTxEvent
 	Reason    string
 	Timestamp int64
 }

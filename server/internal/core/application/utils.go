@@ -3,6 +3,7 @@ package application
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"sort"
@@ -14,21 +15,22 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/wire"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
-)
-
-const (
-	selectGapMinutes = float64(1)
-	deleteGapMinutes = float64(5)
 )
 
 type timedTxRequest struct {
 	domain.TxRequest
 	boardingInputs []ports.BoardingInput
 	timestamp      time.Time
-	pingTimestamp  time.Time
 	musig2Data     *tree.Musig2
+}
+
+func (t timedTxRequest) hashID() [32]byte {
+	return sha256.Sum256([]byte(t.Id))
 }
 
 type txRequestsQueue struct {
@@ -88,11 +90,11 @@ func (m *txRequestsQueue) push(
 	}
 
 	now := time.Now()
-	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, now, now, musig2Data}
+	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, now, musig2Data}
 	return nil
 }
 
-func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []*tree.Musig2) {
+func (m *txRequestsQueue) pop(num int64) []timedTxRequest {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -100,20 +102,6 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 	for _, p := range m.requests {
 		// Skip tx requests without registered receivers.
 		if len(p.Receivers) <= 0 {
-			continue
-		}
-
-		sinceLastPing := time.Since(p.pingTimestamp).Minutes()
-
-		// Skip tx requests for which users didn't notify to be online in the last minute.
-		if sinceLastPing > selectGapMinutes {
-			// Cleanup the request from the map if greater than deleteGapMinutes
-			// TODO move to dedicated function
-			if sinceLastPing > deleteGapMinutes {
-				log.Debugf("delete tx request %s : we didn't receive a ping in the last %d minutes", p.Id, int(deleteGapMinutes))
-				delete(m.requests, p.Id)
-			}
-
 			continue
 		}
 
@@ -127,16 +115,14 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 		num = int64(len(requestsByTime))
 	}
 
-	requests := make([]domain.TxRequest, 0, num)
-	boardingInputs := make([]ports.BoardingInput, 0)
-	musig2Data := make([]*tree.Musig2, 0)
+	result := make([]timedTxRequest, 0, num)
+
 	for _, p := range requestsByTime[:num] {
-		boardingInputs = append(boardingInputs, p.boardingInputs...)
-		requests = append(requests, p.TxRequest)
-		musig2Data = append(musig2Data, p.musig2Data)
+		result = append(result, p)
 		delete(m.requests, p.Id)
 	}
-	return requests, boardingInputs, musig2Data
+
+	return result
 }
 
 func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musig2) error {
@@ -173,19 +159,6 @@ func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musi
 	if musig2Data != nil {
 		r.musig2Data = musig2Data
 	}
-	return nil
-}
-
-func (m *txRequestsQueue) updatePingTimestamp(id string) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	request, ok := m.requests[id]
-	if !ok {
-		return errTxRequestNotFound{id}
-	}
-
-	request.pingTimestamp = time.Now()
 	return nil
 }
 
@@ -410,6 +383,16 @@ func (r *outpointMap) add(outpoints []domain.VtxoKey) {
 	}
 }
 
+func (r *outpointMap) removeRoundInputs(round domain.Round) {
+	vtxoKeys := make([]domain.VtxoKey, 0)
+	for _, req := range round.TxRequests {
+		for _, in := range req.Inputs {
+			vtxoKeys = append(vtxoKeys, in.VtxoKey)
+		}
+	}
+	r.remove(vtxoKeys)
+}
+
 func (r *outpointMap) remove(outpoints []domain.VtxoKey) {
 	r.lock.Lock()
 	defer r.lock.Unlock()
@@ -604,4 +587,136 @@ func findFirstRoundToExpire(vtxos []domain.Vtxo) (expiration int64, roundTxid st
 	}
 
 	return
+}
+
+func newBoardingInput(
+	tx wire.MsgTx,
+	input ports.Input,
+	serverPubKey *secp256k1.PublicKey,
+	boardingExitDelay common.RelativeLocktime,
+) (*ports.BoardingInput, error) {
+	if len(tx.TxOut) <= int(input.VOut) {
+		return nil, fmt.Errorf("output not found")
+	}
+
+	output := tx.TxOut[input.VOut]
+
+	boardingScript, err := tree.ParseVtxoScript(input.Tapscripts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
+	}
+
+	tapKey, _, err := boardingScript.TapTree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get taproot key: %s", err)
+	}
+
+	expectedScriptPubkey, err := common.P2TRScript(tapKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get script pubkey: %s", err)
+	}
+
+	if !bytes.Equal(output.PkScript, expectedScriptPubkey) {
+		return nil, fmt.Errorf(
+			"invalid boarding utxo taproot key: got %x expected %x",
+			output.PkScript, expectedScriptPubkey,
+		)
+	}
+
+	if err := boardingScript.Validate(serverPubKey, boardingExitDelay); err != nil {
+		return nil, err
+	}
+
+	return &ports.BoardingInput{
+		Amount: uint64(output.Value),
+		Input:  input,
+	}, nil
+}
+
+func calcNextMarketHour(marketHourStartTime, marketHourEndTime time.Time, period, marketHourDelta time.Duration, now time.Time) (time.Time, time.Time, error) {
+	// Validate input parameters
+	if period <= 0 {
+		return time.Time{}, time.Time{}, fmt.Errorf("period must be greater than 0")
+	}
+	if !marketHourEndTime.After(marketHourStartTime) {
+		return time.Time{}, time.Time{}, fmt.Errorf("market hour end time must be after start time")
+	}
+
+	// Calculate the duration of the market hour
+	duration := marketHourEndTime.Sub(marketHourStartTime)
+
+	// Calculate the number of periods since the initial marketHourStartTime
+	elapsed := now.Sub(marketHourStartTime)
+	var n int64
+	if elapsed >= 0 {
+		n = int64(elapsed / period)
+	} else {
+		n = int64((elapsed - period + 1) / period)
+	}
+
+	// Calculate the current market hour start and end times
+	currentStartTime := marketHourStartTime.Add(time.Duration(n) * period)
+	currentEndTime := currentStartTime.Add(duration)
+
+	// Adjust if now is before the currentStartTime
+	if now.Before(currentStartTime) {
+		n -= 1
+		currentStartTime = marketHourStartTime.Add(time.Duration(n) * period)
+		currentEndTime = currentStartTime.Add(duration)
+	}
+
+	timeUntilEnd := currentEndTime.Sub(now)
+
+	if !now.Before(currentStartTime) && now.Before(currentEndTime) && timeUntilEnd >= marketHourDelta {
+		// Return the current market hour
+		return currentStartTime, currentEndTime, nil
+	} else {
+		// Move to the next market hour
+		n += 1
+		nextStartTime := marketHourStartTime.Add(time.Duration(n) * period)
+		nextEndTime := nextStartTime.Add(duration)
+		return nextStartTime, nextEndTime, nil
+	}
+}
+
+func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
+	if len(round.VtxoTree) <= 0 {
+		return nil
+	}
+
+	now := time.Now()
+	createdAt := now.Unix()
+	expireAt := round.ExpiryTimestamp()
+
+	leaves := round.VtxoTree.Leaves()
+	vtxos := make([]domain.Vtxo, 0)
+	for _, node := range leaves {
+		tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+		if err != nil {
+			log.WithError(err).Warn("failed to parse tx")
+			continue
+		}
+		for i, out := range tx.UnsignedTx.TxOut {
+			if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
+				continue
+			}
+
+			vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
+			if err != nil {
+				log.WithError(err).Warn("failed to parse vtxo tap key")
+				continue
+			}
+
+			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
+			vtxos = append(vtxos, domain.Vtxo{
+				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+				PubKey:    vtxoPubkey,
+				Amount:    uint64(out.Value),
+				RoundTxid: round.Txid,
+				CreatedAt: createdAt,
+				ExpireAt:  expireAt,
+			})
+		}
+	}
+	return vtxos
 }
