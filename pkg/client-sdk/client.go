@@ -56,6 +56,9 @@ type SettleOptions struct {
 	EventsCh chan<- client.RoundEvent
 }
 
+// name alias, sub-dust vtxos are recoverable vtxos
+var WithSubDustVtxos = WithRecoverableVtxos
+
 func WithRecoverableVtxos(o interface{}) error {
 	opts, ok := o.(*SettleOptions)
 	if !ok {
@@ -549,10 +552,6 @@ func (a *covenantlessArkClient) SendOffChain(
 			return "", fmt.Errorf("invalid receiver address '%s': expected server %s, got %s", receiver.To(), hex.EncodeToString(expectedServerPubkey), hex.EncodeToString(rcvServerPubkey))
 		}
 
-		if receiver.Amount() < a.Dust {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
-		}
-
 		sumOfReceivers += receiver.Amount()
 	}
 
@@ -623,7 +622,7 @@ func (a *covenantlessArkClient) SendOffChain(
 		},
 	}
 
-	virtualTx, checkpointsTxs, err := buildOffchainTx(inputs, receivers, checkpointExitScript)
+	virtualTx, checkpointsTxs, err := buildOffchainTx(inputs, receivers, checkpointExitScript, a.Dust)
 	if err != nil {
 		return "", err
 	}
@@ -3472,6 +3471,7 @@ func buildOffchainTx(
 	vtxos []redeemTxInput,
 	receivers []Receiver,
 	serverUnrollScript *tree.CSVMultisigClosure,
+	dustLimit uint64,
 ) (string, []string, error) {
 	if len(vtxos) <= 0 {
 		return "", nil, fmt.Errorf("missing vtxos")
@@ -3539,7 +3539,13 @@ func buildOffchainTx(
 			return "", nil, err
 		}
 
-		newVtxoScript, err := common.P2TRScript(addr.VtxoTapKey)
+		var newVtxoScript []byte
+
+		if receiver.Amount() < dustLimit {
+			newVtxoScript, err = common.SubDustScript(addr.VtxoTapKey)
+		} else {
+			newVtxoScript, err = common.P2TRScript(addr.VtxoTapKey)
+		}
 		if err != nil {
 			return "", nil, err
 		}

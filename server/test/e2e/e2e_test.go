@@ -779,7 +779,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 	})
 }
 
-func TestChainOutOfRoundTransactions(t *testing.T) {
+func TestChainOffchainTransactions(t *testing.T) {
 	var receive utils.ArkReceive
 	receiveStr, err := runArkCommand("receive")
 	require.NoError(t, err)
@@ -817,6 +817,69 @@ func TestChainOutOfRoundTransactions(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
 	require.NotZero(t, balance.Offchain.Total)
+}
+
+func TestSubDustVtxoTransaction(t *testing.T) {
+	ctx := context.Background()
+	bob, grpcBob := setupArkSDK(t)
+	defer bob.Stop()
+	defer grpcBob.Close()
+
+	var receive utils.ArkReceive
+	receiveStr, err := runArkCommand("receive")
+	require.NoError(t, err)
+
+	err = json.Unmarshal([]byte(receiveStr), &receive)
+	require.NoError(t, err)
+
+	_, err = utils.RunCommand("nigiri", "faucet", receive.Boarding)
+	require.NoError(t, err)
+
+	time.Sleep(5 * time.Second)
+
+	_, err = runArkCommand("settle", "--password", utils.Password)
+	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
+	_, bobAddr, _, err := bob.Receive(ctx)
+	require.NoError(t, err)
+
+	subdustAmount := uint64(1)
+
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := bob.NotifyIncomingFunds(ctx, bobAddr)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+		require.Len(t, vtxos, 1)
+		require.Equal(t, vtxos[0].Amount, subdustAmount)
+	}()
+
+	// send 1 satoshi
+	_, err = runArkCommand("send", "--amount", fmt.Sprintf("%d", subdustAmount), "--to", bobAddr, "--password", utils.Password)
+	require.NoError(t, err)
+
+	// wait for bob to receive the vtxo
+	wg.Wait()
+
+	// bob should fail to send the satoshi via offchain tx
+	_, err = bob.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddr, subdustAmount)}, false)
+	require.Error(t, err)
+
+	// bob should fail to settle the subdust
+	_, err = bob.Settle(ctx, arksdk.WithSubDustVtxos)
+	require.Error(t, err)
+
+	// resend some funds to bob so he can settle
+	_, err = runArkCommand("send", "--amount", "1000", "--to", bobAddr, "--password", utils.Password)
+	require.NoError(t, err)
+
+	// now that bob has enough funds (greater than dust), he should be able to settle
+	_, err = bob.Settle(ctx, arksdk.WithSubDustVtxos)
+	require.NoError(t, err)
 }
 
 // TestCollisionBetweenInRoundAndRedeemVtxo tests for a potential collision between VTXOs that could occur

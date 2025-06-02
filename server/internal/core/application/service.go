@@ -71,7 +71,8 @@ type covenantlessService struct {
 	utxoMaxAmount             int64
 	utxoMinAmount             int64
 	vtxoMaxAmount             int64
-	vtxoMinAmount             int64
+	vtxoMinSettlementAmount   int64
+	vtxoMinOffchainTxAmount   int64
 }
 
 func NewService(
@@ -117,8 +118,12 @@ func NewService(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dust amount: %s", err)
 	}
-	if vtxoMinAmount < int64(dustAmount) {
-		vtxoMinAmount = int64(dustAmount)
+	var vtxoMinSettlementAmount, vtxoMinOffchainTxAmount = vtxoMinAmount, vtxoMinAmount
+	if vtxoMinSettlementAmount < int64(dustAmount) {
+		vtxoMinSettlementAmount = int64(dustAmount)
+	}
+	if vtxoMinOffchainTxAmount == -1 {
+		vtxoMinOffchainTxAmount = int64(dustAmount)
 	}
 	if utxoMinAmount < int64(dustAmount) {
 		utxoMinAmount = int64(dustAmount)
@@ -152,7 +157,8 @@ func NewService(
 		utxoMaxAmount:             utxoMaxAmount,
 		utxoMinAmount:             utxoMinAmount,
 		vtxoMaxAmount:             vtxoMaxAmount,
-		vtxoMinAmount:             vtxoMinAmount,
+		vtxoMinSettlementAmount:   vtxoMinSettlementAmount,
+		vtxoMinOffchainTxAmount:   vtxoMinOffchainTxAmount,
 	}
 
 	repoManager.Events().RegisterEventsHandler(
@@ -555,9 +561,14 @@ func (s *covenantlessService) SubmitOffchainTx(
 		}
 	}
 
+	dust, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("failed to get dust amount: %s", err)
+	}
+
 	outputs := make([]*wire.TxOut, 0) // outputs excluding the anchor
 	foundAnchor := false
-	for _, out := range ptx.UnsignedTx.TxOut {
+	for outIndex, out := range ptx.UnsignedTx.TxOut {
 		if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
 			if foundAnchor {
 				return nil, "", "", fmt.Errorf("invalid tx, multiple anchor outputs")
@@ -568,12 +579,17 @@ func (s *covenantlessService) SubmitOffchainTx(
 
 		if s.vtxoMaxAmount >= 0 {
 			if out.Value > s.vtxoMaxAmount {
-				return nil, "", "", fmt.Errorf("output amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
+				return nil, "", "", fmt.Errorf("output #%d amount is higher than max vtxo amount: %d", outIndex, s.vtxoMaxAmount)
 			}
 		}
-		if s.vtxoMinAmount >= 0 {
-			if out.Value < s.vtxoMinAmount {
-				return nil, "", "", fmt.Errorf("output amount is lower than min utxo amount:%d", s.vtxoMinAmount)
+		if out.Value < s.vtxoMinOffchainTxAmount {
+			return nil, "", "", fmt.Errorf("output #%d amount is lower than min vtxo amount: %d", outIndex, s.vtxoMinOffchainTxAmount)
+		}
+
+		if out.Value < int64(dust) {
+			// if the output is below dust limit, it must be using OP_RETURN-style vtxo pkscript
+			if !common.IsSubDustScript(out.PkScript) {
+				return nil, "", "", fmt.Errorf("output #%d amount is less than dust limit but is not using OP_RETURN output script", outIndex)
 			}
 		}
 
@@ -841,10 +857,8 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 						return "", fmt.Errorf("boarding input amount is higher than max utxo amount:%d", s.utxoMaxAmount)
 					}
 				}
-				if s.utxoMinAmount >= 0 {
-					if tx.TxOut[outpoint.Index].Value < s.utxoMinAmount {
-						return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
-					}
+				if tx.TxOut[outpoint.Index].Value < s.utxoMinAmount {
+					return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
 				}
 
 				boardingTxs[vtxoKey.Txid] = tx
@@ -970,13 +984,11 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			if isOnchain {
 				if s.utxoMaxAmount >= 0 {
 					if amount > uint64(s.utxoMaxAmount) {
-						return "", fmt.Errorf("receiver amount is higher than max utxo amount:%d", s.vtxoMaxAmount)
+						return "", fmt.Errorf("receiver amount is higher than max utxo amount: %d", s.utxoMaxAmount)
 					}
 				}
-				if s.utxoMinAmount >= 0 {
-					if amount < uint64(s.utxoMinAmount) {
-						return "", fmt.Errorf("receiver amount is lower than min utxo amount:%d", s.vtxoMinAmount)
-					}
+				if amount < uint64(s.utxoMinAmount) {
+					return "", fmt.Errorf("receiver amount is lower than min utxo amount: %d", s.utxoMinAmount)
 				}
 
 				_, addrs, _, err := txscript.ExtractPkScriptAddrs(output.PkScript, s.chainParams())
@@ -992,13 +1004,11 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			} else {
 				if s.vtxoMaxAmount >= 0 {
 					if amount > uint64(s.vtxoMaxAmount) {
-						return "", fmt.Errorf("receiver amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
+						return "", fmt.Errorf("receiver amount is higher than max vtxo amount: %d", s.vtxoMaxAmount)
 					}
 				}
-				if s.vtxoMinAmount >= 0 {
-					if amount < uint64(s.vtxoMinAmount) {
-						return "", fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
-					}
+				if amount < uint64(s.vtxoMinSettlementAmount) {
+					return "", fmt.Errorf("receiver amount is lower than min vtxo amount: %d", s.vtxoMinSettlementAmount)
 				}
 
 				hasOffChainReceiver = true
@@ -1100,10 +1110,8 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 						return "", fmt.Errorf("boarding input amount is higher than max utxo amount:%d", s.utxoMaxAmount)
 					}
 				}
-				if s.utxoMinAmount >= 0 {
-					if tx.TxOut[input.VOut].Value < s.utxoMinAmount {
-						return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
-					}
+				if tx.TxOut[input.VOut].Value < s.utxoMinAmount {
+					return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
 				}
 
 				boardingTxs[input.Txid] = tx
@@ -1197,12 +1205,12 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 	for _, rcv := range receivers {
 		if s.vtxoMaxAmount >= 0 {
 			if rcv.Amount > uint64(s.vtxoMaxAmount) {
-				return fmt.Errorf("receiver amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
+				return fmt.Errorf("receiver amount is higher than max vtxo amount: %d", s.vtxoMaxAmount)
 			}
 		}
-		if s.vtxoMinAmount >= 0 {
-			if rcv.Amount < uint64(s.vtxoMinAmount) {
-				return fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
+		if s.vtxoMinSettlementAmount >= 0 {
+			if rcv.Amount < uint64(s.vtxoMinSettlementAmount) {
+				return fmt.Errorf("receiver amount is lower than min vtxo amount: %d", s.vtxoMinSettlementAmount)
 			}
 		}
 
@@ -1356,7 +1364,7 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 		},
 		UtxoMinAmount: s.utxoMinAmount,
 		UtxoMaxAmount: s.utxoMaxAmount,
-		VtxoMinAmount: s.vtxoMinAmount,
+		VtxoMinAmount: s.vtxoMinSettlementAmount,
 		VtxoMaxAmount: s.vtxoMaxAmount,
 	}, nil
 }
@@ -2402,6 +2410,11 @@ func (s *covenantlessService) restoreWatchingVtxos() error {
 }
 
 func (s *covenantlessService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string, error) {
+	dustLimit, err := s.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
 	indexedScripts := make(map[string]struct{})
 
 	for _, vtxo := range vtxos {
@@ -2415,7 +2428,14 @@ func (s *covenantlessService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string
 			return nil, err
 		}
 
-		script, err := common.P2TRScript(vtxoTapKey)
+		var script []byte
+
+		if vtxo.Amount < dustLimit {
+			script, err = common.SubDustScript(vtxoTapKey)
+		} else {
+			script, err = common.P2TRScript(vtxoTapKey)
+		}
+
 		if err != nil {
 			return nil, err
 		}
