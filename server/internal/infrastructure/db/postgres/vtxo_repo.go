@@ -86,7 +86,7 @@ func (v *vtxoRepository) GetAllNonRedeemedVtxos(ctx context.Context, pubkey stri
 		if err != nil {
 			return nil, nil, err
 		}
-		rows := make([]queries.VtxoVirtualTxVw, 0, len(res))
+		rows = make([]queries.VtxoVirtualTxVw, 0, len(res))
 		for _, row := range res {
 			rows = append(rows, row.VtxoVirtualTxVw)
 		}
