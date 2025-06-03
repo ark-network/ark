@@ -74,7 +74,7 @@ func (s *sweeper) start() error {
 			newProgress := (1.0 / float64(len(unsweptRounds))) + progress
 			if int(newProgress*100) > int(progress*100) {
 				progress = newProgress
-				log.Infof("sweeper: restoring... %.2f%%", progress*100)
+				log.Infof("sweeper: restoring... %d%%", int(progress*100))
 			}
 		}
 
