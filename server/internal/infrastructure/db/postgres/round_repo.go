@@ -84,7 +84,7 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 			return fmt.Errorf("failed to upsert round: %w", err)
 		}
 
-		if len(round.CommitmentTx) > 0 {
+		if round.CommitmentTx != "" && round.Txid != "" {
 			if err := querierWithTx.UpsertTransaction(
 				ctx,
 				queries.UpsertTransactionParams{
@@ -383,10 +383,7 @@ func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) 
 }
 
 func (r *roundRepository) GetTxsWithTxids(ctx context.Context, txids []string) ([]string, error) {
-	rows, err := r.querier.GetTxsByTxid(ctx, queries.GetTxsByTxidParams{
-		Column1: txids,
-		Column2: txids,
-	})
+	rows, err := r.querier.GetTxsByTxid(ctx, txids)
 	if err != nil {
 		return nil, err
 	}

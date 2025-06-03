@@ -231,6 +231,7 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 						},
 						VtxoTree:   vtxoTree,
 						Connectors: connectorsTree,
+						Txid:       "txid",
 						RoundTx:    emptyTx,
 					},
 				},
@@ -261,6 +262,7 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 						},
 						VtxoTree:   vtxoTree,
 						Connectors: connectorsTree,
+						Txid:       "txid",
 						RoundTx:    emptyTx,
 					},
 					domain.RoundFinalized{
@@ -268,8 +270,8 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 							Id:   "7578231e-428d-45ae-aaa4-e62c77ad5cec",
 							Type: domain.EventTypeRoundFinalized,
 						},
-						Txid:       randomString(32),
 						ForfeitTxs: []domain.ForfeitTx{f1Tx(), f2Tx(), f3Tx(), f4Tx()},
+						Txid:       "txid",
 						Timestamp:  1701190300,
 					},
 				},
@@ -392,6 +394,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.NotNil(t, roundById)
 		require.Condition(t, roundsMatch(*round, *roundById))
 
+		roundTxid := randomString(32)
 		newEvents := []domain.Event{
 			domain.TxRequestsRegistered{
 				RoundEvent: domain.RoundEvent{
@@ -407,10 +410,9 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 									Txid: randomString(32),
 									VOut: 0,
 								},
-								CommitmentTxid: randomString(32),
-								ExpireAt:       7980322,
-								PubKey:         randomString(32),
-								Amount:         300,
+								ExpireAt: 7980322,
+								PubKey:   randomString(32),
+								Amount:   300,
 							},
 						},
 						Receivers: []domain.Receiver{{
@@ -427,10 +429,9 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 									Txid: randomString(32),
 									VOut: 0,
 								},
-								CommitmentTxid: randomString(32),
-								ExpireAt:       7980322,
-								PubKey:         randomString(32),
-								Amount:         600,
+								ExpireAt: 7980322,
+								PubKey:   randomString(32),
+								Amount:   600,
 							},
 						},
 						Receivers: []domain.Receiver{
@@ -453,6 +454,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 				},
 				VtxoTree:   vtxoTree,
 				Connectors: connectorsTree,
+				Txid:       roundTxid,
 				RoundTx:    emptyTx,
 			},
 		}
@@ -471,15 +473,14 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.NotNil(t, roundById)
 		require.Condition(t, roundsMatch(*updatedRound, *roundById))
 
-		txid := randomString(32)
 		newEvents = []domain.Event{
 			domain.RoundFinalized{
 				RoundEvent: domain.RoundEvent{
 					Id:   roundId,
 					Type: domain.EventTypeRoundFinalized,
 				},
-				Txid:              txid,
 				ForfeitTxs:        []domain.ForfeitTx{f1Tx(), f2Tx(), f3Tx(), f4Tx()},
+				Txid:              roundTxid,
 				FinalCommitmentTx: emptyTx,
 				Timestamp:         now.Add(60 * time.Second).Unix(),
 			},
@@ -495,12 +496,12 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.NotNil(t, roundById)
 		require.Condition(t, roundsMatch(*finalizedRound, *roundById))
 
-		resultTree, err := svc.Rounds().GetVtxoTreeWithTxid(ctx, txid)
+		resultTree, err := svc.Rounds().GetVtxoTreeWithTxid(ctx, roundTxid)
 		require.NoError(t, err)
 		require.NotNil(t, resultTree)
 		require.Equal(t, finalizedRound.VtxoTree, resultTree)
 
-		roundByTxid, err := svc.Rounds().GetRoundWithTxid(ctx, txid)
+		roundByTxid, err := svc.Rounds().GetRoundWithTxid(ctx, roundTxid)
 		require.NoError(t, err)
 		require.NotNil(t, roundByTxid)
 		require.Condition(t, roundsMatch(*finalizedRound, *roundByTxid))

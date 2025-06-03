@@ -41,13 +41,7 @@ SELECT
     tx.txid,
     tx.tx AS data
 FROM tx
-WHERE tx.txid = ANY($1::varchar[])
-UNION
-SELECT
-    vtxo.txid,
-    vtxo.redeem_tx AS data
-FROM vtxo
-WHERE vtxo.txid = ANY($2::varchar[]) AND vtxo.redeem_tx IS NOT NULL AND vtxo.redeem_tx <> '';
+WHERE tx.txid = ANY($1::varchar[]);
 
 -- name: UpsertTxRequest :exec
 INSERT INTO tx_request (id, round_id) VALUES (@id, @round_id)
@@ -141,12 +135,16 @@ FROM round_commitment_tx_vw r
 WHERE r.txid = @txid;
 
 -- name: GetRoundForfeitTxs :many
-SELECT * FROM round_commitment_tx_vw r
-WHERE r.txid = @txid AND tx.type = 'forfeit';
+SELECT t.* FROM tx t
+WHERE t.round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = @txid)
+    AND t.type = 'forfeit';
+
 
 -- name: GetRoundConnectorTreeTxs :many
-SELECT * FROM round_commitment_tx_vw r
-WHERE r.txid = @txid AND tx.type = 'connector';
+SELECT t.* FROM tx t
+WHERE t.round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = @txid)
+    AND t.type = 'connector';
+
 
 -- name: GetSpendableVtxosWithPubKey :many
 SELECT sqlc.embed(vtxo_virtual_tx_vw)FROM vtxo_virtual_tx_vw
@@ -238,8 +236,8 @@ INSERT INTO market_hour (
 SELECT * FROM market_hour ORDER BY updated_at DESC LIMIT 1;
 
 -- name: SelectTreeTxsWithRoundTxid :many
-SELECT * FROM round_commitment_tx_vw r
-WHERE r.txid = @tx_id AND r.type = 'tree';
+SELECT * FROM tx
+WHERE round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = @txid) AND type = 'tree';
 
 -- name: SelectVtxosWithPubkey :many
 SELECT sqlc.embed(vtxo_virtual_tx_vw) FROM vtxo_virtual_tx_vw WHERE pubkey = @pubkey;

@@ -127,6 +127,7 @@ func (r *Round) StartFinalization(
 	connectorAddress string,
 	connectors tree.TxTree,
 	vtxoTree tree.TxTree,
+	txid string,
 	roundTx string,
 	connectorsIndex map[string]Outpoint,
 	vtxoTreeExpiration int64,
@@ -143,6 +144,9 @@ func (r *Round) StartFinalization(
 	if len(r.TxRequests) <= 0 {
 		return nil, fmt.Errorf("no tx requests registered")
 	}
+	if txid == "" {
+		return nil, fmt.Errorf("missing txid")
+	}
 
 	event := RoundFinalizationStarted{
 		RoundEvent: RoundEvent{
@@ -152,6 +156,7 @@ func (r *Round) StartFinalization(
 		VtxoTree:           vtxoTree,
 		Connectors:         connectors,
 		ConnectorAddress:   connectorAddress,
+		Txid:               txid,
 		RoundTx:            roundTx,
 		ConnectorsIndex:    connectorsIndex,
 		VtxoTreeExpiration: vtxoTreeExpiration,
@@ -253,6 +258,7 @@ func (r *Round) on(event Event, replayed bool) {
 		r.VtxoTree = e.VtxoTree
 		r.Connectors = e.Connectors
 		r.ConnectorAddress = e.ConnectorAddress
+		r.Txid = e.Txid
 		r.CommitmentTx = e.RoundTx
 		r.VtxoTreeExpiration = e.VtxoTreeExpiration
 	case RoundFinalized:

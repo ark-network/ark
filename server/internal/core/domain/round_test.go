@@ -325,7 +325,7 @@ func testStartFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx, map[string]domain.Outpoint{
+			events, err = round.StartFinalization("", connectors, vtxoTree, "txid1", roundTx, map[string]domain.Outpoint{
 				txid: {
 					Txid: txid,
 					VOut: 0,
@@ -359,6 +359,7 @@ func testStartFinalization(t *testing.T) {
 				round       *domain.Round
 				connectors  tree.TxTree
 				tree        tree.TxTree
+				txid        string
 				roundTx     string
 				expiration  int64
 				expectedErr string
@@ -444,6 +445,7 @@ func testStartFinalization(t *testing.T) {
 					connectors:  connectors,
 					tree:        vtxoTree,
 					expiration:  expiration,
+					txid:        "txid",
 					roundTx:     roundTx,
 					expectedErr: "not in a valid stage to start finalization",
 				},
@@ -451,7 +453,7 @@ func testStartFinalization(t *testing.T) {
 
 			for _, f := range fixtures {
 				// TODO fix this
-				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.roundTx, map[string]domain.Outpoint{
+				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.txid, f.roundTx, map[string]domain.Outpoint{
 					txid: {
 						Txid: txid,
 						VOut: 0,
@@ -476,7 +478,7 @@ func testEndFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx, map[string]domain.Outpoint{
+			events, err = round.StartFinalization("", connectors, vtxoTree, "txid", roundTx, map[string]domain.Outpoint{
 				txid: {
 					Txid: txid,
 					VOut: 0,
@@ -496,7 +498,6 @@ func testEndFinalization(t *testing.T) {
 			require.True(t, ok)
 			require.Equal(t, domain.EventTypeRoundFinalized, event.Type)
 			require.Equal(t, round.Id, event.Id)
-			require.Exactly(t, txid, event.Txid)
 			require.Exactly(t, forfeitTxs, event.ForfeitTxs)
 			require.Exactly(t, round.EndingTimestamp, event.Timestamp)
 		})
@@ -523,17 +524,6 @@ func testEndFinalization(t *testing.T) {
 					forfeitTxs:  nil,
 					txid:        txid,
 					expectedErr: "missing list of signed forfeit txs",
-				},
-				{
-					round: &domain.Round{
-						Id: "0",
-						Stage: domain.Stage{
-							Code: int(domain.RoundFinalizationStage),
-						},
-					},
-					forfeitTxs:  forfeitTxs,
-					txid:        "",
-					expectedErr: "missing round txid",
 				},
 				{
 					round: &domain.Round{

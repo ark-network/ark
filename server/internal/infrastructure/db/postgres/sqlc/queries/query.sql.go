@@ -78,30 +78,21 @@ func (q *Queries) GetLatestMarketHour(ctx context.Context) (MarketHour, error) {
 }
 
 const getRoundConnectorTreeTxs = `-- name: GetRoundConnectorTreeTxs :many
-SELECT id, starting_timestamp, ending_timestamp, ended, failed, stage_code, connector_address, version, swept, vtxo_tree_expiration, txid, tx, round_id, type, position, tree_level, parent_txid, is_leaf FROM round_commitment_tx_vw r
-WHERE r.txid = $1 AND tx.type = 'connector'
+SELECT t.txid, t.tx, t.round_id, t.type, t.position, t.tree_level, t.parent_txid, t.is_leaf FROM tx t
+WHERE t.round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = $1)
+    AND t.type = 'connector'
 `
 
-func (q *Queries) GetRoundConnectorTreeTxs(ctx context.Context, txid string) ([]RoundCommitmentTxVw, error) {
+func (q *Queries) GetRoundConnectorTreeTxs(ctx context.Context, txid string) ([]Tx, error) {
 	rows, err := q.db.QueryContext(ctx, getRoundConnectorTreeTxs, txid)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []RoundCommitmentTxVw
+	var items []Tx
 	for rows.Next() {
-		var i RoundCommitmentTxVw
+		var i Tx
 		if err := rows.Scan(
-			&i.ID,
-			&i.StartingTimestamp,
-			&i.EndingTimestamp,
-			&i.Ended,
-			&i.Failed,
-			&i.StageCode,
-			&i.ConnectorAddress,
-			&i.Version,
-			&i.Swept,
-			&i.VtxoTreeExpiration,
 			&i.Txid,
 			&i.Tx,
 			&i.RoundID,
@@ -125,30 +116,21 @@ func (q *Queries) GetRoundConnectorTreeTxs(ctx context.Context, txid string) ([]
 }
 
 const getRoundForfeitTxs = `-- name: GetRoundForfeitTxs :many
-SELECT id, starting_timestamp, ending_timestamp, ended, failed, stage_code, connector_address, version, swept, vtxo_tree_expiration, txid, tx, round_id, type, position, tree_level, parent_txid, is_leaf FROM round_commitment_tx_vw r
-WHERE r.txid = $1 AND tx.type = 'forfeit'
+SELECT t.txid, t.tx, t.round_id, t.type, t.position, t.tree_level, t.parent_txid, t.is_leaf FROM tx t
+WHERE t.round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = $1)
+    AND t.type = 'forfeit'
 `
 
-func (q *Queries) GetRoundForfeitTxs(ctx context.Context, txid string) ([]RoundCommitmentTxVw, error) {
+func (q *Queries) GetRoundForfeitTxs(ctx context.Context, txid string) ([]Tx, error) {
 	rows, err := q.db.QueryContext(ctx, getRoundForfeitTxs, txid)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []RoundCommitmentTxVw
+	var items []Tx
 	for rows.Next() {
-		var i RoundCommitmentTxVw
+		var i Tx
 		if err := rows.Scan(
-			&i.ID,
-			&i.StartingTimestamp,
-			&i.EndingTimestamp,
-			&i.Ended,
-			&i.Failed,
-			&i.StageCode,
-			&i.ConnectorAddress,
-			&i.Version,
-			&i.Swept,
-			&i.VtxoTreeExpiration,
 			&i.Txid,
 			&i.Tx,
 			&i.RoundID,
@@ -296,26 +278,15 @@ SELECT
     tx.tx AS data
 FROM tx
 WHERE tx.txid = ANY($1::varchar[])
-UNION
-SELECT
-    vtxo.txid,
-    vtxo.redeem_tx AS data
-FROM vtxo
-WHERE vtxo.txid = ANY($2::varchar[]) AND vtxo.redeem_tx IS NOT NULL AND vtxo.redeem_tx <> ''
 `
-
-type GetTxsByTxidParams struct {
-	Column1 []string
-	Column2 []string
-}
 
 type GetTxsByTxidRow struct {
 	Txid string
 	Data string
 }
 
-func (q *Queries) GetTxsByTxid(ctx context.Context, arg GetTxsByTxidParams) ([]GetTxsByTxidRow, error) {
-	rows, err := q.db.QueryContext(ctx, getTxsByTxid, pq.Array(arg.Column1), pq.Array(arg.Column2))
+func (q *Queries) GetTxsByTxid(ctx context.Context, dollar_1 []string) ([]GetTxsByTxidRow, error) {
+	rows, err := q.db.QueryContext(ctx, getTxsByTxid, pq.Array(dollar_1))
 	if err != nil {
 		return nil, err
 	}
@@ -930,30 +901,20 @@ func (q *Queries) SelectSweptRoundsConnectorAddress(ctx context.Context) ([]stri
 }
 
 const selectTreeTxsWithRoundTxid = `-- name: SelectTreeTxsWithRoundTxid :many
-SELECT id, starting_timestamp, ending_timestamp, ended, failed, stage_code, connector_address, version, swept, vtxo_tree_expiration, txid, tx, round_id, type, position, tree_level, parent_txid, is_leaf FROM round_commitment_tx_vw r
-WHERE r.txid = $1 AND r.type = 'tree'
+SELECT txid, tx, round_id, type, position, tree_level, parent_txid, is_leaf FROM tx
+WHERE round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = $1) AND type = 'tree'
 `
 
-func (q *Queries) SelectTreeTxsWithRoundTxid(ctx context.Context, txID string) ([]RoundCommitmentTxVw, error) {
-	rows, err := q.db.QueryContext(ctx, selectTreeTxsWithRoundTxid, txID)
+func (q *Queries) SelectTreeTxsWithRoundTxid(ctx context.Context, txid string) ([]Tx, error) {
+	rows, err := q.db.QueryContext(ctx, selectTreeTxsWithRoundTxid, txid)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var items []RoundCommitmentTxVw
+	var items []Tx
 	for rows.Next() {
-		var i RoundCommitmentTxVw
+		var i Tx
 		if err := rows.Scan(
-			&i.ID,
-			&i.StartingTimestamp,
-			&i.EndingTimestamp,
-			&i.Ended,
-			&i.Failed,
-			&i.StageCode,
-			&i.ConnectorAddress,
-			&i.Version,
-			&i.Swept,
-			&i.VtxoTreeExpiration,
 			&i.Txid,
 			&i.Tx,
 			&i.RoundID,

@@ -1968,6 +1968,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 
 		log.Debugf("signing session created for round %s with %d signers", round.Id, len(uniqueSignerPubkeys))
 
+		s.currentRound.Txid = unsignedPsbt.UnsignedTx.TxHash().String()
 		s.currentRound.CommitmentTx = unsignedRoundTx
 
 		// send back the unsigned tree & all cosigners pubkeys
@@ -2052,7 +2053,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 	}
 
 	_, err = round.StartFinalization(
-		connectorAddress, connectors, vtxoTree, unsignedRoundTx,
+		connectorAddress, connectors, vtxoTree, s.currentRound.Txid, s.currentRound.CommitmentTx,
 		s.forfeitTxs.connectorsIndex, s.vtxoTreeExpiry.Seconds(),
 	)
 	if err != nil {
