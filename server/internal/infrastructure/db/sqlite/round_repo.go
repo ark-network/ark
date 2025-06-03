@@ -352,8 +352,8 @@ func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid s
 	return vtxoTree, nil
 }
 
-func (r *roundRepository) GetExpiredRoundsTxid(ctx context.Context) ([]string, error) {
-	return r.querier.SelectExpiredRoundsTxid(ctx)
+func (r *roundRepository) GetUnsweptRoundsTxid(ctx context.Context) ([]string, error) {
+	return r.querier.SelectUnsweptRoundsTxid(ctx)
 }
 
 func (r *roundRepository) GetSweptRoundsConnectorAddress(ctx context.Context) ([]string, error) {

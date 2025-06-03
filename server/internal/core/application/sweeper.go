@@ -52,19 +52,33 @@ func (s *sweeper) start() error {
 
 	ctx := context.Background()
 
-	expiredRounds, err := s.repoManager.Rounds().GetExpiredRoundsTxid(ctx)
+	unsweptRounds, err := s.repoManager.Rounds().GetUnsweptRoundsTxid(ctx)
 	if err != nil {
 		return err
 	}
 
-	for _, txid := range expiredRounds {
-		vtxoTree, err := s.repoManager.Rounds().GetVtxoTreeWithTxid(ctx, txid)
-		if err != nil {
-			return err
+	if len(unsweptRounds) > 0 {
+		log.Infof("sweeper: restoring %d unswept batches", len(unsweptRounds))
+
+		progress := 0.0
+
+		for _, txid := range unsweptRounds {
+			vtxoTree, err := s.repoManager.Rounds().GetVtxoTreeWithTxid(ctx, txid)
+			if err != nil {
+				return err
+			}
+
+			task := s.createTask(txid, vtxoTree)
+			task()
+
+			newProgress := (1.0 / float64(len(unsweptRounds))) + progress
+			if int(newProgress*100) > int(progress*100) {
+				progress = newProgress
+				log.Infof("sweeper: restoring... %.2f%%", progress*100)
+			}
 		}
 
-		task := s.createTask(txid, vtxoTree)
-		task()
+		log.Infof("sweeper: unswept batches restored")
 	}
 
 	return nil
@@ -101,14 +115,6 @@ func (s *sweeper) schedule(
 
 	task := s.createTask(roundTxid, vtxoTree)
 
-	var fancyTime string
-	if s.scheduler.Unit() == ports.UnixTime {
-		fancyTime = time.Unix(expirationTimestamp, 0).Format("2006-01-02 15:04:05")
-	} else {
-		fancyTime = fmt.Sprintf("block %d", expirationTimestamp)
-	}
-	log.Debugf("scheduled sweep for round %s at %s", roundTxid, fancyTime)
-
 	if err := s.scheduler.ScheduleTaskOnce(expirationTimestamp, task); err != nil {
 		return err
 	}
@@ -139,7 +145,7 @@ func (s *sweeper) createTask(
 		}
 
 		s.removeTask(root.Txid)
-		log.Debugf("sweeper: %s", root.Txid)
+		log.Tracef("sweeper: %s", root.Txid)
 
 		sweepInputs := make([]ports.SweepInput, 0)
 		vtxoKeys := make([]domain.VtxoKey, 0) // vtxos associated to the sweep inputs

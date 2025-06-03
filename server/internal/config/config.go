@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -97,6 +98,14 @@ type Config struct {
 	scheduler ports.SchedulerService
 	unlocker  ports.Unlocker
 	network   *common.Network
+}
+
+func (c *Config) String() string {
+	json, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("error while marshalling config JSON: %s", err)
+	}
+	return string(json)
 }
 
 var (
