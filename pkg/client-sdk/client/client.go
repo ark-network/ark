@@ -230,8 +230,6 @@ type Round struct {
 type RoundFinalizationEvent struct {
 	ID              string
 	Tx              string
-	Tree            tree.TxTree
-	Connectors      tree.TxTree
 	ConnectorsIndex map[string]Outpoint // <txid:vout> -> outpoint
 }
 
@@ -253,7 +251,6 @@ func (e RoundFailedEvent) isRoundEvent() {}
 
 type RoundSigningStartedEvent struct {
 	ID               string
-	UnsignedTree     tree.TxTree
 	UnsignedRoundTx  string
 	CosignersPubkeys []string
 }
@@ -266,6 +263,26 @@ type RoundSigningNoncesGeneratedEvent struct {
 }
 
 func (e RoundSigningNoncesGeneratedEvent) isRoundEvent() {}
+
+type BatchTreeEvent struct {
+	ID         string
+	Topic      []string
+	BatchIndex int32
+	Node       tree.Node
+}
+
+func (e BatchTreeEvent) isRoundEvent() {}
+
+type BatchTreeSignatureEvent struct {
+	ID         string
+	Topic      []string
+	BatchIndex int32
+	Level      int32
+	LevelIndex int32
+	Signature  string
+}
+
+func (e BatchTreeSignatureEvent) isRoundEvent() {}
 
 type BatchStartedEvent struct {
 	ID             string

@@ -19,9 +19,6 @@ import (
 // swagger:model v1RoundFinalizationEvent
 type V1RoundFinalizationEvent struct {
 
-	// connectors
-	Connectors *V1Tree `json:"connectors,omitempty"`
-
 	// vtxo outpoint encoded as string -> connector outpoint
 	ConnectorsIndex map[string]V1Outpoint `json:"connectorsIndex,omitempty"`
 
@@ -30,49 +27,19 @@ type V1RoundFinalizationEvent struct {
 
 	// round tx
 	RoundTx string `json:"roundTx,omitempty"`
-
-	// vtxo tree
-	VtxoTree *V1Tree `json:"vtxoTree,omitempty"`
 }
 
 // Validate validates this v1 round finalization event
 func (m *V1RoundFinalizationEvent) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateConnectors(formats); err != nil {
-		res = append(res, err)
-	}
-
 	if err := m.validateConnectorsIndex(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateVtxoTree(formats); err != nil {
 		res = append(res, err)
 	}
 
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
-	return nil
-}
-
-func (m *V1RoundFinalizationEvent) validateConnectors(formats strfmt.Registry) error {
-	if swag.IsZero(m.Connectors) { // not required
-		return nil
-	}
-
-	if m.Connectors != nil {
-		if err := m.Connectors.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("connectors")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("connectors")
-			}
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -102,65 +69,17 @@ func (m *V1RoundFinalizationEvent) validateConnectorsIndex(formats strfmt.Regist
 	return nil
 }
 
-func (m *V1RoundFinalizationEvent) validateVtxoTree(formats strfmt.Registry) error {
-	if swag.IsZero(m.VtxoTree) { // not required
-		return nil
-	}
-
-	if m.VtxoTree != nil {
-		if err := m.VtxoTree.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("vtxoTree")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("vtxoTree")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
 // ContextValidate validate this v1 round finalization event based on the context it is used
 func (m *V1RoundFinalizationEvent) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateConnectors(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
 	if err := m.contextValidateConnectorsIndex(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.contextValidateVtxoTree(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
-	return nil
-}
-
-func (m *V1RoundFinalizationEvent) contextValidateConnectors(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.Connectors != nil {
-
-		if swag.IsZero(m.Connectors) { // not required
-			return nil
-		}
-
-		if err := m.Connectors.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("connectors")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("connectors")
-			}
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -174,27 +93,6 @@ func (m *V1RoundFinalizationEvent) contextValidateConnectorsIndex(ctx context.Co
 			}
 		}
 
-	}
-
-	return nil
-}
-
-func (m *V1RoundFinalizationEvent) contextValidateVtxoTree(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.VtxoTree != nil {
-
-		if swag.IsZero(m.VtxoTree) { // not required
-			return nil
-		}
-
-		if err := m.VtxoTree.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("vtxoTree")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("vtxoTree")
-			}
-			return err
-		}
 	}
 
 	return nil

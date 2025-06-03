@@ -503,6 +503,56 @@
         }
       }
     },
+    "v1BatchTreeEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "batchIndex": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "treeTx": {
+          "$ref": "#/definitions/v1Node"
+        }
+      }
+    },
+    "v1BatchTreeSignatureEvent": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "topic": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "batchIndex": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "level": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "levelIndex": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "signature": {
+          "type": "string"
+        }
+      }
+    },
     "v1Bip322Signature": {
       "type": "object",
       "properties": {
@@ -600,6 +650,12 @@
         },
         "roundSigningNoncesGenerated": {
           "$ref": "#/definitions/v1RoundSigningNoncesGeneratedEvent"
+        },
+        "batchTree": {
+          "$ref": "#/definitions/v1BatchTreeEvent"
+        },
+        "batchTreeSignature": {
+          "$ref": "#/definitions/v1BatchTreeSignatureEvent"
         }
       }
     },
@@ -731,6 +787,17 @@
         },
         "parentTxid": {
           "type": "string"
+        },
+        "level": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "levelIndex": {
+          "type": "integer",
+          "format": "int32"
+        },
+        "leaf": {
+          "type": "boolean"
         }
       }
     },
@@ -864,12 +931,6 @@
         "roundTx": {
           "type": "string"
         },
-        "vtxoTree": {
-          "$ref": "#/definitions/v1Tree"
-        },
-        "connectors": {
-          "$ref": "#/definitions/v1Tree"
-        },
         "connectorsIndex": {
           "type": "object",
           "additionalProperties": {
@@ -901,9 +962,6 @@
           "items": {
             "type": "string"
           }
-        },
-        "unsignedVtxoTree": {
-          "$ref": "#/definitions/v1Tree"
         },
         "unsignedRoundTx": {
           "type": "string"
@@ -1044,30 +1102,6 @@
           "type": "array",
           "items": {
             "type": "string"
-          }
-        }
-      }
-    },
-    "v1Tree": {
-      "type": "object",
-      "properties": {
-        "levels": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1TreeLevel"
-          }
-        }
-      }
-    },
-    "v1TreeLevel": {
-      "type": "object",
-      "properties": {
-        "nodes": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Node"
           }
         }
       }

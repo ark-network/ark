@@ -48,7 +48,7 @@ type covenantlessService struct {
 	offchainTxInputs *outpointMap
 	roundInputs      *outpointMap
 
-	eventsCh            chan domain.Event
+	eventsCh            chan []domain.Event
 	transactionEventsCh chan TransactionEvent
 
 	// cached data for the current round
@@ -144,7 +144,7 @@ func NewService(
 		forfeitTxs:                newForfeitTxsMap(builder),
 		offchainTxInputs:          newOutpointMap(),
 		roundInputs:               newOutpointMap(),
-		eventsCh:                  make(chan domain.Event),
+		eventsCh:                  make(chan []domain.Event),
 		transactionEventsCh:       make(chan TransactionEvent),
 		currentRoundLock:          sync.Mutex{},
 		treeSigningSessions:       make(map[string]*musigSigningSession),
@@ -1298,7 +1298,7 @@ func (s *covenantlessService) ListVtxos(ctx context.Context, address string) ([]
 	return s.repoManager.Vtxos().GetAllNonRedeemedVtxos(ctx, pubkey)
 }
 
-func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan domain.Event {
+func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan []domain.Event {
 	return s.eventsCh
 }
 
@@ -1820,7 +1820,6 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 	}
 
 	if len(repushToQueue) > 0 {
-
 		for _, req := range repushToQueue {
 			if err := s.txRequests.push(req.TxRequest, req.boardingInputs, req.musig2Data); err != nil {
 				log.WithError(err).Warn("failed to re-push requests to the queue")
@@ -2261,7 +2260,24 @@ func (s *covenantlessService) listenToScannerNotifications() {
 
 func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	lastEvent := round.Events()[len(round.Events())-1]
-	s.eventsCh <- lastEvent
+	events := make([]domain.Event, 0)
+	switch ev := lastEvent.(type) {
+	// RoundFinalizationStarted event must be handled differently
+	// because it contains the vtxoTree and connectorsTree
+	// and we need to propagate them in specific BatchTree events
+	case domain.RoundFinalizationStarted:
+		events = append(
+			events,
+			batchTreeSignatureEvents(ev.VtxoTree, 0, round.Id)...,
+		)
+		events = append(
+			events,
+			batchTreeEvents(ev.Connectors, 1, round.Id)...,
+		)
+	}
+
+	events = append(events, lastEvent)
+	s.eventsCh <- events
 }
 
 func (s *covenantlessService) propagateBatchStartedEvent(requests []timedTxRequest, forfeitAddr string) {
@@ -2281,21 +2297,23 @@ func (s *covenantlessService) propagateBatchStartedEvent(requests []timedTxReque
 		BatchExpiry:     s.vtxoTreeExpiry.Value,
 		ForfeitAddress:  forfeitAddr,
 	}
-	s.eventsCh <- ev
+	s.eventsCh <- []domain.Event{ev}
 }
 
 func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree tree.TxTree, cosignersPubkeys []string) {
-	ev := RoundSigningStarted{
-		RoundEvent: domain.RoundEvent{
-			Id:   s.currentRound.Id,
-			Type: domain.EventTypeUndefined,
+	events := append(
+		batchTreeEvents(unsignedVtxoTree, 0, s.currentRound.Id),
+		RoundSigningStarted{
+			RoundEvent: domain.RoundEvent{
+				Id:   s.currentRound.Id,
+				Type: domain.EventTypeUndefined,
+			},
+			UnsignedRoundTx:  s.currentRound.CommitmentTx,
+			CosignersPubkeys: cosignersPubkeys,
 		},
-		UnsignedVtxoTree: unsignedVtxoTree,
-		UnsignedRoundTx:  s.currentRound.CommitmentTx,
-		CosignersPubkeys: cosignersPubkeys,
-	}
+	)
 
-	s.eventsCh <- ev
+	s.eventsCh <- events
 }
 
 func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combinedNonces tree.TreeNonces) {
@@ -2307,7 +2325,7 @@ func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combined
 		Nonces: combinedNonces,
 	}
 
-	s.eventsCh <- ev
+	s.eventsCh <- []domain.Event{ev}
 }
 
 func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
@@ -2538,4 +2556,52 @@ func (s *covenantlessService) verifyForfeitTxsSigs(txs []string) error {
 		close(errChan)
 		return nil
 	}
+}
+
+func batchTreeEvents(txTree tree.TxTree, batchIndex int32, roundId string) []domain.Event {
+	events := make([]domain.Event, 0)
+
+	for _, lvl := range txTree {
+		for _, node := range lvl {
+			events = append(events, BatchTree{
+				RoundEvent: domain.RoundEvent{
+					Id:   roundId,
+					Type: domain.EventTypeUndefined,
+				},
+				BatchIndex: batchIndex,
+				Node:       node,
+			})
+		}
+	}
+
+	return events
+}
+
+func batchTreeSignatureEvents(txTree tree.TxTree, batchIndex int32, roundId string) []domain.Event {
+	events := make([]domain.Event, 0)
+
+	for level, lvl := range txTree {
+		for levelIndex, node := range lvl {
+			ptx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+			if err != nil {
+				log.WithError(err).Warn("failed to parse tx")
+				continue
+			}
+
+			sig := ptx.Inputs[0].TaprootKeySpendSig
+
+			events = append(events, BatchTreeSignature{
+				RoundEvent: domain.RoundEvent{
+					Id:   roundId,
+					Type: domain.EventTypeUndefined,
+				},
+				Topic:      []string{},
+				BatchIndex: batchIndex,
+				Level:      int32(level),
+				LevelIndex: int32(levelIndex),
+				Signature:  hex.EncodeToString(sig),
+			})
+		}
+	}
+	return events
 }

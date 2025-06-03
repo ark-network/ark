@@ -17,6 +17,15 @@ import (
 // swagger:model v1Node
 type V1Node struct {
 
+	// leaf
+	Leaf bool `json:"leaf,omitempty"`
+
+	// level
+	Level int32 `json:"level,omitempty"`
+
+	// level index
+	LevelIndex int32 `json:"levelIndex,omitempty"`
+
 	// parent txid
 	ParentTxid string `json:"parentTxid,omitempty"`
 
