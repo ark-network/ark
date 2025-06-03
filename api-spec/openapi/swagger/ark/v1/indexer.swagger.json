@@ -577,6 +577,137 @@
           "IndexerService"
         ]
       }
+    },
+    "/v1/vtxos/subscribe": {
+      "post": {
+        "operationId": "IndexerService_SubscribeForAddresses",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SubscribeForAddressesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SubscribeForAddressesRequest"
+            }
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/vtxos/subscription/{subscriptionId}": {
+      "get": {
+        "operationId": "IndexerService_GetSubscription",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1GetSubscriptionResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1GetSubscriptionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "subscriptionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      },
+      "delete": {
+        "operationId": "IndexerService_DeleteSubscription",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteSubscriptionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "subscriptionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/vtxos/unsubscribe": {
+      "post": {
+        "operationId": "IndexerService_UnsubscribeForAddresses",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UnsubscribeForAddressesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1UnsubscribeForAddressesRequest"
+            }
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
     }
   },
   "definitions": {
@@ -607,6 +738,9 @@
           }
         }
       }
+    },
+    "v1DeleteSubscriptionResponse": {
+      "type": "object"
     },
     "v1GetCommitmentTxLeavesResponse": {
       "type": "object",
@@ -684,6 +818,28 @@
         },
         "page": {
           "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1GetSubscriptionResponse": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "newVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerVtxo"
+          }
+        },
+        "spentVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerVtxo"
+          }
         }
       }
     },
@@ -1003,6 +1159,46 @@
           "type": "string"
         }
       }
+    },
+    "v1SubscribeForAddressesRequest": {
+      "type": "object",
+      "properties": {
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "subscriptionId": {
+          "type": "string"
+        }
+      }
+    },
+    "v1SubscribeForAddressesResponse": {
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "type": "string"
+        }
+      }
+    },
+    "v1UnsubscribeForAddressesRequest": {
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "type": "string"
+        },
+        "addresses": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "if empty, unsubscribe all addresses"
+        }
+      }
+    },
+    "v1UnsubscribeForAddressesResponse": {
+      "type": "object"
     }
   }
 }

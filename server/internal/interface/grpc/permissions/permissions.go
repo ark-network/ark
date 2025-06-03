@@ -178,6 +178,22 @@ func Whitelist() map[string][]bakery.Op {
 			Entity: EntityExplorer,
 			Action: "read",
 		}},
+		fmt.Sprintf("/%s/SubscribeForAddresses", arkv1.IndexerService_ServiceDesc.ServiceName): {{
+			Entity: EntityExplorer,
+			Action: "read",
+		}},
+		fmt.Sprintf("/%s/GetSubscription", arkv1.IndexerService_ServiceDesc.ServiceName): {{
+			Entity: EntityExplorer,
+			Action: "read",
+		}},
+		fmt.Sprintf("/%s/DeleteSubscription", arkv1.IndexerService_ServiceDesc.ServiceName): {{
+			Entity: EntityExplorer,
+			Action: "read",
+		}},
+		fmt.Sprintf("/%s/UnsubscribeForAddresses", arkv1.IndexerService_ServiceDesc.ServiceName): {{
+			Entity: EntityExplorer,
+			Action: "read",
+		}},
 	}
 }
 

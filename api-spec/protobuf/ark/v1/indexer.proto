@@ -65,6 +65,28 @@ service IndexerService {
       get: "/v1/commitmentTx/{txid}/swept"
     };
   }
+  rpc SubscribeForAddresses(SubscribeForAddressesRequest) returns (SubscribeForAddressesResponse) {
+    option (google.api.http) = {
+      post: "/v1/vtxos/subscribe"
+      body: "*"
+    };
+  };
+  rpc UnsubscribeForAddresses(UnsubscribeForAddressesRequest) returns (UnsubscribeForAddressesResponse) {
+    option (google.api.http) = {
+      post: "/v1/vtxos/unsubscribe"
+      body: "*"
+    };
+  };
+  rpc GetSubscription(GetSubscriptionRequest) returns (stream GetSubscriptionResponse) {
+    option (google.api.http) = {
+      get: "/v1/vtxos/subscription/{subscription_id}"
+    };
+  };
+  rpc DeleteSubscription(DeleteSubscriptionRequest) returns (DeleteSubscriptionResponse) {
+    option (google.api.http) = {
+      delete: "/v1/vtxos/subscription/{subscription_id}"
+    };
+  };
 }
 
 message GetCommitmentTxRequest {
@@ -183,15 +205,6 @@ message GetSweptCommitmentTxResponse {
   repeated string swept_by = 1;
 }
 
-message SubscribeForAddressesRequest {
-  repeated string addresses = 1;
-}
-message SubscribeForAddressesResponse {
-  string address = 1;
-  repeated IndexerVtxo new_vtxos = 2;
-  repeated IndexerVtxo spent_vtxos = 3;
-}
-
 message IndexerBatch {
   uint64 total_output_amount = 1;
   int32 total_output_vtxos = 2;
@@ -269,3 +282,36 @@ message IndexerPageResponse {
   int32 next = 2;
   int32 total = 3;
 }
+
+message SubscribeForAddressesRequest {
+  repeated string addresses = 1;
+  optional string subscription_id = 2;
+}
+
+message SubscribeForAddressesResponse {
+  string subscription_id = 1;
+}
+
+message UnsubscribeForAddressesRequest {
+  string subscription_id = 1;
+  // if empty, unsubscribe all addresses
+  repeated string addresses = 2; 
+}
+
+message UnsubscribeForAddressesResponse {}
+
+message GetSubscriptionRequest {
+  string subscription_id = 1;
+}
+
+message GetSubscriptionResponse {
+  string txid = 1;
+  repeated IndexerVtxo new_vtxos = 2;
+  repeated IndexerVtxo spent_vtxos = 3;
+}
+
+message DeleteSubscriptionRequest {
+  string subscription_id = 1;
+}
+
+message DeleteSubscriptionResponse {}
