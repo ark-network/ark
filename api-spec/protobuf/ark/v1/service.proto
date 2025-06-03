@@ -134,8 +134,10 @@ message RegisterIntentResponse {
 }
 
 message DeleteIntentRequest {
-  string request_id = 1;
-  Bip322Signature bip322_signature = 2;
+  oneof proof {
+    string intent_id = 1;
+    Bip322Signature bip322_signature = 2;
+  }
 }
 message DeleteIntentResponse {}
 
@@ -197,6 +199,8 @@ message GetEventStreamResponse {
     RoundFailed round_failed = 4;
     RoundSigningEvent round_signing = 5;
     RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 6;
+    BatchTreeEvent batch_tree = 7;
+    BatchTreeSignatureEvent batch_tree_signature = 8;
   }
 }
 

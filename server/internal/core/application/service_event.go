@@ -24,7 +24,6 @@ type BatchStarted struct {
 // signer should react to this event by generating a musig2 nonce for each transaction in the tree
 type RoundSigningStarted struct {
 	domain.RoundEvent
-	UnsignedVtxoTree tree.TxTree
 	UnsignedRoundTx  string
 	CosignersPubkeys []string
 }
@@ -45,3 +44,25 @@ func (e RoundSigningNoncesGenerated) SerializeNonces() (string, error) {
 
 	return hex.EncodeToString(serialized.Bytes()), nil
 }
+
+type BatchTree struct {
+	domain.RoundEvent
+	Topic      []string
+	BatchIndex int32
+	Node       tree.Node
+}
+
+type BatchTreeSignature struct {
+	domain.RoundEvent
+	Topic      []string
+	BatchIndex int32
+	Level      int32
+	LevelIndex int32
+	Signature  string
+}
+
+// implement domain.RoundEvent interface
+func (r RoundSigningStarted) GetTopic() string         { return domain.RoundTopic }
+func (r RoundSigningNoncesGenerated) GetTopic() string { return domain.RoundTopic }
+func (r BatchTree) GetTopic() string                   { return domain.RoundTopic }
+func (r BatchTreeSignature) GetTopic() string          { return domain.RoundTopic }

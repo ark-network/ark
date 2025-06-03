@@ -23,7 +23,7 @@ type Service interface {
 	GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error)
 	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
-	GetEventsChannel(ctx context.Context) <-chan domain.Event
+	GetEventsChannel(ctx context.Context) <-chan []domain.Event
 	ListVtxos(
 		ctx context.Context, address string,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
@@ -53,7 +53,7 @@ type Service interface {
 	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
 	GetTxRequestQueue(ctx context.Context, requestIds ...string) ([]TxRequestInfo, error)
 	DeleteTxRequests(ctx context.Context, requestIds ...string) error
-	DeleteTxRequestsByProof(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) error
+	DeleteTxRequestsByProof(ctx context.Context, bip322signature bip322.Signature, message tree.DeleteIntentMessage) error
 }
 
 type ServiceInfo struct {
