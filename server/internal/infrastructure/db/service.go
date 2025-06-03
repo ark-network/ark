@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -316,6 +317,8 @@ func (s *service) updateProjectionsAfterOffchainTxEvents(events []domain.Event) 
 				continue
 			}
 
+			isDust := common.IsSubDustScript(out.PkScript)
+
 			newVtxos = append(newVtxos, domain.Vtxo{
 				VtxoKey: domain.VtxoKey{
 					Txid: txid,
@@ -327,6 +330,10 @@ func (s *service) updateProjectionsAfterOffchainTxEvents(events []domain.Event) 
 				RoundTxid: offchainTx.RootCommitmentTxid(),
 				RedeemTx:  offchainTx.VirtualTx,
 				CreatedAt: offchainTx.EndingTimestamp,
+				// mark the vtxo as "swept" if it is below dust limit to prevent it from being spent again in a future offchain tx
+				// the only way to spend a swept vtxo is by collecting enough dust to cover the minSettlementVtxoAmount and then settle.
+				// because sub-dust vtxos are using OP_RETURN output script, they can't be unilaterally exited.
+				Swept: isDust,
 			})
 		}
 

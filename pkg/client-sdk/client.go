@@ -53,13 +53,17 @@ type SettleOptions struct {
 	WalletSignerDisabled   bool
 	SelectRecoverableVtxos bool
 
+	CancelCh <-chan struct{}
 	EventsCh chan<- client.RoundEvent
 }
 
+// name alias, sub-dust vtxos are recoverable vtxos
+var WithSubDustVtxos = WithRecoverableVtxos
+
 func WithRecoverableVtxos(o interface{}) error {
-	opts, ok := o.(*SettleOptions)
-	if !ok {
-		return fmt.Errorf("invalid options type")
+	opts, err := checkSettleOptionsType(o)
+	if err != nil {
+		return err
 	}
 
 	opts.SelectRecoverableVtxos = true
@@ -68,9 +72,9 @@ func WithRecoverableVtxos(o interface{}) error {
 
 func WithEventsCh(ch chan<- client.RoundEvent) Option {
 	return func(o interface{}) error {
-		opts, ok := o.(*SettleOptions)
-		if !ok {
-			return fmt.Errorf("invalid options type")
+		opts, err := checkSettleOptionsType(o)
+		if err != nil {
+			return err
 		}
 
 		opts.EventsCh = ch
@@ -80,9 +84,9 @@ func WithEventsCh(ch chan<- client.RoundEvent) Option {
 
 // WithoutWalletSigner disables the wallet signer
 func WithoutWalletSigner(o interface{}) error {
-	opts, ok := o.(*SettleOptions)
-	if !ok {
-		return fmt.Errorf("invalid options type")
+	opts, err := checkSettleOptionsType(o)
+	if err != nil {
+		return err
 	}
 
 	opts.WalletSignerDisabled = true
@@ -91,9 +95,9 @@ func WithoutWalletSigner(o interface{}) error {
 
 // WithSignAll sets the signing type to ALL instead of the default BRANCH
 func WithSignAll(o interface{}) error {
-	opts, ok := o.(*SettleOptions)
-	if !ok {
-		return fmt.Errorf("invalid options type")
+	opts, err := checkSettleOptionsType(o)
+	if err != nil {
+		return err
 	}
 
 	t := tree.SignAll
@@ -104,9 +108,9 @@ func WithSignAll(o interface{}) error {
 // WithExtraSigner allows to use a set of custom signer for the vtxo tree signing process
 func WithExtraSigner(signerSessions ...tree.SignerSession) Option {
 	return func(o interface{}) error {
-		opts, ok := o.(*SettleOptions)
-		if !ok {
-			return fmt.Errorf("invalid options type")
+		opts, err := checkSettleOptionsType(o)
+		if err != nil {
+			return err
 		}
 
 		if len(signerSessions) == 0 {
@@ -114,6 +118,19 @@ func WithExtraSigner(signerSessions ...tree.SignerSession) Option {
 		}
 
 		opts.ExtraSignerSessions = signerSessions
+		return nil
+	}
+}
+
+// WithCancelCh allows to cancel the settlement process
+func WithCancelCh(ch <-chan struct{}) Option {
+	return func(o interface{}) error {
+		opts, err := checkSettleOptionsType(o)
+		if err != nil {
+			return err
+		}
+
+		opts.CancelCh = ch
 		return nil
 	}
 }
@@ -549,10 +566,6 @@ func (a *covenantlessArkClient) SendOffChain(
 			return "", fmt.Errorf("invalid receiver address '%s': expected server %s, got %s", receiver.To(), hex.EncodeToString(expectedServerPubkey), hex.EncodeToString(rcvServerPubkey))
 		}
 
-		if receiver.Amount() < a.Dust {
-			return "", fmt.Errorf("invalid amount (%d), must be greater than dust %d", receiver.Amount(), a.Dust)
-		}
-
 		sumOfReceivers += receiver.Amount()
 	}
 
@@ -623,7 +636,7 @@ func (a *covenantlessArkClient) SendOffChain(
 		},
 	}
 
-	virtualTx, checkpointsTxs, err := buildOffchainTx(inputs, receivers, checkpointExitScript)
+	virtualTx, checkpointsTxs, err := buildOffchainTx(inputs, receivers, checkpointExitScript, a.Dust)
 	if err != nil {
 		return "", err
 	}
@@ -1044,6 +1057,61 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 	})
 
 	return history, nil
+}
+
+func (a *covenantlessArkClient) RegisterIntent(
+	ctx context.Context,
+	vtxos []client.Vtxo,
+	boardingUtxos []types.Utxo,
+	notes []string,
+	outputs []client.Output,
+	musig2Data *tree.Musig2,
+) (string, error) {
+	vtxosWithTapscripts, err := a.populateVtxosWithTapscripts(ctx, vtxos)
+	if err != nil {
+		return "", err
+	}
+
+	inputs, exitLeaves, tapscripts, notesWitnesses, err := toBIP322Inputs(boardingUtxos, vtxosWithTapscripts, notes)
+	if err != nil {
+		return "", err
+	}
+
+	bip322Signature, bip322Message, err := a.makeRegisterIntentBIP322Signature(
+		inputs, exitLeaves, tapscripts,
+		outputs, musig2Data, notesWitnesses,
+	)
+	if err != nil {
+		return "", err
+	}
+
+	return a.client.RegisterIntent(ctx, bip322Signature, bip322Message)
+}
+
+func (a *covenantlessArkClient) DeleteIntent(
+	ctx context.Context,
+	vtxos []client.Vtxo,
+	boardingUtxos []types.Utxo,
+	notes []string,
+) error {
+	vtxosWithTapscripts, err := a.populateVtxosWithTapscripts(ctx, vtxos)
+	if err != nil {
+		return err
+	}
+
+	inputs, exitLeaves, _, notesWitnesses, err := toBIP322Inputs(boardingUtxos, vtxosWithTapscripts, notes)
+	if err != nil {
+		return err
+	}
+
+	bip322Signature, bip322Message, err := a.makeDeleteIntentBIP322Signature(
+		inputs, exitLeaves, notesWitnesses,
+	)
+	if err != nil {
+		return err
+	}
+
+	return a.client.DeleteIntent(ctx, "", bip322Signature, bip322Message)
 }
 
 func (a *covenantlessArkClient) listenForArkTxs(ctx context.Context) {
@@ -1694,7 +1762,7 @@ func (a *covenantlessArkClient) sendOffchain(
 	return a.joinRoundWithRetry(ctx, nil, outputs, *options, vtxos, boardingUtxos)
 }
 
-func (a *covenantlessArkClient) makeBIP322Signature(
+func (a *covenantlessArkClient) makeRegisterIntentBIP322Signature(
 	inputs []bip322.Input,
 	leafProofs []*common.TaprootMerkleProof,
 	tapscripts map[string][]string,
@@ -1702,51 +1770,39 @@ func (a *covenantlessArkClient) makeBIP322Signature(
 	musig2Data *tree.Musig2,
 	notesWitnesses map[int][]byte,
 ) (string, string, error) {
-	validAt := time.Now()
-	expireAt := validAt.Add(2 * time.Minute).Unix()
-	outputsTxOut := make([]*wire.TxOut, 0)
-	onchainOutputsIndexes := make([]int, 0)
-	inputTapTrees := make([]string, 0)
-
-	for _, input := range inputs {
-		outpointStr := input.OutPoint.String()
-		tapscripts, ok := tapscripts[outpointStr]
-		if !ok {
-			return "", "", fmt.Errorf("no tapscripts found for input %s", outpointStr)
-		}
-
-		encodedTapTree, err := tree.TapTree(tapscripts).Encode()
-		if err != nil {
-			return "", "", err
-		}
-
-		inputTapTrees = append(inputTapTrees, hex.EncodeToString(encodedTapTree))
+	message, outputsTxOut, err := registerIntentMessage(inputs, outputs, tapscripts, musig2Data)
+	if err != nil {
+		return "", "", err
 	}
 
-	for i, output := range outputs {
-		txOut, isOnchain, err := output.ToTxOut()
-		if err != nil {
-			return "", "", err
-		}
+	return a.makeBIP322Signature(message, inputs, outputsTxOut, leafProofs, notesWitnesses)
+}
 
-		if isOnchain {
-			onchainOutputsIndexes = append(onchainOutputsIndexes, i)
-		}
-
-		outputsTxOut = append(outputsTxOut, txOut)
-	}
-
-	message, err := tree.IntentMessage{
-		InputTapTrees:        inputTapTrees,
-		OnchainOutputIndexes: onchainOutputsIndexes,
-		ExpireAt:             expireAt,
-		ValidAt:              validAt.Unix(),
-		Musig2Data:           musig2Data,
+func (a *covenantlessArkClient) makeDeleteIntentBIP322Signature(
+	inputs []bip322.Input,
+	leafProofs []*common.TaprootMerkleProof,
+	notesWitnesses map[int][]byte,
+) (string, string, error) {
+	message, err := tree.DeleteIntentMessage{
+		BaseIntentMessage: tree.BaseIntentMessage{
+			Type: tree.IntentMessageTypeDelete,
+		},
+		ExpireAt: time.Now().Add(2 * time.Minute).Unix(),
 	}.Encode()
 	if err != nil {
 		return "", "", err
 	}
 
+	return a.makeBIP322Signature(message, inputs, nil, leafProofs, notesWitnesses)
+}
+
+func (a *covenantlessArkClient) makeBIP322Signature(
+	message string,
+	inputs []bip322.Input,
+	outputsTxOut []*wire.TxOut,
+	leafProofs []*common.TaprootMerkleProof,
+	notesWitnesses map[int][]byte,
+) (string, string, error) {
 	proof, err := bip322.New(message, inputs, outputsTxOut)
 	if err != nil {
 		return "", "", err
@@ -1876,6 +1932,45 @@ func (a *covenantlessArkClient) addInputs(
 	return nil
 }
 
+func (a *covenantlessArkClient) populateVtxosWithTapscripts(
+	ctx context.Context,
+	vtxos []client.Vtxo,
+) ([]client.TapscriptsVtxo, error) {
+	_, offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if len(offchainAddrs) <= 0 {
+		return nil, fmt.Errorf("no offchain addresses found")
+	}
+
+	vtxosWithTapscripts := make([]client.TapscriptsVtxo, 0)
+
+	for _, v := range vtxos {
+		found := false
+		for _, offchainAddr := range offchainAddrs {
+			vtxoAddr, err := v.Address(a.ServerPubKey, a.Network)
+			if err != nil {
+				return nil, err
+			}
+
+			if vtxoAddr == offchainAddr.Address {
+				vtxosWithTapscripts = append(vtxosWithTapscripts, client.TapscriptsVtxo{
+					Vtxo:       v,
+					Tapscripts: offchainAddr.Tapscripts,
+				})
+				found = true
+				break
+			}
+		}
+		if !found {
+			return nil, fmt.Errorf("no offchain address found for vtxo %s", v.Txid)
+		}
+	}
+
+	return vtxosWithTapscripts, nil
+}
+
 func (a *covenantlessArkClient) joinRoundWithRetry(
 	ctx context.Context, notes []string, outputs []client.Output, options SettleOptions,
 	selectedCoins []client.TapscriptsVtxo, selectedBoardingCoins []types.Utxo,
@@ -1895,7 +1990,7 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 		SigningType:         signingType,
 	}
 
-	bip322Signature, bip322Message, err := a.makeBIP322Signature(
+	bip322Signature, bip322Message, err := a.makeRegisterIntentBIP322Signature(
 		inputs, exitLeaves, tapscripts,
 		outputs, musig2Data, notesWitnesses,
 	)
@@ -1917,7 +2012,8 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 		log.Infof("registered inputs and outputs with request id: %s", intentID)
 
 		roundTxID, err := a.handleRoundStream(
-			ctx, intentID, selectedCoins, selectedBoardingCoins, outputs, signerSessions, options.EventsCh,
+			ctx, intentID, selectedCoins, selectedBoardingCoins, outputs, signerSessions,
+			options.EventsCh, options.CancelCh,
 		)
 		if err != nil {
 			log.WithError(err).Warn("round failed, retrying...")
@@ -1941,6 +2037,7 @@ func (a *covenantlessArkClient) handleRoundStream(
 	receivers []client.Output,
 	signerSessions []tree.SignerSession,
 	replayEventsCh chan<- client.RoundEvent,
+	cancelCh <-chan struct{},
 ) (string, error) {
 	eventsCh, close, err := a.client.GetEventStream(ctx)
 	if err != nil {
@@ -1984,9 +2081,27 @@ func (a *covenantlessArkClient) handleRoundStream(
 		step = roundSigningNoncesGenerated
 	}
 
+	deleteIntent := func() error {
+		// delete only if the intent has not been confirmed yet
+		if step == start {
+			if err := a.client.DeleteIntent(ctx, intentID, "", ""); err != nil {
+				return err
+			}
+		}
+		return nil
+	}
+
 	for {
 		select {
+		case <-cancelCh:
+			if err := deleteIntent(); err != nil {
+				return "", err
+			}
+			return "", fmt.Errorf("canceled")
 		case <-ctx.Done():
+			if err := deleteIntent(); err != nil {
+				return "", err
+			}
 			return "", fmt.Errorf("context done %s", ctx.Err())
 		case notify := <-eventsCh:
 			if notify.Err != nil {
@@ -3507,6 +3622,7 @@ func buildOffchainTx(
 	vtxos []redeemTxInput,
 	receivers []Receiver,
 	serverUnrollScript *tree.CSVMultisigClosure,
+	dustLimit uint64,
 ) (string, []string, error) {
 	if len(vtxos) <= 0 {
 		return "", nil, fmt.Errorf("missing vtxos")
@@ -3574,7 +3690,13 @@ func buildOffchainTx(
 			return "", nil, err
 		}
 
-		newVtxoScript, err := common.P2TRScript(addr.VtxoTapKey)
+		var newVtxoScript []byte
+
+		if receiver.Amount() < dustLimit {
+			newVtxoScript, err = common.SubDustScript(addr.VtxoTapKey)
+		} else {
+			newVtxoScript, err = common.P2TRScript(addr.VtxoTapKey)
+		}
 		if err != nil {
 			return "", nil, err
 		}
@@ -3989,4 +4111,70 @@ func handleBatchTreeSignature(event client.BatchTreeSignatureEvent, vtxoTree tre
 
 	vtxoTree[level][levelIndex].Tx = encodedTx
 	return vtxoTree, nil
+}
+
+func checkSettleOptionsType(o interface{}) (*SettleOptions, error) {
+	opts, ok := o.(*SettleOptions)
+	if !ok {
+		return nil, fmt.Errorf("invalid options type")
+	}
+
+	return opts, nil
+}
+
+func registerIntentMessage(
+	inputs []bip322.Input,
+	outputs []client.Output,
+	tapscripts map[string][]string,
+	musig2Data *tree.Musig2,
+) (string, []*wire.TxOut, error) {
+	validAt := time.Now()
+	expireAt := validAt.Add(2 * time.Minute).Unix()
+	outputsTxOut := make([]*wire.TxOut, 0)
+	onchainOutputsIndexes := make([]int, 0)
+	inputTapTrees := make([]string, 0)
+
+	for _, input := range inputs {
+		outpointStr := input.OutPoint.String()
+		tapscripts, ok := tapscripts[outpointStr]
+		if !ok {
+			return "", nil, fmt.Errorf("no tapscripts found for input %s", outpointStr)
+		}
+
+		encodedTapTree, err := tree.TapTree(tapscripts).Encode()
+		if err != nil {
+			return "", nil, err
+		}
+
+		inputTapTrees = append(inputTapTrees, hex.EncodeToString(encodedTapTree))
+	}
+
+	for i, output := range outputs {
+		txOut, isOnchain, err := output.ToTxOut()
+		if err != nil {
+			return "", nil, err
+		}
+
+		if isOnchain {
+			onchainOutputsIndexes = append(onchainOutputsIndexes, i)
+		}
+
+		outputsTxOut = append(outputsTxOut, txOut)
+	}
+
+	message, err := tree.IntentMessage{
+		BaseIntentMessage: tree.BaseIntentMessage{
+			Type: tree.IntentMessageTypeRegister,
+		},
+		InputTapTrees:        inputTapTrees,
+		OnchainOutputIndexes: onchainOutputsIndexes,
+		ExpireAt:             expireAt,
+		ValidAt:              validAt.Unix(),
+		Musig2Data:           musig2Data,
+	}.Encode()
+	if err != nil {
+		return "", nil, err
+	}
+
+	return message, outputsTxOut, nil
 }

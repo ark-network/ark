@@ -159,11 +159,20 @@ func (h *handler) RegisterIntent(
 func (h *handler) DeleteIntent(
 	ctx context.Context, req *arkv1.DeleteIntentRequest,
 ) (*arkv1.DeleteIntentResponse, error) {
-	requestID := req.GetRequestId()
-	bip322Signature := req.GetBip322Signature()
+	proof := req.GetProof()
 
-	if requestID != "" {
-		if err := h.svc.DeleteTxRequests(ctx, requestID); err != nil {
+	var intentID string
+	var bip322Signature *arkv1.Bip322Signature
+
+	switch proof := proof.(type) {
+	case *arkv1.DeleteIntentRequest_IntentId:
+		intentID = proof.IntentId
+	case *arkv1.DeleteIntentRequest_Bip322Signature:
+		bip322Signature = proof.Bip322Signature
+	}
+
+	if intentID != "" {
+		if err := h.svc.DeleteTxRequests(ctx, intentID); err != nil {
 			return nil, err
 		}
 		return &arkv1.DeleteIntentResponse{}, nil
@@ -183,7 +192,7 @@ func (h *handler) DeleteIntent(
 		return nil, status.Error(codes.InvalidArgument, "missing BIP0322 message")
 	}
 
-	var message tree.IntentMessage
+	var message tree.DeleteIntentMessage
 	if err := message.Decode(intentMessage); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 message")
 	}
