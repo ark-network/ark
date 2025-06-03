@@ -62,7 +62,7 @@ jobs:
       - name: Run go work sync
         run: go work sync
       - name: create pg db
-        run: make pgpgtest
+        run: make pgtest
       - name: unit testing
         run: make test
       - name: drop pg db

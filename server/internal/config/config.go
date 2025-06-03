@@ -198,9 +198,12 @@ func LoadConfig() (*Config, error) {
 
 	dbPath := filepath.Join(viper.GetString(Datadir), "db")
 
-	dbUrl := viper.GetString(DbUrl)
-	if dbUrl == "" {
-		return nil, fmt.Errorf("DB_URL not provided")
+	var dbUrl string
+	if viper.GetString(DbType) == "postgres" {
+		dbUrl = viper.GetString(DbUrl)
+		if dbUrl == "" {
+			return nil, fmt.Errorf("DB_URL not provided")
+		}
 	}
 
 	return &Config{
