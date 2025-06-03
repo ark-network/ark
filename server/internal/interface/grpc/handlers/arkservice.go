@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
-	"sync"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/bip322"
@@ -29,9 +28,9 @@ type handler struct {
 
 	svc application.Service
 
-	eventsListenerHandler       *listenerHanlder[*arkv1.GetEventStreamResponse]
-	transactionsListenerHandler *listenerHanlder[*arkv1.GetTransactionsStreamResponse]
-	addressSubsHandler          *listenerHanlder[*arkv1.SubscribeForAddressResponse]
+	eventsListenerHandler       *broker[*arkv1.GetEventStreamResponse]
+	transactionsListenerHandler *broker[*arkv1.GetTransactionsStreamResponse]
+	addressSubsHandler          *broker[*arkv1.SubscribeForAddressResponse]
 
 	stopCh                  <-chan struct{}
 	stopRoundEventsCh       chan struct{}
@@ -43,9 +42,9 @@ func NewHandler(version string, service application.Service, stopCh <-chan struc
 	h := &handler{
 		version:                     version,
 		svc:                         service,
-		eventsListenerHandler:       newListenerHandler[*arkv1.GetEventStreamResponse](),
-		transactionsListenerHandler: newListenerHandler[*arkv1.GetTransactionsStreamResponse](),
-		addressSubsHandler:          newListenerHandler[*arkv1.SubscribeForAddressResponse](),
+		eventsListenerHandler:       newBroker[*arkv1.GetEventStreamResponse](),
+		transactionsListenerHandler: newBroker[*arkv1.GetTransactionsStreamResponse](),
+		addressSubsHandler:          newBroker[*arkv1.SubscribeForAddressResponse](),
 		stopCh:                      stopCh,
 		stopRoundEventsCh:           make(chan struct{}, 1),
 		stopTransactionEventsCh:     make(chan struct{}, 1),
@@ -747,42 +746,6 @@ func (h *handler) listenToTxEvents() {
 					}
 				}
 			}
-		}
-	}
-}
-
-type listener[T any] struct {
-	id string
-	ch chan T
-}
-
-type listenerHanlder[T any] struct {
-	lock      *sync.Mutex
-	listeners []*listener[T]
-}
-
-func newListenerHandler[T any]() *listenerHanlder[T] {
-	return &listenerHanlder[T]{
-		lock:      &sync.Mutex{},
-		listeners: make([]*listener[T], 0),
-	}
-}
-
-func (h *listenerHanlder[T]) pushListener(l *listener[T]) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
-	h.listeners = append(h.listeners, l)
-}
-
-func (h *listenerHanlder[T]) removeListener(id string) {
-	h.lock.Lock()
-	defer h.lock.Unlock()
-
-	for i, listener := range h.listeners {
-		if listener.id == id {
-			h.listeners = append(h.listeners[:i], h.listeners[i+1:]...)
-			return
 		}
 	}
 }

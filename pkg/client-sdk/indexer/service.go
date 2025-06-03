@@ -14,6 +14,10 @@ type Indexer interface {
 	GetVtxoChain(ctx context.Context, outpoint Outpoint, opts ...RequestOption) (*VtxoChainResponse, error)
 	GetVirtualTxs(ctx context.Context, txids []string, opts ...RequestOption) (*VirtualTxsResponse, error)
 	GetSweptCommitmentTx(ctx context.Context, txid string) ([]string, error)
+	SubscribeForAddresses(ctx context.Context, subscriptionId string, addresses []string) (string, error)
+	UnsubscribeForAddresses(ctx context.Context, subscriptionId string, addresses []string) error
+	GetSubscription(ctx context.Context, subscriptionId string) (<-chan *AddressEvent, func(), error)
+	DeleteSubscription(ctx context.Context, subscriptionId string) error
 }
 
 type CommitmentTxLeavesResponse struct {
@@ -61,6 +65,13 @@ type VtxoChainResponse struct {
 type VirtualTxsResponse struct {
 	Txs  []string
 	Page *PageResponse
+}
+
+type AddressEvent struct {
+	NewVtxos   []Vtxo
+	SpentVtxos []Vtxo
+	Txid       string
+	Err        error
 }
 
 type PageRequest struct {

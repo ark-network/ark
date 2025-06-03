@@ -54,6 +54,8 @@ type ClientOption func(*runtime.ClientOperation)
 
 // ClientService is the interface for Client methods
 type ClientService interface {
+	IndexerServiceDeleteSubscription(params *IndexerServiceDeleteSubscriptionParams, opts ...ClientOption) (*IndexerServiceDeleteSubscriptionOK, error)
+
 	IndexerServiceGetCommitmentTx(params *IndexerServiceGetCommitmentTxParams, opts ...ClientOption) (*IndexerServiceGetCommitmentTxOK, error)
 
 	IndexerServiceGetCommitmentTxLeaves(params *IndexerServiceGetCommitmentTxLeavesParams, opts ...ClientOption) (*IndexerServiceGetCommitmentTxLeavesOK, error)
@@ -61,6 +63,8 @@ type ClientService interface {
 	IndexerServiceGetConnectors(params *IndexerServiceGetConnectorsParams, opts ...ClientOption) (*IndexerServiceGetConnectorsOK, error)
 
 	IndexerServiceGetForfeitTxs(params *IndexerServiceGetForfeitTxsParams, opts ...ClientOption) (*IndexerServiceGetForfeitTxsOK, error)
+
+	IndexerServiceGetSubscription(params *IndexerServiceGetSubscriptionParams, opts ...ClientOption) (*IndexerServiceGetSubscriptionOK, error)
 
 	IndexerServiceGetSweptCommitmentTx(params *IndexerServiceGetSweptCommitmentTxParams, opts ...ClientOption) (*IndexerServiceGetSweptCommitmentTxOK, error)
 
@@ -78,7 +82,48 @@ type ClientService interface {
 
 	IndexerServiceGetVtxosByOutpoint(params *IndexerServiceGetVtxosByOutpointParams, opts ...ClientOption) (*IndexerServiceGetVtxosByOutpointOK, error)
 
+	IndexerServiceSubscribeForAddresses(params *IndexerServiceSubscribeForAddressesParams, opts ...ClientOption) (*IndexerServiceSubscribeForAddressesOK, error)
+
+	IndexerServiceUnsubscribeForAddresses(params *IndexerServiceUnsubscribeForAddressesParams, opts ...ClientOption) (*IndexerServiceUnsubscribeForAddressesOK, error)
+
 	SetTransport(transport runtime.ClientTransport)
+}
+
+/*
+IndexerServiceDeleteSubscription indexer service delete subscription API
+*/
+func (a *Client) IndexerServiceDeleteSubscription(params *IndexerServiceDeleteSubscriptionParams, opts ...ClientOption) (*IndexerServiceDeleteSubscriptionOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewIndexerServiceDeleteSubscriptionParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "IndexerService_DeleteSubscription",
+		Method:             "DELETE",
+		PathPattern:        "/v1/vtxos/subscription/{subscriptionId}",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &IndexerServiceDeleteSubscriptionReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*IndexerServiceDeleteSubscriptionOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*IndexerServiceDeleteSubscriptionDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
 /*
@@ -226,6 +271,43 @@ func (a *Client) IndexerServiceGetForfeitTxs(params *IndexerServiceGetForfeitTxs
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*IndexerServiceGetForfeitTxsDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+IndexerServiceGetSubscription indexer service get subscription API
+*/
+func (a *Client) IndexerServiceGetSubscription(params *IndexerServiceGetSubscriptionParams, opts ...ClientOption) (*IndexerServiceGetSubscriptionOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewIndexerServiceGetSubscriptionParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "IndexerService_GetSubscription",
+		Method:             "GET",
+		PathPattern:        "/v1/vtxos/subscription/{subscriptionId}",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &IndexerServiceGetSubscriptionReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*IndexerServiceGetSubscriptionOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*IndexerServiceGetSubscriptionDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
@@ -522,6 +604,80 @@ func (a *Client) IndexerServiceGetVtxosByOutpoint(params *IndexerServiceGetVtxos
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*IndexerServiceGetVtxosByOutpointDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+IndexerServiceSubscribeForAddresses indexer service subscribe for addresses API
+*/
+func (a *Client) IndexerServiceSubscribeForAddresses(params *IndexerServiceSubscribeForAddressesParams, opts ...ClientOption) (*IndexerServiceSubscribeForAddressesOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewIndexerServiceSubscribeForAddressesParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "IndexerService_SubscribeForAddresses",
+		Method:             "POST",
+		PathPattern:        "/v1/vtxos/subscribe",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &IndexerServiceSubscribeForAddressesReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*IndexerServiceSubscribeForAddressesOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*IndexerServiceSubscribeForAddressesDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+IndexerServiceUnsubscribeForAddresses indexer service unsubscribe for addresses API
+*/
+func (a *Client) IndexerServiceUnsubscribeForAddresses(params *IndexerServiceUnsubscribeForAddressesParams, opts ...ClientOption) (*IndexerServiceUnsubscribeForAddressesOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewIndexerServiceUnsubscribeForAddressesParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "IndexerService_UnsubscribeForAddresses",
+		Method:             "POST",
+		PathPattern:        "/v1/vtxos/unsubscribe",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &IndexerServiceUnsubscribeForAddressesReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*IndexerServiceUnsubscribeForAddressesOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*IndexerServiceUnsubscribeForAddressesDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

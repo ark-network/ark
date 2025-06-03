@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/server/internal/config"
@@ -208,7 +209,8 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		if err != nil {
 			return err
 		}
-		indexerHandler := handlers.NewIndexerService(indexerSvc)
+		subscriptionTimeoutDuration := time.Minute // TODO let to be set via config
+		indexerHandler := handlers.NewIndexerService(indexerSvc, subscriptionTimeoutDuration)
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
 		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
 		arkv1.RegisterIndexerServiceServer(grpcServer, indexerHandler)

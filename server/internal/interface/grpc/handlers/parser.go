@@ -34,6 +34,23 @@ func parseArkAddress(addr string) (string, error) {
 	return hex.EncodeToString(schnorr.SerializePubKey(a.VtxoTapKey)), nil
 }
 
+func parseAddresses(addrs []string) ([]string, error) {
+	if len(addrs) == 0 {
+		return nil, fmt.Errorf("missing addresses")
+	}
+
+	vtxoScripts := make([]string, 0, len(addrs))
+	for _, addr := range addrs {
+		vtxoScript, err := parseArkAddress(addr)
+		if err != nil {
+			return nil, err
+		}
+
+		vtxoScripts = append(vtxoScripts, vtxoScript)
+	}
+	return vtxoScripts, nil
+}
+
 func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
 	if len(ins) <= 0 {
 		return nil, fmt.Errorf("missing inputs")
