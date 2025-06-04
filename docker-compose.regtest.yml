@@ -35,6 +35,7 @@ services:
       - ARK_DATADIR=./data/regtest
       - ARK_WALLET_ADDR=arkd-wallet:6060
       - ARK_ESPLORA_URL=http://chopsticks:3000
+      - ARK_LIVE_STORE_TYPE=inmemory
     volumes:
       - type: tmpfs
         target: /app/data

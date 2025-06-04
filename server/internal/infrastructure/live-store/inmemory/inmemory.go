@@ -18,10 +18,10 @@ const (
 	deleteGapMinutes = float64(5)
 )
 
-func NewLiveStore() ports.LiveStore {
-	return &liveStore{
+func NewLiveStore(txBuilder ports.TxBuilder) ports.LiveStore {
+	return &inMemoryLiveStore{
 		txRequestStore:        NewTxRequestStore(),
-		forfeitTxsStore:       NewForfeitTxsStore(),
+		forfeitTxsStore:       NewForfeitTxsStore(txBuilder),
 		offChainTxInputsStore: NewOutpointStore(),
 		roundInputsStore:      NewOutpointStore(),
 		currentRoundStore:     NewCurrentRoundStore(),
@@ -29,20 +29,24 @@ func NewLiveStore() ports.LiveStore {
 	}
 }
 
-func (s *liveStore) TxRequest() ports.TxRequestStore                    { return s.txRequestStore }
-func (s *liveStore) ForfeitTxs() ports.ForfeitTxsStore                  { return s.forfeitTxsStore }
-func (s *liveStore) OffChainTxInputs() ports.OffChainTxInputsStore      { return s.offChainTxInputsStore }
-func (s *liveStore) RoundInputs() ports.RoundInputsStore                { return s.roundInputsStore }
-func (s *liveStore) CurrentRound() ports.CurrentRoundStore              { return s.currentRoundStore }
-func (s *liveStore) TreeSigingSessions() ports.TreeSigningSessionsStore { return s.treeSigningSessions }
+func (s *inMemoryLiveStore) TxRequest() ports.TxRequestStore   { return s.txRequestStore }
+func (s *inMemoryLiveStore) ForfeitTxs() ports.ForfeitTxsStore { return s.forfeitTxsStore }
+func (s *inMemoryLiveStore) OffChainTxInputs() ports.OutpointStore {
+	return s.offChainTxInputsStore
+}
+func (s *inMemoryLiveStore) RoundInputs() ports.OutpointStore      { return s.roundInputsStore }
+func (s *inMemoryLiveStore) CurrentRound() ports.CurrentRoundStore { return s.currentRoundStore }
+func (s *inMemoryLiveStore) TreeSigingSessions() ports.TreeSigningSessionsStore {
+	return s.treeSigningSessions
+}
 
-type liveStore struct {
-	txRequestStore        *txRequestStore
-	forfeitTxsStore       *forfeitTxsStore
-	offChainTxInputsStore *outpointStore
-	roundInputsStore      *outpointStore
-	currentRoundStore     *currentRoundStore
-	treeSigningSessions   *treeSigningSessionsStore
+type inMemoryLiveStore struct {
+	txRequestStore        ports.TxRequestStore
+	forfeitTxsStore       ports.ForfeitTxsStore
+	offChainTxInputsStore ports.OutpointStore
+	roundInputsStore      ports.OutpointStore
+	currentRoundStore     ports.CurrentRoundStore
+	treeSigningSessions   ports.TreeSigningSessionsStore
 }
 
 type txRequestStore struct {
@@ -77,19 +81,19 @@ func (m *txRequestStore) Push(request domain.TxRequest, boardingInputs []ports.B
 
 	for _, input := range request.Inputs {
 		for _, pay := range m.requests {
-			for _, pInput := range pay.TxRequest.Inputs {
+			for _, pInput := range pay.Inputs {
 				if input.Txid == pInput.Txid && input.VOut == pInput.VOut {
-					return fmt.Errorf("duplicated input, %s:%d already used by tx request %s", input.Txid, input.VOut, pay.TxRequest.Id)
+					return fmt.Errorf("duplicated input, %s:%d already used by tx request %s", input.Txid, input.VOut, pay.Id)
 				}
 			}
 		}
 	}
 
 	for _, input := range boardingInputs {
-		for _, req := range m.requests {
-			for _, pBoardingInput := range req.BoardingInputs {
+		for _, v := range m.requests {
+			for _, pBoardingInput := range v.BoardingInputs {
 				if input.Txid == pBoardingInput.Txid && input.VOut == pBoardingInput.VOut {
-					return fmt.Errorf("duplicated boarding input, %s:%d already used by tx request %s", input.Txid, input.VOut, req.TxRequest.Id)
+					return fmt.Errorf("duplicated boarding input, %s:%d already used by tx request %s", input.Txid, input.VOut, request.Id)
 				}
 			}
 		}
@@ -112,6 +116,7 @@ func (m *txRequestStore) Pop(num int64) ([]domain.TxRequest, []ports.BoardingInp
 
 	requestsByTime := make([]*ports.TimedTxRequest, 0, len(m.requests))
 	for _, p := range m.requests {
+		// Skip tx requests without registered receivers.
 		if len(p.Receivers) <= 0 {
 			continue
 		}
@@ -222,7 +227,7 @@ func (m *txRequestStore) ViewAll(ids []string) ([]ports.TimedTxRequest, error) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	results := make([]ports.TimedTxRequest, 0, len(ids))
+	results := make([]ports.TimedTxRequest, 0, len(m.requests))
 	for _, request := range m.requests {
 		if len(ids) > 0 {
 			for _, id := range ids {
@@ -256,25 +261,26 @@ func (m *txRequestStore) View(id string) (*domain.TxRequest, bool) {
 }
 
 type forfeitTxsStore struct {
-	lock            sync.RWMutex
-	forfeits        map[string]string // key: VtxoKey.String(), value: tx
-	vtxos           []domain.Vtxo
+	lock            *sync.RWMutex
+	builder         ports.TxBuilder
+	forfeitTxs      map[domain.VtxoKey]string
 	connectors      tree.TxTree
 	connectorsIndex map[string]domain.Outpoint
+	vtxos           []domain.Vtxo
 }
 
-func NewForfeitTxsStore() ports.ForfeitTxsStore {
-	return &forfeitTxsStore{forfeits: make(map[string]string)}
+func NewForfeitTxsStore(txBuilder ports.TxBuilder) ports.ForfeitTxsStore {
+	return &forfeitTxsStore{
+		builder:    txBuilder,
+		forfeitTxs: make(map[domain.VtxoKey]string),
+	}
 }
 
 func (s *forfeitTxsStore) Init(connectors tree.TxTree, requests []domain.TxRequest) error {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-
-	// 1. Gather all vtxos that require forfeit
 	vtxosToSign := make([]domain.Vtxo, 0)
-	for _, req := range requests {
-		for _, vtxo := range req.Inputs {
+	for _, request := range requests {
+		for _, vtxo := range request.Inputs {
+			// If the vtxo is swept or is a note, it doens't require to be forfeited so we skip it
 			if !vtxo.RequiresForfeit() {
 				continue
 			}
@@ -282,86 +288,127 @@ func (s *forfeitTxsStore) Init(connectors tree.TxTree, requests []domain.TxReque
 		}
 	}
 
-	// 2. Initialize forfeits map with those vtxos as keys
-	s.forfeits = make(map[string]string)
-	for _, vtxo := range vtxosToSign {
-		s.forfeits[vtxo.VtxoKey.String()] = ""
-	}
-
-	// 3. Store connectors
-	s.connectors = connectors
-
-	// 4. Create connectors index: vtxo string -> Outpoint
-	connectorsOutpoints := make([]domain.Outpoint, 0)
-	leaves := connectors.Leaves()
-	for _, n := range leaves {
-		connectorsOutpoints = append(connectorsOutpoints, domain.Outpoint{
-			Txid: n.Txid,
-			VOut: 0,
-		})
-	}
-
-	// 5. Sort vtxos lexicographically
-	sort.Slice(vtxosToSign, func(i, j int) bool {
-		return vtxosToSign[i].String() < vtxosToSign[j].String()
-	})
-
-	if len(vtxosToSign) > len(connectorsOutpoints) {
-		return fmt.Errorf("more vtxos to sign than outpoints, %d > %d", len(vtxosToSign), len(connectorsOutpoints))
-	}
-
-	connectorsIndex := make(map[string]domain.Outpoint)
-	for i, vtxo := range vtxosToSign {
-		connectorsIndex[vtxo.String()] = connectorsOutpoints[i]
-	}
+	s.lock.Lock()
+	defer s.lock.Unlock()
 
 	s.vtxos = vtxosToSign
+	s.connectors = connectors
+
+	// init the forfeit txs map
+	for _, vtxo := range vtxosToSign {
+		s.forfeitTxs[vtxo.VtxoKey] = ""
+	}
+
+	// create the connectors index
+	connectorsIndex := make(map[string]domain.Outpoint)
+
+	if len(vtxosToSign) > 0 {
+		connectorsOutpoints := make([]domain.Outpoint, 0)
+
+		leaves := connectors.Leaves()
+		if len(leaves) == 0 {
+			return fmt.Errorf("no connectors found")
+		}
+
+		for _, n := range leaves {
+			connectorsOutpoints = append(connectorsOutpoints, domain.Outpoint{
+				Txid: n.Txid,
+				VOut: 0,
+			})
+		}
+
+		// sort lexicographically
+		sort.Slice(vtxosToSign, func(i, j int) bool {
+			return vtxosToSign[i].String() < vtxosToSign[j].String()
+		})
+
+		if len(vtxosToSign) > len(connectorsOutpoints) {
+			return fmt.Errorf("more vtxos to sign than outpoints, %d > %d", len(vtxosToSign), len(connectorsOutpoints))
+		}
+
+		for i, vtxo := range vtxosToSign {
+			connectorsIndex[vtxo.String()] = connectorsOutpoints[i]
+		}
+	}
+
 	s.connectorsIndex = connectorsIndex
 
 	return nil
 }
+
 func (s *forfeitTxsStore) Sign(txs []string) error {
+	if len(txs) == 0 {
+		return nil
+	}
+
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	for _, tx := range txs {
-		for k := range s.forfeits {
-			if s.forfeits[k] == "" {
-				s.forfeits[k] = tx
-				break
-			}
-		}
+
+	if len(s.vtxos) == 0 || len(s.connectors) == 0 {
+		return fmt.Errorf("forfeit txs map not initialized")
 	}
+
+	// verify the txs are valid
+	validTxs, err := s.builder.VerifyForfeitTxs(s.vtxos, s.connectors, txs, s.connectorsIndex)
+	if err != nil {
+		return err
+	}
+
+	for vtxoKey, txs := range validTxs {
+		if _, ok := s.forfeitTxs[vtxoKey]; !ok {
+			return fmt.Errorf("unexpected forfeit tx, vtxo %s is not in the batch", vtxoKey)
+		}
+		s.forfeitTxs[vtxoKey] = txs
+	}
+
 	return nil
 }
 func (s *forfeitTxsStore) Reset() {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.forfeits = make(map[string]string)
+
+	s.forfeitTxs = make(map[domain.VtxoKey]string)
+	s.connectors = nil
+	s.connectorsIndex = nil
+	s.vtxos = nil
 }
 func (s *forfeitTxsStore) Pop() ([]string, error) {
 	s.lock.Lock()
-	defer s.lock.Unlock()
-	var txs []string
-	for _, v := range s.forfeits {
-		if v != "" {
-			txs = append(txs, v)
+	defer func() {
+		s.lock.Unlock()
+		s.Reset()
+	}()
+
+	txs := make([]string, 0)
+	for vtxo, forfeit := range s.forfeitTxs {
+		if len(forfeit) == 0 {
+			return nil, fmt.Errorf("missing forfeit tx for vtxo %s", vtxo)
 		}
+		txs = append(txs, forfeit)
 	}
-	// Reset all forfeits after pop
-	for k := range s.forfeits {
-		s.forfeits[k] = ""
-	}
+
 	return txs, nil
 }
 func (s *forfeitTxsStore) AllSigned() bool {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	for _, v := range s.forfeits {
-		if v == "" {
+	for _, txs := range s.forfeitTxs {
+		if len(txs) == 0 {
 			return false
 		}
 	}
+
 	return true
+}
+
+func (s *forfeitTxsStore) Len() int {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	return len(s.forfeitTxs)
+}
+
+func (s *forfeitTxsStore) GetConnectorsIndexes() map[string]domain.Outpoint {
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	return s.connectorsIndex
 }
 
 type outpointStore struct {
@@ -369,9 +416,10 @@ type outpointStore struct {
 	outpoints map[string]struct{}
 }
 
-func NewOutpointStore() *outpointStore {
+func NewOutpointStore() ports.OutpointStore {
 	return &outpointStore{outpoints: make(map[string]struct{})}
 }
+
 func (s *outpointStore) Add(outpoints []domain.VtxoKey) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
@@ -408,19 +456,18 @@ type currentRoundStore struct {
 	round *domain.Round
 }
 
-func NewCurrentRoundStore() *currentRoundStore {
+func NewCurrentRoundStore() ports.CurrentRoundStore {
 	return &currentRoundStore{}
 }
-func (s *currentRoundStore) Upsert(round *domain.Round) error {
+func (s *currentRoundStore) Upsert(round *domain.Round) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	s.round = round
-	return nil
 }
-func (s *currentRoundStore) Get() (*domain.Round, error) {
+func (s *currentRoundStore) Get() *domain.Round {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
-	return s.round, nil
+	return s.round
 }
 
 type treeSigningSessionsStore struct {
@@ -428,10 +475,12 @@ type treeSigningSessionsStore struct {
 	sessions map[string]*ports.MusigSigningSession
 }
 
-func NewTreeSigningSessionsStore() *treeSigningSessionsStore {
+func NewTreeSigningSessionsStore() ports.TreeSigningSessionsStore {
 	return &treeSigningSessionsStore{sessions: make(map[string]*ports.MusigSigningSession)}
 }
-func (s *treeSigningSessionsStore) NewSession(roundId string, uniqueSignersPubKeys map[string]struct{}) (*ports.MusigSigningSession, error) {
+func (s *treeSigningSessionsStore) NewSession(
+	roundId string, uniqueSignersPubKeys map[string]struct{},
+) *ports.MusigSigningSession {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	sess := &ports.MusigSigningSession{
@@ -443,16 +492,13 @@ func (s *treeSigningSessionsStore) NewSession(roundId string, uniqueSignersPubKe
 		SigDoneC:    make(chan struct{}),
 	}
 	s.sessions[roundId] = sess
-	return sess, nil
+	return sess
 }
-func (s *treeSigningSessionsStore) GetSession(roundId string) (*ports.MusigSigningSession, error) {
+func (s *treeSigningSessionsStore) GetSession(roundId string) (*ports.MusigSigningSession, bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	sess, ok := s.sessions[roundId]
-	if !ok {
-		return nil, nil
-	}
-	return sess, nil
+	return sess, ok
 }
 func (s *treeSigningSessionsStore) DeleteSession(roundId string) {
 	s.lock.Lock()

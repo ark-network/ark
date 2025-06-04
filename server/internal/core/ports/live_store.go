@@ -11,8 +11,8 @@ import (
 type LiveStore interface {
 	TxRequest() TxRequestStore
 	ForfeitTxs() ForfeitTxsStore
-	OffChainTxInputs() OffChainTxInputsStore
-	RoundInputs() RoundInputsStore
+	OffChainTxInputs() OutpointStore
+	RoundInputs() OutpointStore
 	CurrentRound() CurrentRoundStore
 	TreeSigingSessions() TreeSigningSessionsStore
 }
@@ -35,14 +35,8 @@ type ForfeitTxsStore interface {
 	Reset()
 	Pop() ([]string, error)
 	AllSigned() bool
-}
-
-type OffChainTxInputsStore interface {
-	OutpointStore
-}
-
-type RoundInputsStore interface {
-	OutpointStore
+	Len() int
+	GetConnectorsIndexes() map[string]domain.Outpoint
 }
 
 type OutpointStore interface {
@@ -53,13 +47,13 @@ type OutpointStore interface {
 }
 
 type CurrentRoundStore interface {
-	Upsert(round *domain.Round) error
-	Get() (*domain.Round, error)
+	Upsert(round *domain.Round)
+	Get() *domain.Round
 }
 
 type TreeSigningSessionsStore interface {
-	NewSession(roundId string, uniqueSignersPubKeys map[string]struct{}) (*MusigSigningSession, error)
-	GetSession(roundId string) (*MusigSigningSession, error)
+	NewSession(roundId string, uniqueSignersPubKeys map[string]struct{}) *MusigSigningSession
+	GetSession(roundId string) (*MusigSigningSession, bool)
 	DeleteSession(roundId string)
 }
 
@@ -71,6 +65,7 @@ type TimedTxRequest struct {
 	Musig2Data     *tree.Musig2
 }
 
+// MusigSigningSession holds the state of ephemeral nonces and signatures in order to coordinate the signing of the tree
 type MusigSigningSession struct {
 	Lock        sync.Mutex
 	NbCosigners int

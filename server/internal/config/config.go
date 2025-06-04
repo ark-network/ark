@@ -3,6 +3,8 @@ package config
 import (
 	"context"
 	"fmt"
+	"github.com/ark-network/ark/server/internal/infrastructure/live-store/inmemory"
+	"github.com/ark-network/ark/server/internal/infrastructure/live-store/redis"
 	"os"
 	"path/filepath"
 	"strings"
@@ -63,6 +65,7 @@ type Config struct {
 	RoundInterval       int64
 	SchedulerType       string
 	TxBuilderType       string
+	LiveStoreType       string
 	WalletAddr          string
 	VtxoTreeExpiry      common.RelativeLocktime
 	UnilateralExitDelay common.RelativeLocktime
@@ -95,6 +98,7 @@ type Config struct {
 	scanner   ports.BlockchainScanner
 	scheduler ports.SchedulerService
 	unlocker  ports.Unlocker
+	liveStore ports.LiveStore
 	network   *common.Network
 }
 
@@ -107,6 +111,7 @@ var (
 	DbType                    = "DB_TYPE"
 	SchedulerType             = "SCHEDULER_TYPE"
 	TxBuilderType             = "TX_BUILDER_TYPE"
+	LiveStoreType             = "LIVE_STORE_TYPE"
 	LogLevel                  = "LOG_LEVEL"
 	VtxoTreeExpiry            = "VTXO_TREE_EXPIRY"
 	UnilateralExitDelay       = "UNILATERAL_EXIT_DELAY"
@@ -138,6 +143,7 @@ var (
 	defaultEventDbType         = "badger"
 	defaultSchedulerType       = "gocron"
 	defaultTxBuilderType       = "covenantless"
+	defaultLiveStoreType       = "redis"
 	defaultEsploraURL          = "https://blockstream.info/api"
 	defaultLogLevel            = 4
 	defaultVtxoTreeExpiry      = 604672  // 7 days
@@ -184,6 +190,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(UtxoMinAmount, defaultUtxoMinAmount)
 	viper.SetDefault(VtxoMaxAmount, defaultVtxoMaxAmount)
 	viper.SetDefault(VtxoMinAmount, defaultVtxoMinAmount)
+	viper.SetDefault(LiveStoreType, defaultLiveStoreType)
 
 	if err := initDatadir(); err != nil {
 		return nil, fmt.Errorf("error while creating datadir: %s", err)
@@ -200,6 +207,7 @@ func LoadConfig() (*Config, error) {
 		DbType:                    viper.GetString(DbType),
 		SchedulerType:             viper.GetString(SchedulerType),
 		TxBuilderType:             viper.GetString(TxBuilderType),
+		LiveStoreType:             viper.GetString(LiveStoreType),
 		NoTLS:                     viper.GetBool(NoTLS),
 		DbDir:                     dbPath,
 		EventDbDir:                dbPath,
@@ -326,6 +334,9 @@ func (c *Config) Validate() error {
 	if err := c.scannerService(); err != nil {
 		return err
 	}
+	if err := c.liveStoreService(); err != nil {
+		return err
+	}
 	if err := c.schedulerService(); err != nil {
 		return err
 	}
@@ -447,6 +458,30 @@ func (c *Config) scannerService() error {
 	return nil
 }
 
+func (c *Config) liveStoreService() error {
+	if c.txBuilder == nil {
+		return fmt.Errorf("tx builder not set")
+	}
+
+	var liveStoreSvc ports.LiveStore
+	var err error
+	switch c.LiveStoreType {
+	case "inmemory":
+		liveStoreSvc = inmemory.NewLiveStore(c.txBuilder)
+	case "redis":
+		liveStoreSvc = redis.NewLiveStore()
+	default:
+		err = fmt.Errorf("unknown liveStore type")
+	}
+
+	if err != nil {
+		return err
+	}
+
+	c.liveStore = liveStoreSvc
+	return nil
+}
+
 func (c *Config) schedulerService() error {
 	var svc ports.SchedulerService
 	var err error
@@ -471,7 +506,7 @@ func (c *Config) appService() error {
 		*c.network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
-		c.RoundMaxParticipantsCount, c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount,
+		c.RoundMaxParticipantsCount, c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount, c.liveStore,
 	)
 	if err != nil {
 		return err
