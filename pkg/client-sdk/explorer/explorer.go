@@ -571,7 +571,7 @@ func (t *AddrTracker) ListenAddresses(messageHandler func([]BlockUtxo) error) er
 	}()
 
 	for {
-		var payload BlockTransactionsPayload
+		var payload WSBlockTransactions
 		err := t.conn.ReadJSON(&payload)
 		if err != nil {
 			return fmt.Errorf("read message failed: %w", err)
@@ -590,7 +590,7 @@ func (t *AddrTracker) ListenAddresses(messageHandler func([]BlockUtxo) error) er
 
 }
 
-func (t *AddrTracker) deriveUtxos(block BlockTransactionsPayload) []BlockUtxo {
+func (t *AddrTracker) deriveUtxos(block WSBlockTransactions) []BlockUtxo {
 	utxos := make([]BlockUtxo, 0, len(t.subscribedMap))
 	for _, rawTransaction := range block.BlockTransactions {
 
