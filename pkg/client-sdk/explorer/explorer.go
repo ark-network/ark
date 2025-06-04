@@ -534,7 +534,6 @@ func NewAddrTracker(
 }
 
 // AddAddress subscribes to a new address if it wasn’t already tracked.
-// It’s safe to call from multiple goroutines.
 func (t *AddrTracker) TrackAddress(addr string) error {
 	t.subscribedMu.Lock()
 	defer t.subscribedMu.Unlock()
@@ -544,14 +543,12 @@ func (t *AddrTracker) TrackAddress(addr string) error {
 		return nil
 	}
 
-	// Prepare the JSON payload. Adjust to match your server’s protocol.
 	payload := struct {
 		Addr string `json:"track-address"`
 	}{
 		Addr: addr,
 	}
 
-	// WriteJSON is convenient—it sets TextMessage + marshals for you.
 	if err := t.conn.WriteJSON(payload); err != nil {
 		return fmt.Errorf("failed to write subscribe for %s: %w", addr, err)
 	}
