@@ -50,3 +50,57 @@ type utxo struct {
 func (e utxo) ToUtxo(delay common.RelativeLocktime, tapscripts []string) types.Utxo {
 	return newUtxo(e, delay, tapscripts)
 }
+
+type BlockTransactionsPayload struct {
+	BlockTransactions []RawTx `json:"block-transactions"`
+}
+
+// each transaction in the array:
+type RawTx struct {
+	Txid     string      `json:"txid"`
+	Version  int         `json:"version"`
+	Locktime uint32      `json:"locktime"`
+	Vin      []VinEntry  `json:"vin"`
+	Vout     []VoutEntry `json:"vout"`
+	Size     int         `json:"size"`
+	Weight   int         `json:"weight"`
+	Fee      uint64      `json:"fee"`
+}
+
+// “vin” is a slice of these:
+type VinEntry struct {
+	Txid         string  `json:"txid"`
+	VoutIndex    uint32  `json:"vout"`
+	Prevout      Prevout `json:"prevout"`
+	Scriptsig    string  `json:"scriptsig"`
+	ScriptsigAsm string  `json:"scriptsig_asm"`
+	IsCoinbase   bool    `json:"is_coinbase"`
+	Sequence     uint32  `json:"sequence"`
+	// if “inner_redeemscript_asm” is present:
+	InnerRedeemAsm string `json:"inner_redeemscript_asm,omitempty"`
+}
+
+// the nested “prevout” object:
+type Prevout struct {
+	ScriptPubKey     string `json:"scriptpubkey"`
+	ScriptPubKeyAsm  string `json:"scriptpubkey_asm"`
+	ScriptPubKeyType string `json:"scriptpubkey_type"`
+	ScriptPubKeyAddr string `json:"scriptpubkey_address"`
+	Value            uint64 `json:"value"`
+}
+
+// “vout” is a slice of these:
+type VoutEntry struct {
+	ScriptPubKey     string `json:"scriptpubkey"`
+	ScriptPubKeyAsm  string `json:"scriptpubkey_asm"`
+	ScriptPubKeyType string `json:"scriptpubkey_type"`
+	ScriptPubKeyAddr string `json:"scriptpubkey_address"`
+	Value            uint64 `json:"value"`
+}
+
+type BlockUtxo struct {
+	Txid             string
+	VoutIndex        int
+	ScriptPubAddress string
+	Value            uint64
+}
