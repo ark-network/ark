@@ -393,10 +393,6 @@ func (s *forfeitTxsStore) Pop() ([]string, error) {
 	return txs, nil
 }
 func (s *forfeitTxsStore) AllSigned() bool {
-	if len(s.forfeitTxs) == 0 {
-		return false
-	}
-	
 	for _, txs := range s.forfeitTxs {
 		if len(txs) == 0 {
 			return false
