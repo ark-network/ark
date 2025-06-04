@@ -124,7 +124,7 @@ type GetTransactionResponse struct {
 
 	// Raw transaction in hex format.
 	TxHex string `protobuf:"bytes,1,opt,name=tx_hex,json=txHex,proto3" json:"tx_hex,omitempty"`
-	// Deatils of the block including the transaction.
+	// Details of the block including the transaction.
 	BlockDetails *BlockDetails `protobuf:"bytes,2,opt,name=block_details,json=blockDetails,proto3" json:"block_details,omitempty"`
 }
 
