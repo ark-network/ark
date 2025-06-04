@@ -72,11 +72,11 @@ func (a *arkClient) GetConfigData(
 	return a.Config, nil
 }
 
-func (a *arkClient) Unlock(ctx context.Context, pasword string) error {
+func (a *arkClient) Unlock(ctx context.Context, password string) error {
 	if a.wallet == nil {
 		return fmt.Errorf("wallet not initialized")
 	}
-	_, err := a.wallet.Unlock(ctx, pasword)
+	_, err := a.wallet.Unlock(ctx, password)
 	return err
 }
 
