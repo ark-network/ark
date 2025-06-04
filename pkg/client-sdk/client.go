@@ -176,7 +176,7 @@ func LoadArkClient(sdkStore types.Store) (ArkClient, error) {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.Network.Name)
+	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.ExplorerWSURL, cfgData.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -188,6 +188,7 @@ func LoadArkClient(sdkStore types.Store) (ArkClient, error) {
 
 	walletSvc, err := getWallet(
 		sdkStore.ConfigStore(),
+		explorerSvc,
 		cfgData,
 		supportedWallets,
 	)
@@ -214,7 +215,7 @@ func LoadArkClient(sdkStore types.Store) (ArkClient, error) {
 		}
 		go covenantlessClient.listenForArkTxs(txStreamCtx)
 		if cfgData.UtxoMaxAmount != 0 {
-			go covenantlessClient.listenWebsocketBoardingUtxos(txStreamCtx)
+			go covenantlessClient.listenWebsocketBoardingTxns(txStreamCtx)
 		}
 	}
 
@@ -247,7 +248,7 @@ func LoadArkClientWithWallet(
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.Network.Name)
+	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.ExplorerWSURL, cfgData.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -276,7 +277,7 @@ func LoadArkClientWithWallet(
 		}
 		go covenantlessClient.listenForArkTxs(txStreamCtx)
 		if cfgData.UtxoMaxAmount != 0 {
-			go covenantlessClient.listenWebsocketBoardingUtxos(txStreamCtx)
+			go covenantlessClient.listenWebsocketBoardingTxns(txStreamCtx)
 		}
 	}
 
@@ -296,7 +297,7 @@ func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
 		}
 		go a.listenForArkTxs(txStreamCtx)
 		if a.UtxoMaxAmount != 0 {
-			go a.listenWebsocketBoardingUtxos(txStreamCtx)
+			go a.listenWebsocketBoardingTxns(txStreamCtx)
 		}
 	}
 
@@ -316,7 +317,7 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 		}
 		go a.listenForArkTxs(txStreamCtx)
 		if a.UtxoMaxAmount != 0 {
-			go a.listenWebsocketBoardingUtxos(txStreamCtx)
+			go a.listenWebsocketBoardingTxns(txStreamCtx)
 		}
 	}
 
@@ -1006,7 +1007,7 @@ func (a *covenantlessArkClient) refreshVtxoDb(spendableVtxos, spentVtxos []clien
 	return nil
 }
 
-func (a *covenantlessArkClient) listenWebsocketBoardingUtxos(ctx context.Context) {
+func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context) {
 	// try to add existing boarding utxos if present
 	_, boardingAddresses, _, err := a.wallet.GetAddresses(ctx)
 	if err == nil {
@@ -1048,11 +1049,13 @@ func (a *covenantlessArkClient) listenWebsocketBoardingUtxos(ctx context.Context
 			}
 		}
 
-		if err := a.store.TransactionStore().
-			AddTransactions(ctx, newPendingBoardingTxs); err != nil {
+		count, err := a.store.TransactionStore().
+			AddTransactions(ctx, newPendingBoardingTxs)
+		if err != nil {
 			return err
 
 		}
+		log.Debugf("added %d boarding transaction(s)", count)
 
 		return nil
 	})
@@ -1060,7 +1063,7 @@ func (a *covenantlessArkClient) listenWebsocketBoardingUtxos(ctx context.Context
 	// falback to polling if websocket fails
 	if err != nil {
 		log.WithError(err).Error("Failed to listen for boarding utxos on websocket, falling back to polling")
-		a.listenForBoardingUtxos(ctx)
+		a.listenForBoardingTxs(ctx)
 	}
 }
 
