@@ -134,6 +134,10 @@ SELECT
 FROM round_commitment_tx_vw r
 WHERE r.txid = @txid;
 
+-- name: SelectUnsweptRoundsTxid :many
+SELECT txid FROM round_commitment_tx_vw r
+WHERE r.swept = false AND r.ended = true AND r.failed = false;
+
 -- name: GetRoundForfeitTxs :many
 SELECT t.* FROM tx t
 WHERE t.round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = @txid)

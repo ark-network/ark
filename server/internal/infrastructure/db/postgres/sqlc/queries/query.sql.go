@@ -937,6 +937,34 @@ func (q *Queries) SelectTreeTxsWithRoundTxid(ctx context.Context, txid string) (
 	return items, nil
 }
 
+const selectUnsweptRoundsTxid = `-- name: SelectUnsweptRoundsTxid :many
+SELECT txid FROM round_commitment_tx_vw r
+WHERE r.swept = false AND r.ended = true AND r.failed = false
+`
+
+func (q *Queries) SelectUnsweptRoundsTxid(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, selectUnsweptRoundsTxid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var txid string
+		if err := rows.Scan(&txid); err != nil {
+			return nil, err
+		}
+		items = append(items, txid)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const selectVirtualTxWithTxId = `-- name: SelectVirtualTxWithTxId :many
 SELECT  virtual_tx_checkpoint_tx_vw.txid, virtual_tx_checkpoint_tx_vw.tx, virtual_tx_checkpoint_tx_vw.starting_timestamp, virtual_tx_checkpoint_tx_vw.ending_timestamp, virtual_tx_checkpoint_tx_vw.expiry_timestamp, virtual_tx_checkpoint_tx_vw.fail_reason, virtual_tx_checkpoint_tx_vw.stage_code, virtual_tx_checkpoint_tx_vw.checkpoint_txid, virtual_tx_checkpoint_tx_vw.checkpoint_tx, virtual_tx_checkpoint_tx_vw.commitment_txid, virtual_tx_checkpoint_tx_vw.is_root_commitment_txid, virtual_tx_checkpoint_tx_vw.virtual_txid
 FROM virtual_tx_checkpoint_tx_vw WHERE txid = $1

@@ -307,6 +307,10 @@ func (r *roundRepository) GetRoundStats(ctx context.Context, id string) (*domain
 	}, nil
 }
 
+func (r *roundRepository) GetUnsweptRoundsTxid(ctx context.Context) ([]string, error) {
+	return r.querier.SelectUnsweptRoundsTxid(ctx)
+}
+
 func (r *roundRepository) GetRoundForfeitTxs(ctx context.Context, roundTxid string) ([]domain.ForfeitTx, error) {
 	rows, err := r.querier.GetRoundForfeitTxs(ctx, roundTxid)
 	if err != nil {
