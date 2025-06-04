@@ -1012,7 +1012,9 @@ func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context)
 	_, boardingAddresses, _, err := a.wallet.GetAddresses(ctx)
 	if err == nil {
 		for _, boardingAddress := range boardingAddresses {
-			a.explorer.TrackAddress(boardingAddress.Address)
+			if err := a.explorer.TrackAddress(boardingAddress.Address); err != nil {
+				log.WithError(err).Errorf("failed to track boarding address %s", boardingAddress.Address)
+			}
 		}
 	}
 
