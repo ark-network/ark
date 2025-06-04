@@ -137,7 +137,7 @@
         },
         "blockDetails": {
           "$ref": "#/definitions/v1BlockDetails",
-          "description": "Deatils of the block including the transaction."
+          "description": "Details of the block including the transaction."
         }
       }
     },
