@@ -128,7 +128,7 @@ func (a *adminService) GetRounds(ctx context.Context, after int64, before int64)
 }
 
 func (a *adminService) GetScheduledSweeps(ctx context.Context) ([]ScheduledSweep, error) {
-	sweepableRounds, err := a.repoManager.Rounds().GetExpiredRoundsTxid(ctx)
+	sweepableRounds, err := a.repoManager.Rounds().GetUnsweptRoundsTxid(ctx)
 	if err != nil {
 		return nil, err
 	}

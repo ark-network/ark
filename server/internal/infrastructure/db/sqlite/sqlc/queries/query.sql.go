@@ -471,34 +471,6 @@ func (q *Queries) SelectAllVtxos(ctx context.Context) ([]SelectAllVtxosRow, erro
 	return items, nil
 }
 
-const selectExpiredRoundsTxid = `-- name: SelectExpiredRoundsTxid :many
-SELECT round.txid FROM round
-WHERE round.swept = false AND round.ended = true AND round.failed = false
-`
-
-func (q *Queries) SelectExpiredRoundsTxid(ctx context.Context) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, selectExpiredRoundsTxid)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	var items []string
-	for rows.Next() {
-		var txid string
-		if err := rows.Scan(&txid); err != nil {
-			return nil, err
-		}
-		items = append(items, txid)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const selectLeafVtxosByRoundTxid = `-- name: SelectLeafVtxosByRoundTxid :many
 SELECT vtxo.txid, vtxo.vout, vtxo.pubkey, vtxo.amount, vtxo.round_tx, vtxo.spent_by, vtxo.spent, vtxo.redeemed, vtxo.swept, vtxo.expire_at, vtxo.created_at, vtxo.request_id, vtxo.redeem_tx FROM vtxo
 WHERE round_tx = ? AND (redeem_tx IS NULL or redeem_tx = '')
@@ -977,6 +949,34 @@ func (q *Queries) SelectTreeTxsWithRoundTxid(ctx context.Context, txid string) (
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const selectUnsweptRoundsTxid = `-- name: SelectUnsweptRoundsTxid :many
+SELECT round.txid FROM round
+WHERE round.swept = false AND round.ended = true AND round.failed = false
+`
+
+func (q *Queries) SelectUnsweptRoundsTxid(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, selectUnsweptRoundsTxid)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var items []string
+	for rows.Next() {
+		var txid string
+		if err := rows.Scan(&txid); err != nil {
+			return nil, err
+		}
+		items = append(items, txid)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err

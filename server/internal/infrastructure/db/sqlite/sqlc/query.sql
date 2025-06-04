@@ -90,7 +90,7 @@ FROM round
          LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
 WHERE round.txid = ?;
 
--- name: SelectExpiredRoundsTxid :many
+-- name: SelectUnsweptRoundsTxid :many
 SELECT round.txid FROM round
 WHERE round.swept = false AND round.ended = true AND round.failed = false;
 

@@ -2348,6 +2348,8 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 
 	expirationTimestamp := s.sweeper.scheduler.AddNow(int64(s.vtxoTreeExpiry.Value))
 
+	log.Debugf("round %s sweeping scheduled at %s", round.Txid, fancyTime(expirationTimestamp, s.sweeper.scheduler.Unit()))
+
 	if err := s.sweeper.schedule(expirationTimestamp, round.Txid, round.VtxoTree); err != nil {
 		log.WithError(err).Warn("failed to schedule sweep tx")
 	}
@@ -2416,13 +2418,13 @@ func (s *covenantlessService) stopWatchingVtxos(vtxos []domain.Vtxo) {
 func (s *covenantlessService) restoreWatchingVtxos() error {
 	ctx := context.Background()
 
-	expiredRounds, err := s.repoManager.Rounds().GetExpiredRoundsTxid(ctx)
+	unsweptRounds, err := s.repoManager.Rounds().GetUnsweptRoundsTxid(ctx)
 	if err != nil {
 		return err
 	}
 
 	vtxos := make([]domain.Vtxo, 0)
-	for _, txid := range expiredRounds {
+	for _, txid := range unsweptRounds {
 		fromRound, err := s.repoManager.Vtxos().GetVtxosForRound(ctx, txid)
 		if err != nil {
 			log.WithError(err).Warnf("failed to retrieve vtxos for round %s", txid)
@@ -2568,6 +2570,15 @@ func (s *covenantlessService) verifyForfeitTxsSigs(txs []string) error {
 		close(errChan)
 		return nil
 	}
+}
+
+func fancyTime(timestamp int64, unit ports.TimeUnit) (fancyTime string) {
+	if unit == ports.UnixTime {
+		fancyTime = time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
+	} else {
+		fancyTime = fmt.Sprintf("block %d", timestamp)
+	}
+	return
 }
 
 func batchTreeEvents(txTree tree.TxTree, batchIndex int32, roundId string) []domain.Event {
