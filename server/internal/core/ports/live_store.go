@@ -15,6 +15,7 @@ type LiveStore interface {
 	RoundInputs() OutpointStore
 	CurrentRound() CurrentRoundStore
 	TreeSigingSessions() TreeSigningSessionsStore
+	BoardingInputs() BoardingInputsStore
 }
 
 type TxRequestStore interface {
@@ -57,6 +58,11 @@ type TreeSigningSessionsStore interface {
 	DeleteSession(roundId string)
 }
 
+type BoardingInputsStore interface {
+	Set(numOfInputs int)
+	Get() int
+}
+
 type TimedTxRequest struct {
 	domain.TxRequest
 	BoardingInputs []BoardingInput
@@ -70,9 +76,9 @@ type MusigSigningSession struct {
 	Lock        sync.Mutex
 	NbCosigners int
 	Cosigners   map[string]struct{}
-	Nonces      map[*secp256k1.PublicKey]tree.TreeNonces
+	Nonces      map[secp256k1.PublicKey]tree.TreeNonces
 	NonceDoneC  chan struct{}
 
-	Signatures map[*secp256k1.PublicKey]tree.TreePartialSigs
+	Signatures map[secp256k1.PublicKey]tree.TreePartialSigs
 	SigDoneC   chan struct{}
 }

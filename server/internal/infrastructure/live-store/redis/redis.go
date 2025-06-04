@@ -14,6 +14,7 @@ func NewLiveStore() ports.LiveStore {
 		roundInputsStore:      NewOutpointStore(),
 		currentRoundStore:     NewCurrentRoundStore(),
 		treeSigningSessions:   NewTreeSigningSessionsStore(),
+		boardingInputsStore:   NewBoardingInputsStore(),
 	}
 }
 
@@ -27,6 +28,7 @@ func (s *redisLiveStore) CurrentRound() ports.CurrentRoundStore { return s.curre
 func (s *redisLiveStore) TreeSigingSessions() ports.TreeSigningSessionsStore {
 	return s.treeSigningSessions
 }
+func (s *redisLiveStore) BoardingInputs() ports.BoardingInputsStore { return s.boardingInputsStore }
 
 type redisLiveStore struct {
 	txRequestStore        ports.TxRequestStore
@@ -35,6 +37,7 @@ type redisLiveStore struct {
 	roundInputsStore      ports.OutpointStore
 	currentRoundStore     ports.CurrentRoundStore
 	treeSigningSessions   ports.TreeSigningSessionsStore
+	boardingInputsStore   ports.BoardingInputsStore
 }
 
 type txRequestStore struct{}
@@ -106,3 +109,18 @@ func (s *treeSigningSessionsStore) GetSession(roundId string) (*ports.MusigSigni
 	panic("not implemented")
 }
 func (s *treeSigningSessionsStore) DeleteSession(roundId string) { panic("not implemented") }
+
+func NewBoardingInputsStore() ports.BoardingInputsStore {
+	return &boardingInputsStore{}
+}
+
+type boardingInputsStore struct {
+}
+
+func (b *boardingInputsStore) Set(numOfInputs int) {
+	panic("not implemented")
+}
+
+func (b *boardingInputsStore) Get() int {
+	panic("not implemented")
+}

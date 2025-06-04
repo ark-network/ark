@@ -26,6 +26,7 @@ func NewLiveStore(txBuilder ports.TxBuilder) ports.LiveStore {
 		roundInputsStore:      NewOutpointStore(),
 		currentRoundStore:     NewCurrentRoundStore(),
 		treeSigningSessions:   NewTreeSigningSessionsStore(),
+		boardingInputsStore:   NewBoardingInputsStore(),
 	}
 }
 
@@ -39,6 +40,7 @@ func (s *inMemoryLiveStore) CurrentRound() ports.CurrentRoundStore { return s.cu
 func (s *inMemoryLiveStore) TreeSigingSessions() ports.TreeSigningSessionsStore {
 	return s.treeSigningSessions
 }
+func (s *inMemoryLiveStore) BoardingInputs() ports.BoardingInputsStore { return s.boardingInputsStore }
 
 type inMemoryLiveStore struct {
 	txRequestStore        ports.TxRequestStore
@@ -47,6 +49,7 @@ type inMemoryLiveStore struct {
 	roundInputsStore      ports.OutpointStore
 	currentRoundStore     ports.CurrentRoundStore
 	treeSigningSessions   ports.TreeSigningSessionsStore
+	boardingInputsStore   ports.BoardingInputsStore
 }
 
 type txRequestStore struct {
@@ -261,7 +264,7 @@ func (m *txRequestStore) View(id string) (*domain.TxRequest, bool) {
 }
 
 type forfeitTxsStore struct {
-	lock            *sync.RWMutex
+	lock            sync.RWMutex
 	builder         ports.TxBuilder
 	forfeitTxs      map[domain.VtxoKey]string
 	connectors      tree.TxTree
@@ -390,6 +393,10 @@ func (s *forfeitTxsStore) Pop() ([]string, error) {
 	return txs, nil
 }
 func (s *forfeitTxsStore) AllSigned() bool {
+	if len(s.forfeitTxs) == 0 {
+		return false
+	}
+	
 	for _, txs := range s.forfeitTxs {
 		if len(txs) == 0 {
 			return false
@@ -486,9 +493,9 @@ func (s *treeSigningSessionsStore) NewSession(
 	sess := &ports.MusigSigningSession{
 		Cosigners:   uniqueSignersPubKeys,
 		NbCosigners: len(uniqueSignersPubKeys) + 1, // server included
-		Nonces:      make(map[*secp256k1.PublicKey]tree.TreeNonces),
+		Nonces:      make(map[secp256k1.PublicKey]tree.TreeNonces),
 		NonceDoneC:  make(chan struct{}),
-		Signatures:  make(map[*secp256k1.PublicKey]tree.TreePartialSigs),
+		Signatures:  make(map[secp256k1.PublicKey]tree.TreePartialSigs),
 		SigDoneC:    make(chan struct{}),
 	}
 	s.sessions[roundId] = sess
@@ -504,4 +511,25 @@ func (s *treeSigningSessionsStore) DeleteSession(roundId string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	delete(s.sessions, roundId)
+}
+
+func NewBoardingInputsStore() ports.BoardingInputsStore {
+	return &boardingInputsStore{}
+}
+
+type boardingInputsStore struct {
+	lock        sync.RWMutex
+	numOfInputs int
+}
+
+func (b *boardingInputsStore) Set(numOfInputs int) {
+	b.lock.Lock()
+	defer b.lock.Unlock()
+	b.numOfInputs = numOfInputs
+}
+
+func (b *boardingInputsStore) Get() int {
+	b.lock.RLock()
+	defer b.lock.RUnlock()
+	return b.numOfInputs
 }

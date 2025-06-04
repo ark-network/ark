@@ -51,9 +51,6 @@ type covenantlessService struct {
 	serverSigningKey    *secp256k1.PrivateKey
 	serverSigningPubKey *secp256k1.PublicKey
 
-	numOfBoardingInputs    int
-	numOfBoardingInputsMtx sync.RWMutex
-
 	forfeitsBoardingSigsChan chan struct{}
 
 	roundMaxParticipantsCount int64
@@ -1314,9 +1311,7 @@ func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *dom
 	// Condition: all forfeit txs are signed and
 	// the number of signed boarding inputs matches
 	// numOfBoardingInputs we expect
-	s.numOfBoardingInputsMtx.RLock()
-	numOfBoardingInputs := s.numOfBoardingInputs
-	s.numOfBoardingInputsMtx.RUnlock()
+	numOfBoardingInputs := s.liveStore.BoardingInputs().Get()
 	if s.liveStore.ForfeitTxs().AllSigned() && numOfBoardingInputs == numOfInputsSigned {
 		select {
 		case s.forfeitsBoardingSigsChan <- struct{}{}:
@@ -1669,11 +1664,11 @@ func (s *covenantlessService) RegisterCosignerNonces(
 		session.Lock.Lock()
 		defer session.Lock.Unlock()
 
-		if _, ok := session.Nonces[pubkey]; ok {
+		if _, ok := session.Nonces[*pubkey]; ok {
 			return // skip if we already have nonces for this pubkey
 		}
 
-		session.Nonces[pubkey] = nonces
+		session.Nonces[*pubkey] = nonces
 
 		if len(session.Nonces) == session.NbCosigners-1 { // exclude the server
 			go func() {
@@ -1707,11 +1702,11 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 		session.Lock.Lock()
 		defer session.Lock.Unlock()
 
-		if _, ok := session.Signatures[pubkey]; ok {
+		if _, ok := session.Signatures[*pubkey]; ok {
 			return // skip if we already have signatures for this pubkey
 		}
 
-		session.Signatures[pubkey] = signatures
+		session.Signatures[*pubkey] = signatures
 
 		if len(session.Signatures) == session.NbCosigners-1 { // exclude the server
 			go func() {
@@ -1815,10 +1810,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		}
 	}
 
-	s.numOfBoardingInputsMtx.Lock()
-	s.numOfBoardingInputs = len(boardingInputs)
-	s.numOfBoardingInputsMtx.Unlock()
-
+	s.liveStore.BoardingInputs().Set(len(boardingInputs))
 	totAmount := uint64(0)
 	for _, request := range requests {
 		totAmount += request.TotalOutputAmount()
@@ -1947,7 +1939,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		case <-signingSession.NonceDoneC:
 			noncesTimer.Stop()
 			for pubkey, nonce := range signingSession.Nonces {
-				coordinator.AddNonce(pubkey, nonce)
+				coordinator.AddNonce(&pubkey, nonce)
 			}
 		}
 
@@ -1994,7 +1986,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		case <-signingSession.SigDoneC:
 			signaturesTimer.Stop()
 			for pubkey, sig := range signingSession.Signatures {
-				coordinator.AddSignatures(pubkey, sig)
+				coordinator.AddSignatures(&pubkey, sig)
 			}
 		}
 
