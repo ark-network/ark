@@ -70,7 +70,7 @@ func mainAction(_ *cli.Context) error {
 		return err
 	}
 
-	log.Infof("Ark Server config: %+v", cfg)
+	log.Infof("Ark Server config: %s", cfg)
 
 	log.Info("starting service...")
 	if err := svc.Start(); err != nil {
