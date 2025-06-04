@@ -32,7 +32,6 @@ type RoundFinalizationStarted struct {
 
 type RoundFinalized struct {
 	RoundEvent
-	Txid              string
 	ForfeitTxs        []ForfeitTx
 	FinalCommitmentTx string
 	Timestamp         int64

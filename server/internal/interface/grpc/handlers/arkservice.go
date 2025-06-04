@@ -614,7 +614,7 @@ func (h *handler) listenToEvents() {
 						},
 					},
 				})
-			case domain.RoundFinalized:
+			case application.RoundFinalized:
 				evs = append(evs, &arkv1.GetEventStreamResponse{
 					Event: &arkv1.GetEventStreamResponse_RoundFinalized{
 						RoundFinalized: &arkv1.RoundFinalizedEvent{

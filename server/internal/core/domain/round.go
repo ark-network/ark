@@ -166,7 +166,7 @@ func (r *Round) StartFinalization(
 	return []Event{event}, nil
 }
 
-func (r *Round) EndFinalization(forfeitTxs []ForfeitTx, txid, finalCommitmentTx string) ([]Event, error) {
+func (r *Round) EndFinalization(forfeitTxs []ForfeitTx, finalCommitmentTx string) ([]Event, error) {
 	if len(forfeitTxs) <= 0 {
 		for _, request := range r.TxRequests {
 			for _, in := range request.Inputs {
@@ -177,9 +177,6 @@ func (r *Round) EndFinalization(forfeitTxs []ForfeitTx, txid, finalCommitmentTx 
 				}
 			}
 		}
-	}
-	if len(txid) <= 0 {
-		return nil, fmt.Errorf("missing round txid")
 	}
 	if r.Stage.Code != int(RoundFinalizationStage) || r.IsFailed() {
 		return nil, fmt.Errorf("not in a valid stage to end finalization")
@@ -196,7 +193,6 @@ func (r *Round) EndFinalization(forfeitTxs []ForfeitTx, txid, finalCommitmentTx 
 			Id:   r.Id,
 			Type: EventTypeRoundFinalized,
 		},
-		Txid:              txid,
 		ForfeitTxs:        forfeitTxs,
 		FinalCommitmentTx: finalCommitmentTx,
 		Timestamp:         time.Now().Unix(),
@@ -263,7 +259,6 @@ func (r *Round) on(event Event, replayed bool) {
 		r.VtxoTreeExpiration = e.VtxoTreeExpiration
 	case RoundFinalized:
 		r.Stage.Ended = true
-		r.Txid = e.Txid
 		r.ForfeitTxs = append([]ForfeitTx{}, e.ForfeitTxs...)
 		r.EndingTimestamp = e.Timestamp
 		r.CommitmentTx = e.FinalCommitmentTx

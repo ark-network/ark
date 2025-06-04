@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -43,11 +44,9 @@ type covenantlessService struct {
 	scanner     ports.BlockchainScanner
 	sweeper     *sweeper
 
-	txRequests       *txRequestsQueue
-	forfeitTxs       *forfeitTxsMap
-	offchainTxInputs *outpointMap
-	roundInputs      *outpointMap
-	offchainTxs      *offchainTxsMap
+	txRequests  *txRequestsQueue
+	forfeitTxs  *forfeitTxsMap
+	offchainTxs *offchainTxsMap
 
 	eventsCh            chan []domain.Event
 	transactionEventsCh chan TransactionEvent
@@ -143,8 +142,6 @@ func NewService(
 		sweeper:                   newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
 		txRequests:                newTxRequestsQueue(),
 		forfeitTxs:                newForfeitTxsMap(builder),
-		offchainTxInputs:          newOutpointMap(),
-		roundInputs:               newOutpointMap(),
 		offchainTxs:               newOffchainTxsMap(),
 		eventsCh:                  make(chan []domain.Event),
 		transactionEventsCh:       make(chan TransactionEvent),
@@ -371,18 +368,21 @@ func (s *covenantlessService) SubmitOffchainTx(
 		return nil, "", "", fmt.Errorf("some vtxos not found")
 	}
 
-	if exists, vtxo := s.roundInputs.includesAny(spentVtxoKeys); exists {
+	if exists, vtxo := s.txRequests.includesAny(spentVtxoKeys); exists {
 		return nil, "", "", fmt.Errorf("vtxo %s is already registered for next round", vtxo)
 	}
 
-	s.offchainTxInputs.add(spentVtxoKeys)
-	defer s.offchainTxInputs.remove(spentVtxoKeys)
-
 	indexedSpentVtxos := make(map[domain.VtxoKey]domain.Vtxo)
 	commitmentTxsByCheckpointTxid := make(map[string]string)
+	expiration := int64(math.MaxInt64)
+	rootCommitmentTxid := ""
 	for _, vtxo := range spentVtxos {
 		indexedSpentVtxos[vtxo.VtxoKey] = vtxo
 		commitmentTxsByCheckpointTxid[checkpointTxsByVtxoKey[vtxo.VtxoKey]] = vtxo.CommitmentTxid
+		if vtxo.ExpireAt < expiration {
+			rootCommitmentTxid = vtxo.CommitmentTxid
+			expiration = vtxo.ExpireAt
+		}
 	}
 
 	for _, checkpointPsbt := range checkpointPsbts {
@@ -662,11 +662,6 @@ func (s *covenantlessService) SubmitOffchainTx(
 		signedCheckpointTxs[rebuiltCheckpointTx.UnsignedTx.TxID()] = signedCheckpointTx
 	}
 
-	expiration, rootCommitmentTxid := findFirstRoundToExpire(spentVtxos)
-	if expiration == 0 {
-		return nil, "", "", fmt.Errorf("invalid expiry")
-	}
-
 	change, err := offchainTx.Accept(
 		signedRedeemTx,
 		signedCheckpointTxs,
@@ -686,7 +681,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 		signedCheckpoints = append(signedCheckpoints, tx)
 	}
 
-	return
+	return signedCheckpoints, finalVirtualTx, virtualTxid, nil
 }
 
 func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid string, finalCheckpoints []string) error {
@@ -712,8 +707,6 @@ func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid strin
 		); err != nil {
 			log.WithError(err).Fatal("failed to save offchain tx events")
 		}
-
-		s.offchainTxs.remove(txid)
 	}()
 
 	finalCheckpointsTxs := make(map[string]string)
@@ -732,6 +725,7 @@ func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid strin
 		return err
 	}
 	changes = []domain.Event{event}
+	s.offchainTxs.remove(txid)
 
 	return nil
 }
@@ -764,8 +758,6 @@ func (s *covenantlessService) GetBoardingAddress(
 }
 
 func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) (string, error) {
-	// vtxoKeysInputs keeps track of the vtxos that are inputs of the intent
-	vtxoKeysInputs := make([]domain.VtxoKey, 0)
 	// the vtxo to swap for new ones, require forfeit transactions
 	vtxosInputs := make([]domain.Vtxo, 0)
 	// the boarding utxos to add in the commitment tx
@@ -812,7 +804,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			VOut: outpoint.Index,
 		}
 
-		if s.offchainTxInputs.includes(vtxoKey) {
+		if s.offchainTxs.includes(vtxoKey) {
 			return "", fmt.Errorf("vtxo %s is currently being spent", vtxoKey.String())
 		}
 
@@ -920,8 +912,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			Value:    int64(vtxo.Amount),
 			PkScript: pkScript,
 		}
-
-		vtxoKeysInputs = append(vtxoKeysInputs, vtxo.VtxoKey)
 
 		// We want to validate the taproot tree of an input vtxo only if it requires
 		// to be forfeited. Note and swept vtxos can't go onchain, so there's no reason to
@@ -1052,15 +1042,11 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 		return "", err
 	}
 
-	// prevent the vtxos from being spent in a concurrent intent
-	s.roundInputs.add(vtxoKeysInputs)
-
 	return request.Id, nil
 }
 
 func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
 	vtxosInputs := make([]domain.Vtxo, 0)
-	vtxoKeys := make([]domain.VtxoKey, 0)
 	boardingInputs := make([]ports.BoardingInput, 0)
 
 	now := time.Now().Unix()
@@ -1068,7 +1054,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
 
 	for _, input := range inputs {
-		if s.offchainTxInputs.includes(input.VtxoKey) {
+		if s.offchainTxs.includes(input.VtxoKey) {
 			return "", fmt.Errorf("vtxo %s is currently being spent", input.String())
 		}
 
@@ -1179,7 +1165,6 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		}
 
 		vtxosInputs = append(vtxosInputs, vtxo)
-		vtxoKeys = append(vtxoKeys, vtxo.VtxoKey)
 	}
 
 	request, err := domain.NewTxRequest(vtxosInputs)
@@ -1190,8 +1175,6 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	if err := s.txRequests.push(*request, boardingInputs, nil); err != nil {
 		return "", err
 	}
-
-	s.roundInputs.add(vtxoKeys)
 
 	return request.Id, nil
 }
@@ -1711,7 +1694,6 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 
 	ctx := context.Background()
 
-	var poppedRequests []timedTxRequest
 	var registeredRequests []timedTxRequest
 	roundAborted := false
 
@@ -1728,13 +1710,7 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 		}
 
 		if round.IsFailed() {
-			vtxoKeys := make([]domain.VtxoKey, 0)
-			for _, req := range poppedRequests {
-				for _, in := range req.Inputs {
-					vtxoKeys = append(vtxoKeys, in.VtxoKey)
-				}
-			}
-			s.roundInputs.remove(vtxoKeys)
+			s.txRequests.deleteVtxos()
 			s.startRound()
 			return
 		}
@@ -1770,7 +1746,6 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 
 	// TODO take into account available liquidity
 	requests := s.txRequests.pop(num)
-	poppedRequests = requests
 
 	totAmount := uint64(0)
 	for _, request := range requests {
@@ -1838,9 +1813,6 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 			}
 		}
 
-		// once repush is successful, make the popped requests = the registered ones
-		poppedRequests = registeredRequests
-
 		// make the round fail if we don't register this round
 		if len(confirmedRequests) == 0 {
 			round.Fail(fmt.Errorf("not enough participants confirmed"))
@@ -1865,7 +1837,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		}
 
 		if round.IsFailed() {
-			s.roundInputs.removeRoundInputs(*round)
+			s.txRequests.deleteVtxos()
 			s.startRound()
 			return
 		}
@@ -2077,10 +2049,7 @@ func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 
 	ctx := context.Background()
 	round := s.getCurrentRound()
-
-	defer func() {
-		s.roundInputs.removeRoundInputs(*round)
-	}()
+	defer s.txRequests.deleteVtxos()
 
 	if round.IsFailed() {
 		return
@@ -2190,13 +2159,12 @@ func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 		return
 	}
 
-	txid, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx)
-	if err != nil {
+	if _, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx); err != nil {
 		changes = round.Fail(fmt.Errorf("failed to broadcast round tx: %s", err))
 		return
 	}
 
-	changes, err = round.EndFinalization(forfeitTxs, txid, signedRoundTx)
+	changes, err = round.EndFinalization(forfeitTxs, signedRoundTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
 		log.WithError(err).Warn("failed to finalize round")
@@ -2286,6 +2254,8 @@ func (s *covenantlessService) propagateEvents(round *domain.Round) {
 			events,
 			batchTreeEvents(ev.Connectors, 1, round.Id)...,
 		)
+	case domain.RoundFinalized:
+		lastEvent = RoundFinalized{lastEvent.(domain.RoundFinalized), round.Txid}
 	}
 
 	events = append(events, lastEvent)

@@ -34,14 +34,18 @@ func (t timedTxRequest) hashID() [32]byte {
 }
 
 type txRequestsQueue struct {
-	lock     *sync.RWMutex
-	requests map[string]*timedTxRequest
+	lock          *sync.RWMutex
+	requests      map[string]*timedTxRequest
+	vtxos         map[string]struct{}
+	vtxosToRemove []string
 }
 
 func newTxRequestsQueue() *txRequestsQueue {
-	requestsById := make(map[string]*timedTxRequest)
 	lock := &sync.RWMutex{}
-	return &txRequestsQueue{lock, requestsById}
+	requestsById := make(map[string]*timedTxRequest)
+	vtxos := make(map[string]struct{})
+	vtxosToRemove := make([]string, 0)
+	return &txRequestsQueue{lock, requestsById, vtxos, vtxosToRemove}
 }
 
 func (m *txRequestsQueue) len() int64 {
@@ -91,6 +95,12 @@ func (m *txRequestsQueue) push(
 
 	now := time.Now()
 	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, now, musig2Data}
+	for _, vtxo := range request.Inputs {
+		if vtxo.IsNote() {
+			continue
+		}
+		m.vtxos[vtxo.VtxoKey.String()] = struct{}{}
+	}
 	return nil
 }
 
@@ -119,6 +129,9 @@ func (m *txRequestsQueue) pop(num int64) []timedTxRequest {
 
 	for _, p := range requestsByTime[:num] {
 		result = append(result, p)
+		for _, vtxo := range m.requests[p.Id].Inputs {
+			m.vtxosToRemove = append(m.vtxosToRemove, vtxo.VtxoKey.String())
+		}
 		delete(m.requests, p.Id)
 	}
 
@@ -167,6 +180,13 @@ func (m *txRequestsQueue) delete(ids []string) error {
 	defer m.lock.Unlock()
 
 	for _, id := range ids {
+		req, ok := m.requests[id]
+		if !ok {
+			continue
+		}
+		for _, vtxo := range req.Inputs {
+			delete(m.vtxos, vtxo.VtxoKey.String())
+		}
 		delete(m.requests, id)
 	}
 	return nil
@@ -177,7 +197,17 @@ func (m *txRequestsQueue) deleteAll() error {
 	defer m.lock.Unlock()
 
 	m.requests = make(map[string]*timedTxRequest)
+	m.vtxos = make(map[string]struct{})
 	return nil
+}
+
+func (m *txRequestsQueue) deleteVtxos() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	for _, vtxo := range m.vtxosToRemove {
+		delete(m.vtxos, vtxo)
+	}
+	m.vtxosToRemove = make([]string, 0)
 }
 
 func (m *txRequestsQueue) viewAll(ids []string) ([]timedTxRequest, error) {
@@ -214,6 +244,26 @@ func (m *txRequestsQueue) view(id string) (*domain.TxRequest, bool) {
 		Inputs:    request.Inputs,
 		Receivers: request.Receivers,
 	}, true
+}
+
+func (m *txRequestsQueue) includes(outpoint domain.VtxoKey) bool {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	_, exists := m.vtxos[outpoint.String()]
+	return exists
+}
+
+func (m *txRequestsQueue) includesAny(outpoints []domain.VtxoKey) (bool, string) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	for _, out := range outpoints {
+		if _, exists := m.vtxos[out.String()]; exists {
+			return true, out.String()
+		}
+	}
+
+	return false, ""
 }
 
 type forfeitTxsMap struct {
@@ -363,73 +413,17 @@ func (m *forfeitTxsMap) allSigned() bool {
 	return true
 }
 
-type outpointMap struct {
-	lock      *sync.RWMutex
-	outpoints map[string]struct{}
-}
-
-func newOutpointMap() *outpointMap {
-	return &outpointMap{
-		lock:      &sync.RWMutex{},
-		outpoints: make(map[string]struct{}),
-	}
-}
-
-func (r *outpointMap) add(outpoints []domain.VtxoKey) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	for _, out := range outpoints {
-		r.outpoints[out.String()] = struct{}{}
-	}
-}
-
-func (r *outpointMap) removeRoundInputs(round domain.Round) {
-	vtxoKeys := make([]domain.VtxoKey, 0)
-	for _, req := range round.TxRequests {
-		for _, in := range req.Inputs {
-			vtxoKeys = append(vtxoKeys, in.VtxoKey)
-		}
-	}
-	r.remove(vtxoKeys)
-}
-
-func (r *outpointMap) remove(outpoints []domain.VtxoKey) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	for _, out := range outpoints {
-		delete(r.outpoints, out.String())
-	}
-}
-
-func (r *outpointMap) includes(outpoint domain.VtxoKey) bool {
-	r.lock.RLock()
-	defer r.lock.RUnlock()
-	_, exists := r.outpoints[outpoint.String()]
-	return exists
-}
-
-func (r *outpointMap) includesAny(outpoints []domain.VtxoKey) (bool, string) {
-	r.lock.RLock()
-	defer r.lock.RUnlock()
-
-	for _, out := range outpoints {
-		if _, exists := r.outpoints[out.String()]; exists {
-			return true, out.String()
-		}
-	}
-
-	return false, ""
-}
-
 type offchainTxsMap struct {
 	lock        *sync.RWMutex
 	offchainTxs map[string]domain.OffchainTx
+	inputs      map[string]struct{}
 }
 
 func newOffchainTxsMap() *offchainTxsMap {
 	return &offchainTxsMap{
 		lock:        &sync.RWMutex{},
 		offchainTxs: make(map[string]domain.OffchainTx),
+		inputs:      make(map[string]struct{}),
 	}
 }
 
@@ -437,19 +431,44 @@ func (m *offchainTxsMap) add(offchainTx domain.OffchainTx) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 	m.offchainTxs[offchainTx.VirtualTxid] = offchainTx
+	for _, tx := range offchainTx.CheckpointTxs {
+		ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+		for _, in := range ptx.UnsignedTx.TxIn {
+			m.inputs[in.PreviousOutPoint.String()] = struct{}{}
+		}
+	}
 }
 
 func (m *offchainTxsMap) remove(virtualTxid string) {
 	m.lock.Lock()
 	defer m.lock.Unlock()
+
+	offchainTx, ok := m.offchainTxs[virtualTxid]
+	if !ok {
+		return
+	}
+
+	for _, tx := range offchainTx.CheckpointTxs {
+		ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+		for _, in := range ptx.UnsignedTx.TxIn {
+			delete(m.inputs, in.PreviousOutPoint.String())
+		}
+	}
 	delete(m.offchainTxs, virtualTxid)
 }
 
-func (m *offchainTxsMap) get(offchainTxid string) (domain.OffchainTx, bool) {
+func (m *offchainTxsMap) get(virtualTxid string) (domain.OffchainTx, bool) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
-	offchainTx, ok := m.offchainTxs[offchainTxid]
+	offchainTx, ok := m.offchainTxs[virtualTxid]
 	return offchainTx, ok
+}
+
+func (m *offchainTxsMap) includes(outpoint domain.VtxoKey) bool {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	_, exists := m.inputs[outpoint.String()]
+	return exists
 }
 
 // onchainOutputs iterates over all the nodes' outputs in the vtxo tree and checks their onchain state
@@ -576,17 +595,6 @@ func decodeTx(offchainTx domain.OffchainTx) (string, []domain.VtxoKey, []domain.
 	}
 
 	return txid, ins, outs, nil
-}
-
-func findFirstRoundToExpire(vtxos []domain.Vtxo) (expiration int64, roundTxid string) {
-	for i, vtxo := range vtxos {
-		if i == 0 || vtxo.ExpireAt < expiration {
-			roundTxid = vtxo.CommitmentTxid
-			expiration = vtxo.ExpireAt
-		}
-	}
-
-	return
 }
 
 func newBoardingInput(

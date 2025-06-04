@@ -487,7 +487,7 @@ func testEndFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.EndFinalization(forfeitTxs, txid, finalRoundTx)
+			events, err = round.EndFinalization(forfeitTxs, finalRoundTx)
 			require.NoError(t, err)
 			require.Len(t, events, 1)
 			require.False(t, round.IsStarted())
@@ -510,7 +510,6 @@ func testEndFinalization(t *testing.T) {
 			fixtures := []struct {
 				round       *domain.Round
 				forfeitTxs  []domain.ForfeitTx
-				txid        string
 				expectedErr string
 			}{
 				{
@@ -522,7 +521,6 @@ func testEndFinalization(t *testing.T) {
 						TxRequests: requestsById,
 					},
 					forfeitTxs:  nil,
-					txid:        txid,
 					expectedErr: "missing list of signed forfeit txs",
 				},
 				{
@@ -530,7 +528,6 @@ func testEndFinalization(t *testing.T) {
 						Id: "0",
 					},
 					forfeitTxs:  forfeitTxs,
-					txid:        txid,
 					expectedErr: "not in a valid stage to end finalization",
 				},
 				{
@@ -541,7 +538,6 @@ func testEndFinalization(t *testing.T) {
 						},
 					},
 					forfeitTxs:  forfeitTxs,
-					txid:        txid,
 					expectedErr: "not in a valid stage to end finalization",
 				},
 				{
@@ -553,7 +549,6 @@ func testEndFinalization(t *testing.T) {
 						},
 					},
 					forfeitTxs:  []domain.ForfeitTx{emptyForfeitTx, emptyForfeitTx, emptyForfeitTx, emptyForfeitTx},
-					txid:        txid,
 					expectedErr: "not in a valid stage to end finalization",
 				},
 				{
@@ -565,13 +560,12 @@ func testEndFinalization(t *testing.T) {
 						},
 					},
 					forfeitTxs:  []domain.ForfeitTx{emptyForfeitTx, emptyForfeitTx, emptyForfeitTx, emptyForfeitTx},
-					txid:        txid,
 					expectedErr: "round already finalized",
 				},
 			}
 
 			for _, f := range fixtures {
-				events, err := f.round.EndFinalization(f.forfeitTxs, f.txid, finalRoundTx)
+				events, err := f.round.EndFinalization(f.forfeitTxs, finalRoundTx)
 				require.EqualError(t, err, f.expectedErr)
 				require.Empty(t, events)
 			}
