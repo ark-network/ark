@@ -1,9 +1,11 @@
 package inmemory
 
 import (
+	"crypto/sha256"
 	"fmt"
-	log "github.com/sirupsen/logrus"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,45 +22,56 @@ const (
 
 func NewLiveStore(txBuilder ports.TxBuilder) ports.LiveStore {
 	return &inMemoryLiveStore{
-		txRequestStore:        NewTxRequestStore(),
-		forfeitTxsStore:       NewForfeitTxsStore(txBuilder),
-		offChainTxInputsStore: NewOutpointStore(),
-		roundInputsStore:      NewOutpointStore(),
-		currentRoundStore:     NewCurrentRoundStore(),
-		treeSigningSessions:   NewTreeSigningSessionsStore(),
-		boardingInputsStore:   NewBoardingInputsStore(),
+		txRequestsStore:           NewTxRequestsStore(),
+		forfeitTxsStore:           NewForfeitTxsStore(txBuilder),
+		offChainTxStore:           NewOffChainTxStore(),
+		currentRoundStore:         NewCurrentRoundStore(),
+		confirmationSessionsStore: NewConfirmationSessionsStore(),
+		treeSigningSessions:       NewTreeSigningSessionsStore(),
+		boardingInputsStore:       NewBoardingInputsStore(),
 	}
 }
 
-func (s *inMemoryLiveStore) TxRequest() ports.TxRequestStore   { return s.txRequestStore }
+func (s *inMemoryLiveStore) TxRequests() ports.TxRequestsStore { return s.txRequestsStore }
 func (s *inMemoryLiveStore) ForfeitTxs() ports.ForfeitTxsStore { return s.forfeitTxsStore }
-func (s *inMemoryLiveStore) OffChainTxInputs() ports.OutpointStore {
-	return s.offChainTxInputsStore
+func (s *inMemoryLiveStore) OffchainTxs() ports.OffChainTxStore {
+	return s.offChainTxStore
 }
-func (s *inMemoryLiveStore) RoundInputs() ports.OutpointStore      { return s.roundInputsStore }
 func (s *inMemoryLiveStore) CurrentRound() ports.CurrentRoundStore { return s.currentRoundStore }
+func (s *inMemoryLiveStore) ConfirmationSessions() ports.ConfirmationSessionsStore {
+	return s.confirmationSessionsStore
+}
 func (s *inMemoryLiveStore) TreeSigingSessions() ports.TreeSigningSessionsStore {
 	return s.treeSigningSessions
 }
 func (s *inMemoryLiveStore) BoardingInputs() ports.BoardingInputsStore { return s.boardingInputsStore }
 
 type inMemoryLiveStore struct {
-	txRequestStore        ports.TxRequestStore
-	forfeitTxsStore       ports.ForfeitTxsStore
-	offChainTxInputsStore ports.OutpointStore
-	roundInputsStore      ports.OutpointStore
-	currentRoundStore     ports.CurrentRoundStore
-	treeSigningSessions   ports.TreeSigningSessionsStore
-	boardingInputsStore   ports.BoardingInputsStore
+	txRequestsStore           ports.TxRequestsStore
+	forfeitTxsStore           ports.ForfeitTxsStore
+	offChainTxStore           ports.OffChainTxStore
+	currentRoundStore         ports.CurrentRoundStore
+	confirmationSessionsStore ports.ConfirmationSessionsStore
+	treeSigningSessions       ports.TreeSigningSessionsStore
+	boardingInputsStore       ports.BoardingInputsStore
 }
 
 type txRequestStore struct {
-	lock     sync.RWMutex
-	requests map[string]*ports.TimedTxRequest
+	lock          sync.RWMutex
+	requests      map[string]*ports.TimedTxRequest
+	vtxos         map[string]struct{}
+	vtxosToRemove []string
 }
 
-func NewTxRequestStore() ports.TxRequestStore {
-	return &txRequestStore{requests: make(map[string]*ports.TimedTxRequest)}
+func NewTxRequestsStore() ports.TxRequestsStore {
+	requestsById := make(map[string]*ports.TimedTxRequest)
+	vtxos := make(map[string]struct{})
+	vtxosToRemove := make([]string, 0)
+	return &txRequestStore{
+		requests:      requestsById,
+		vtxos:         vtxos,
+		vtxosToRemove: vtxosToRemove,
+	}
 }
 
 func (m *txRequestStore) Len() int64 {
@@ -93,8 +106,8 @@ func (m *txRequestStore) Push(request domain.TxRequest, boardingInputs []ports.B
 	}
 
 	for _, input := range boardingInputs {
-		for _, v := range m.requests {
-			for _, pBoardingInput := range v.BoardingInputs {
+		for _, request := range m.requests {
+			for _, pBoardingInput := range request.BoardingInputs {
 				if input.Txid == pBoardingInput.Txid && input.VOut == pBoardingInput.VOut {
 					return fmt.Errorf("duplicated boarding input, %s:%d already used by tx request %s", input.Txid, input.VOut, request.Id)
 				}
@@ -107,37 +120,30 @@ func (m *txRequestStore) Push(request domain.TxRequest, boardingInputs []ports.B
 		TxRequest:      request,
 		BoardingInputs: boardingInputs,
 		Timestamp:      now,
-		PingTimestamp:  now,
 		Musig2Data:     musig2Data,
+	}
+	for _, vtxo := range request.Inputs {
+		if vtxo.IsNote() {
+			continue
+		}
+		m.vtxos[vtxo.String()] = struct{}{}
 	}
 	return nil
 }
 
-func (m *txRequestStore) Pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []*tree.Musig2) {
+func (m *txRequestStore) Pop(num int64) []ports.TimedTxRequest {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	requestsByTime := make([]*ports.TimedTxRequest, 0, len(m.requests))
+	requestsByTime := make([]ports.TimedTxRequest, 0, len(m.requests))
 	for _, p := range m.requests {
 		// Skip tx requests without registered receivers.
 		if len(p.Receivers) <= 0 {
 			continue
 		}
 
-		sinceLastPing := time.Since(p.PingTimestamp).Minutes()
-		// Skip tx requests for which users didn't notify to be online in the last minute.
-		if sinceLastPing > selectGapMinutes {
-			// Cleanup the request from the map if greater than deleteGapMinutes
-			// TODO move to dedicated function
-			if sinceLastPing > deleteGapMinutes {
-				log.Debugf("delete tx request %s : we didn't receive a ping in the last %d minutes", p.Id, int(deleteGapMinutes))
-				delete(m.requests, p.TxRequest.Id)
-			}
-			continue
-		}
-		requestsByTime = append(requestsByTime, p)
+		requestsByTime = append(requestsByTime, *p)
 	}
-
 	sort.SliceStable(requestsByTime, func(i, j int) bool {
 		return requestsByTime[i].Timestamp.Before(requestsByTime[j].Timestamp)
 	})
@@ -146,16 +152,17 @@ func (m *txRequestStore) Pop(num int64) ([]domain.TxRequest, []ports.BoardingInp
 		num = int64(len(requestsByTime))
 	}
 
-	requests := make([]domain.TxRequest, 0, num)
-	boardingInputs := make([]ports.BoardingInput, 0)
-	musig2Data := make([]*tree.Musig2, 0)
+	result := make([]ports.TimedTxRequest, 0, num)
+
 	for _, p := range requestsByTime[:num] {
-		boardingInputs = append(boardingInputs, p.BoardingInputs...)
-		requests = append(requests, p.TxRequest)
-		musig2Data = append(musig2Data, p.Musig2Data)
-		delete(m.requests, p.TxRequest.Id)
+		result = append(result, p)
+		for _, vtxo := range m.requests[p.Id].Inputs {
+			m.vtxosToRemove = append(m.vtxosToRemove, vtxo.String())
+		}
+		delete(m.requests, p.Id)
 	}
-	return requests, boardingInputs, musig2Data
+
+	return result
 }
 
 func (m *txRequestStore) Update(request domain.TxRequest, musig2Data *tree.Musig2) error {
@@ -195,24 +202,18 @@ func (m *txRequestStore) Update(request domain.TxRequest, musig2Data *tree.Musig
 	return nil
 }
 
-func (m *txRequestStore) UpdatePingTimestamp(id string) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	request, ok := m.requests[id]
-	if !ok {
-		return fmt.Errorf("tx request %s not found", id)
-	}
-
-	request.PingTimestamp = time.Now()
-	return nil
-}
-
 func (m *txRequestStore) Delete(ids []string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
 	for _, id := range ids {
+		req, ok := m.requests[id]
+		if !ok {
+			continue
+		}
+		for _, vtxo := range req.Inputs {
+			delete(m.vtxos, vtxo.String())
+		}
 		delete(m.requests, id)
 	}
 	return nil
@@ -223,28 +224,37 @@ func (m *txRequestStore) DeleteAll() error {
 	defer m.lock.Unlock()
 
 	m.requests = make(map[string]*ports.TimedTxRequest)
+	m.vtxos = make(map[string]struct{})
 	return nil
+}
+
+func (m *txRequestStore) DeleteVtxos() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	for _, vtxo := range m.vtxosToRemove {
+		delete(m.vtxos, vtxo)
+	}
+	m.vtxosToRemove = make([]string, 0)
 }
 
 func (m *txRequestStore) ViewAll(ids []string) ([]ports.TimedTxRequest, error) {
 	m.lock.RLock()
 	defer m.lock.RUnlock()
 
-	results := make([]ports.TimedTxRequest, 0, len(m.requests))
+	requests := make([]ports.TimedTxRequest, 0, len(m.requests))
 	for _, request := range m.requests {
 		if len(ids) > 0 {
 			for _, id := range ids {
 				if request.Id == id {
-					results = append(results, *request)
+					requests = append(requests, *request)
 					break
 				}
 			}
 			continue
 		}
-
-		results = append(results, *request)
+		requests = append(requests, *request)
 	}
-	return results, nil
+	return requests, nil
 }
 
 func (m *txRequestStore) View(id string) (*domain.TxRequest, bool) {
@@ -263,6 +273,19 @@ func (m *txRequestStore) View(id string) (*domain.TxRequest, bool) {
 	}, true
 }
 
+func (m *txRequestStore) IncludesAny(outpoints []domain.VtxoKey) (bool, string) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	for _, out := range outpoints {
+		if _, exists := m.vtxos[out.String()]; exists {
+			return true, out.String()
+		}
+	}
+
+	return false, ""
+}
+
 type forfeitTxsStore struct {
 	lock            sync.RWMutex
 	builder         ports.TxBuilder
@@ -279,7 +302,7 @@ func NewForfeitTxsStore(txBuilder ports.TxBuilder) ports.ForfeitTxsStore {
 	}
 }
 
-func (s *forfeitTxsStore) Init(connectors tree.TxTree, requests []domain.TxRequest) error {
+func (m *forfeitTxsStore) Init(connectors tree.TxTree, requests []domain.TxRequest) error {
 	vtxosToSign := make([]domain.Vtxo, 0)
 	for _, request := range requests {
 		for _, vtxo := range request.Inputs {
@@ -291,15 +314,15 @@ func (s *forfeitTxsStore) Init(connectors tree.TxTree, requests []domain.TxReque
 		}
 	}
 
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	m.lock.Lock()
+	defer m.lock.Unlock()
 
-	s.vtxos = vtxosToSign
-	s.connectors = connectors
+	m.vtxos = vtxosToSign
+	m.connectors = connectors
 
 	// init the forfeit txs map
 	for _, vtxo := range vtxosToSign {
-		s.forfeitTxs[vtxo.VtxoKey] = ""
+		m.forfeitTxs[vtxo.VtxoKey] = ""
 	}
 
 	// create the connectors index
@@ -334,56 +357,56 @@ func (s *forfeitTxsStore) Init(connectors tree.TxTree, requests []domain.TxReque
 		}
 	}
 
-	s.connectorsIndex = connectorsIndex
+	m.connectorsIndex = connectorsIndex
 
 	return nil
 }
 
-func (s *forfeitTxsStore) Sign(txs []string) error {
+func (m *forfeitTxsStore) Sign(txs []string) error {
 	if len(txs) == 0 {
 		return nil
 	}
 
-	s.lock.Lock()
-	defer s.lock.Unlock()
+	m.lock.Lock()
+	defer m.lock.Unlock()
 
-	if len(s.vtxos) == 0 || len(s.connectors) == 0 {
+	if len(m.vtxos) == 0 || len(m.connectors) == 0 {
 		return fmt.Errorf("forfeit txs map not initialized")
 	}
 
 	// verify the txs are valid
-	validTxs, err := s.builder.VerifyForfeitTxs(s.vtxos, s.connectors, txs, s.connectorsIndex)
+	validTxs, err := m.builder.VerifyForfeitTxs(m.vtxos, m.connectors, txs, m.connectorsIndex)
 	if err != nil {
 		return err
 	}
 
 	for vtxoKey, txs := range validTxs {
-		if _, ok := s.forfeitTxs[vtxoKey]; !ok {
+		if _, ok := m.forfeitTxs[vtxoKey]; !ok {
 			return fmt.Errorf("unexpected forfeit tx, vtxo %s is not in the batch", vtxoKey)
 		}
-		s.forfeitTxs[vtxoKey] = txs
+		m.forfeitTxs[vtxoKey] = txs
 	}
 
 	return nil
 }
-func (s *forfeitTxsStore) Reset() {
-	s.lock.Lock()
-	defer s.lock.Unlock()
+func (m *forfeitTxsStore) Reset() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
 
-	s.forfeitTxs = make(map[domain.VtxoKey]string)
-	s.connectors = nil
-	s.connectorsIndex = nil
-	s.vtxos = nil
+	m.forfeitTxs = make(map[domain.VtxoKey]string)
+	m.connectors = nil
+	m.connectorsIndex = nil
+	m.vtxos = nil
 }
-func (s *forfeitTxsStore) Pop() ([]string, error) {
-	s.lock.Lock()
+func (m *forfeitTxsStore) Pop() ([]string, error) {
+	m.lock.Lock()
 	defer func() {
-		s.lock.Unlock()
-		s.Reset()
+		m.lock.Unlock()
+		m.Reset()
 	}()
 
 	txs := make([]string, 0)
-	for vtxo, forfeit := range s.forfeitTxs {
+	for vtxo, forfeit := range m.forfeitTxs {
 		if len(forfeit) == 0 {
 			return nil, fmt.Errorf("missing forfeit tx for vtxo %s", vtxo)
 		}
@@ -392,8 +415,8 @@ func (s *forfeitTxsStore) Pop() ([]string, error) {
 
 	return txs, nil
 }
-func (s *forfeitTxsStore) AllSigned() bool {
-	for _, txs := range s.forfeitTxs {
+func (m *forfeitTxsStore) AllSigned() bool {
+	for _, txs := range m.forfeitTxs {
 		if len(txs) == 0 {
 			return false
 		}
@@ -414,44 +437,61 @@ func (s *forfeitTxsStore) GetConnectorsIndexes() map[string]domain.Outpoint {
 	return s.connectorsIndex
 }
 
-type outpointStore struct {
-	lock      sync.RWMutex
-	outpoints map[string]struct{}
+type offChainTxStore struct {
+	lock        sync.RWMutex
+	offchainTxs map[string]domain.OffchainTx
+	inputs      map[string]struct{}
 }
 
-func NewOutpointStore() ports.OutpointStore {
-	return &outpointStore{outpoints: make(map[string]struct{})}
+func NewOffChainTxStore() ports.OffChainTxStore {
+	return &offChainTxStore{
+		offchainTxs: make(map[string]domain.OffchainTx),
+		inputs:      make(map[string]struct{}),
+	}
 }
 
-func (s *outpointStore) Add(outpoints []domain.VtxoKey) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	for _, o := range outpoints {
-		s.outpoints[o.String()] = struct{}{}
-	}
-}
-func (s *outpointStore) Remove(outpoints []domain.VtxoKey) {
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	for _, o := range outpoints {
-		delete(s.outpoints, o.String())
-	}
-}
-func (s *outpointStore) Includes(outpoint domain.VtxoKey) bool {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	_, ok := s.outpoints[outpoint.String()]
-	return ok
-}
-func (s *outpointStore) IncludesAny(outpoints []domain.VtxoKey) (bool, string) {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	for _, o := range outpoints {
-		if _, ok := s.outpoints[o.String()]; ok {
-			return true, o.String()
+func (m *offChainTxStore) Add(offchainTx domain.OffchainTx) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.offchainTxs[offchainTx.VirtualTxid] = offchainTx
+	for _, tx := range offchainTx.CheckpointTxs {
+		ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+		for _, in := range ptx.UnsignedTx.TxIn {
+			m.inputs[in.PreviousOutPoint.String()] = struct{}{}
 		}
 	}
-	return false, ""
+}
+
+func (m *offChainTxStore) Remove(virtualTxid string) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	offchainTx, ok := m.offchainTxs[virtualTxid]
+	if !ok {
+		return
+	}
+
+	for _, tx := range offchainTx.CheckpointTxs {
+		ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+		for _, in := range ptx.UnsignedTx.TxIn {
+			delete(m.inputs, in.PreviousOutPoint.String())
+		}
+	}
+	delete(m.offchainTxs, virtualTxid)
+}
+
+func (m *offChainTxStore) Get(virtualTxid string) (domain.OffchainTx, bool) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	offchainTx, ok := m.offchainTxs[virtualTxid]
+	return offchainTx, ok
+}
+
+func (m *offChainTxStore) Includes(outpoint domain.VtxoKey) bool {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	_, exists := m.inputs[outpoint.String()]
+	return exists
 }
 
 type currentRoundStore struct {
@@ -473,6 +513,80 @@ func (s *currentRoundStore) Get() *domain.Round {
 	return s.round
 }
 
+type confirmationSessionsStore struct {
+	lock                sync.RWMutex
+	intentsHashes       map[[32]byte]bool // hash --> confirmed
+	numIntents          int
+	numConfirmedIntents int
+	confirmedC          chan struct{}
+}
+
+func NewConfirmationSessionsStore() ports.ConfirmationSessionsStore {
+	return &confirmationSessionsStore{
+		confirmedC: make(chan struct{}),
+	}
+}
+
+func (c *confirmationSessionsStore) Init(intentIDsHashes [][32]byte) {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	hashes := make(map[[32]byte]bool)
+	for _, hash := range intentIDsHashes {
+		hashes[hash] = false
+	}
+
+	c.intentsHashes = hashes
+	c.numIntents = len(intentIDsHashes)
+}
+
+func (s *confirmationSessionsStore) Confirm(intentId string) error {
+	hash := sha256.Sum256([]byte(intentId))
+	s.lock.Lock()
+	defer s.lock.Unlock()
+	alreadyConfirmed, ok := s.intentsHashes[hash]
+	if !ok {
+		return fmt.Errorf("intent hash not found")
+	}
+
+	if alreadyConfirmed {
+		return nil
+	}
+
+	s.numConfirmedIntents++
+	s.intentsHashes[hash] = true
+
+	if s.numConfirmedIntents == s.numIntents {
+		select {
+		case s.confirmedC <- struct{}{}:
+		default:
+		}
+	}
+
+	return nil
+}
+
+func (c *confirmationSessionsStore) Get() *ports.ConfirmationSessions {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	return &ports.ConfirmationSessions{
+		IntentsHashes:       c.intentsHashes,
+		NumIntents:          c.numIntents,
+		NumConfirmedIntents: c.numConfirmedIntents,
+		ConfirmedC:          c.confirmedC,
+	}
+}
+
+func (c *confirmationSessionsStore) Reset() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	c.intentsHashes = make(map[[32]byte]bool)
+	c.numIntents = 0
+	c.numConfirmedIntents = 0
+}
+
 type treeSigningSessionsStore struct {
 	lock     sync.RWMutex
 	sessions map[string]*ports.MusigSigningSession
@@ -481,7 +595,7 @@ type treeSigningSessionsStore struct {
 func NewTreeSigningSessionsStore() ports.TreeSigningSessionsStore {
 	return &treeSigningSessionsStore{sessions: make(map[string]*ports.MusigSigningSession)}
 }
-func (s *treeSigningSessionsStore) NewSession(
+func (s *treeSigningSessionsStore) New(
 	roundId string, uniqueSignersPubKeys map[string]struct{},
 ) *ports.MusigSigningSession {
 	s.lock.Lock()
@@ -497,13 +611,13 @@ func (s *treeSigningSessionsStore) NewSession(
 	s.sessions[roundId] = sess
 	return sess
 }
-func (s *treeSigningSessionsStore) GetSession(roundId string) (*ports.MusigSigningSession, bool) {
+func (s *treeSigningSessionsStore) Get(roundId string) (*ports.MusigSigningSession, bool) {
 	s.lock.RLock()
 	defer s.lock.RUnlock()
 	sess, ok := s.sessions[roundId]
 	return sess, ok
 }
-func (s *treeSigningSessionsStore) DeleteSession(roundId string) {
+func (s *treeSigningSessionsStore) Delete(roundId string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 	delete(s.sessions, roundId)

@@ -38,6 +38,12 @@ service ArkService {
       body: "*"
     };
   };
+  rpc ConfirmRegistration(ConfirmRegistrationRequest) returns (ConfirmRegistrationResponse) {
+    option (google.api.http) = {
+      post: "/v1/batch/ack"
+      body: "*"
+    };
+  };
   rpc RegisterOutputsForNextRound(RegisterOutputsForNextRoundRequest) returns (RegisterOutputsForNextRoundResponse) {
     option (google.api.http) = {
       post: "/v1/round/registerOutputs"
@@ -65,11 +71,6 @@ service ArkService {
   rpc GetEventStream(GetEventStreamRequest) returns (stream GetEventStreamResponse) {
     option (google.api.http) = {
       get: "/v1/events"
-    };
-  };
-  rpc Ping(PingRequest) returns (PingResponse) {
-    option (google.api.http) = {
-      get: "/v1/round/ping/{request_id}"
     };
   };
 
@@ -133,8 +134,10 @@ message RegisterIntentResponse {
 }
 
 message DeleteIntentRequest {
-  string request_id = 1;
-  Bip322Signature bip322_signature = 2;
+  oneof proof {
+    string intent_id = 1;
+    Bip322Signature bip322_signature = 2;
+  }
 }
 message DeleteIntentResponse {}
 
@@ -143,6 +146,13 @@ message RegisterInputsForNextRoundRequest {
 }
 message RegisterInputsForNextRoundResponse {
   string request_id = 1;
+}
+
+message ConfirmRegistrationRequest {
+  string intent_id = 1;
+}
+message ConfirmRegistrationResponse {
+  string blinded_creds = 1;
 }
 
 message Musig2 {
@@ -183,19 +193,16 @@ message SubmitSignedForfeitTxsResponse {}
 message GetEventStreamRequest {}
 message GetEventStreamResponse {
   oneof event {
-    RoundFinalizationEvent round_finalization = 1;
-    RoundFinalizedEvent round_finalized = 2;
-    RoundFailed round_failed = 3;
-    RoundSigningEvent round_signing = 4;
-    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 5;
+    BatchStartedEvent batch_started = 1;
+    RoundFinalizationEvent round_finalization = 2;
+    RoundFinalizedEvent round_finalized = 3;
+    RoundFailed round_failed = 4;
+    RoundSigningEvent round_signing = 5;
+    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 6;
+    BatchTreeEvent batch_tree = 7;
+    BatchTreeSignatureEvent batch_tree_signature = 8;
   }
 }
-
-message PingRequest {
-  // The id used to register inputs and ouptuts.
-  string request_id = 1;
-}
-message PingResponse {}
 
 /* Out-of-Round Transaction API messages */
 

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
+	"math"
 	"runtime"
 	"runtime/debug"
 	"strings"
@@ -30,13 +31,7 @@ import (
 const marketHourDelta = 5 * time.Minute
 
 type covenantlessService struct {
-	network             common.Network
-	pubkey              *secp256k1.PublicKey
-	vtxoTreeExpiry      common.RelativeLocktime
-	roundInterval       int64
-	unilateralExitDelay common.RelativeLocktime
-	boardingExitDelay   common.RelativeLocktime
-
+	// services
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
 	builder     ports.TxBuilder
@@ -44,20 +39,29 @@ type covenantlessService struct {
 	liveStore   ports.LiveStore
 	sweeper     *sweeper
 
-	eventsCh            chan domain.Event
-	transactionEventsCh chan TransactionEvent
+	// config
+	network                   common.Network
+	pubkey                    *secp256k1.PublicKey
+	vtxoTreeExpiry            common.RelativeLocktime
+	roundInterval             time.Duration
+	unilateralExitDelay       common.RelativeLocktime
+	boardingExitDelay         common.RelativeLocktime
+	roundMinParticipantsCount int64
+	roundMaxParticipantsCount int64
+	utxoMaxAmount             int64
+	utxoMinAmount             int64
+	vtxoMaxAmount             int64
+	vtxoMinSettlementAmount   int64
+	vtxoMinOffchainTxAmount   int64
 
 	// TODO derive this from wallet
 	serverSigningKey    *secp256k1.PrivateKey
 	serverSigningPubKey *secp256k1.PublicKey
 
+	// channels
+	eventsCh                 chan []domain.Event
+	transactionEventsCh      chan TransactionEvent
 	forfeitsBoardingSigsChan chan struct{}
-
-	roundMaxParticipantsCount int64
-	utxoMaxAmount             int64
-	utxoMinAmount             int64
-	vtxoMaxAmount             int64
-	vtxoMinAmount             int64
 }
 
 func NewService(
@@ -70,7 +74,7 @@ func NewService(
 	noteUriPrefix string,
 	marketHourStartTime, marketHourEndTime time.Time,
 	marketHourPeriod, marketHourRoundInterval time.Duration,
-	roundMaxParticipantsCount int64,
+	roundMinParticipantsCount, roundMaxParticipantsCount int64,
 	utxoMaxAmount int64,
 	utxoMinAmount int64,
 	vtxoMaxAmount int64,
@@ -104,8 +108,12 @@ func NewService(
 	if err != nil {
 		return nil, fmt.Errorf("failed to get dust amount: %s", err)
 	}
-	if vtxoMinAmount < int64(dustAmount) {
-		vtxoMinAmount = int64(dustAmount)
+	var vtxoMinSettlementAmount, vtxoMinOffchainTxAmount = vtxoMinAmount, vtxoMinAmount
+	if vtxoMinSettlementAmount < int64(dustAmount) {
+		vtxoMinSettlementAmount = int64(dustAmount)
+	}
+	if vtxoMinOffchainTxAmount == -1 {
+		vtxoMinOffchainTxAmount = int64(dustAmount)
 	}
 	if utxoMinAmount < int64(dustAmount) {
 		utxoMinAmount = int64(dustAmount)
@@ -115,25 +123,27 @@ func NewService(
 		network:                   network,
 		pubkey:                    pubkey,
 		vtxoTreeExpiry:            vtxoTreeExpiry,
-		roundInterval:             roundInterval,
+		roundInterval:             time.Duration(roundInterval) * time.Second,
 		unilateralExitDelay:       unilateralExitDelay,
 		wallet:                    walletSvc,
 		repoManager:               repoManager,
 		builder:                   builder,
-		scanner:                   scanner,
 		liveStore:                 liveStore,
+		scanner:                   scanner,
 		sweeper:                   newSweeper(walletSvc, repoManager, builder, scheduler, noteUriPrefix),
-		eventsCh:                  make(chan domain.Event),
+		eventsCh:                  make(chan []domain.Event),
 		transactionEventsCh:       make(chan TransactionEvent),
 		boardingExitDelay:         boardingExitDelay,
 		serverSigningKey:          serverSigningKey,
 		serverSigningPubKey:       serverSigningKey.PubKey(),
 		forfeitsBoardingSigsChan:  make(chan struct{}, 1),
+		roundMinParticipantsCount: roundMinParticipantsCount,
 		roundMaxParticipantsCount: roundMaxParticipantsCount,
 		utxoMaxAmount:             utxoMaxAmount,
 		utxoMinAmount:             utxoMinAmount,
 		vtxoMaxAmount:             vtxoMaxAmount,
-		vtxoMinAmount:             vtxoMinAmount,
+		vtxoMinSettlementAmount:   vtxoMinSettlementAmount,
+		vtxoMinOffchainTxAmount:   vtxoMinOffchainTxAmount,
 	}
 
 	repoManager.Events().RegisterEventsHandler(
@@ -307,6 +317,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 	checkpointTxs := make(map[string]string)
 	checkpointPsbts := make(map[string]*psbt.Packet) // txid -> psbt
 	spentVtxoKeys := make([]domain.VtxoKey, 0)
+	checkpointTxsByVtxoKey := make(map[domain.VtxoKey]string)
 	for _, tx := range unsignedCheckpoints {
 		checkpointPtx, err := psbt.NewFromRawBytes(strings.NewReader(tx), true)
 		if err != nil {
@@ -323,6 +334,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 		}
 		checkpointTxs[checkpointPtx.UnsignedTx.TxID()] = tx
 		checkpointPsbts[checkpointPtx.UnsignedTx.TxID()] = checkpointPtx
+		checkpointTxsByVtxoKey[vtxoKey] = checkpointPtx.UnsignedTx.TxID()
 		spentVtxoKeys = append(spentVtxoKeys, vtxoKey)
 	}
 
@@ -342,18 +354,21 @@ func (s *covenantlessService) SubmitOffchainTx(
 		return nil, "", "", fmt.Errorf("some vtxos not found")
 	}
 
-	if exists, vtxo := s.liveStore.RoundInputs().IncludesAny(spentVtxoKeys); exists {
+	if exists, vtxo := s.liveStore.TxRequests().IncludesAny(spentVtxoKeys); exists {
 		return nil, "", "", fmt.Errorf("vtxo %s is already registered for next round", vtxo)
 	}
 
-	s.liveStore.OffChainTxInputs().Add(spentVtxoKeys)
-	defer s.liveStore.OffChainTxInputs().Remove(spentVtxoKeys)
-
 	indexedSpentVtxos := make(map[domain.VtxoKey]domain.Vtxo)
-	indexedCommitmentTxids := make(map[string]struct{}, 0)
+	commitmentTxsByCheckpointTxid := make(map[string]string)
+	expiration := int64(math.MaxInt64)
+	rootCommitmentTxid := ""
 	for _, vtxo := range spentVtxos {
 		indexedSpentVtxos[vtxo.VtxoKey] = vtxo
-		indexedCommitmentTxids[vtxo.RoundTxid] = struct{}{}
+		commitmentTxsByCheckpointTxid[checkpointTxsByVtxoKey[vtxo.VtxoKey]] = vtxo.CommitmentTxid
+		if vtxo.ExpireAt < expiration {
+			rootCommitmentTxid = vtxo.CommitmentTxid
+			expiration = vtxo.ExpireAt
+		}
 	}
 
 	for _, checkpointPsbt := range checkpointPsbts {
@@ -536,9 +551,14 @@ func (s *covenantlessService) SubmitOffchainTx(
 		}
 	}
 
+	dust, err := s.wallet.GetDustAmount(ctx)
+	if err != nil {
+		return nil, "", "", fmt.Errorf("failed to get dust amount: %s", err)
+	}
+
 	outputs := make([]*wire.TxOut, 0) // outputs excluding the anchor
 	foundAnchor := false
-	for _, out := range ptx.UnsignedTx.TxOut {
+	for outIndex, out := range ptx.UnsignedTx.TxOut {
 		if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
 			if foundAnchor {
 				return nil, "", "", fmt.Errorf("invalid tx, multiple anchor outputs")
@@ -549,12 +569,17 @@ func (s *covenantlessService) SubmitOffchainTx(
 
 		if s.vtxoMaxAmount >= 0 {
 			if out.Value > s.vtxoMaxAmount {
-				return nil, "", "", fmt.Errorf("output amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
+				return nil, "", "", fmt.Errorf("output #%d amount is higher than max vtxo amount: %d", outIndex, s.vtxoMaxAmount)
 			}
 		}
-		if s.vtxoMinAmount >= 0 {
-			if out.Value < s.vtxoMinAmount {
-				return nil, "", "", fmt.Errorf("output amount is lower than min utxo amount:%d", s.vtxoMinAmount)
+		if out.Value < s.vtxoMinOffchainTxAmount {
+			return nil, "", "", fmt.Errorf("output #%d amount is lower than min vtxo amount: %d", outIndex, s.vtxoMinOffchainTxAmount)
+		}
+
+		if out.Value < int64(dust) {
+			// if the output is below dust limit, it must be using OP_RETURN-style vtxo pkscript
+			if !common.IsSubDustScript(out.PkScript) {
+				return nil, "", "", fmt.Errorf("output #%d amount is less than dust limit but is not using OP_RETURN output script", outIndex)
 			}
 		}
 
@@ -623,22 +648,18 @@ func (s *covenantlessService) SubmitOffchainTx(
 		signedCheckpointTxs[rebuiltCheckpointTx.UnsignedTx.TxID()] = signedCheckpointTx
 	}
 
-	expiration, roundTxid := findFirstRoundToExpire(spentVtxos)
-	if expiration == 0 {
-		return nil, "", "", fmt.Errorf("invalid expiry")
-	}
-
-	commitmentTxids := []string{roundTxid}
-	delete(indexedCommitmentTxids, roundTxid)
-	for txid := range indexedCommitmentTxids {
-		commitmentTxids = append(commitmentTxids, txid)
-	}
-
-	change, err := offchainTx.Accept(signedRedeemTx, signedCheckpointTxs, commitmentTxids, expiration)
+	change, err := offchainTx.Accept(
+		signedRedeemTx,
+		signedCheckpointTxs,
+		commitmentTxsByCheckpointTxid,
+		rootCommitmentTxid,
+		expiration,
+	)
 	if err != nil {
 		return nil, "", "", fmt.Errorf("failed to accept offchain tx: %s", err)
 	}
 	changes = append(changes, change)
+	s.liveStore.OffchainTxs().Add(*offchainTx)
 
 	finalVirtualTx = signedRedeemTx
 	signedCheckpoints = make([]string, 0)
@@ -646,15 +667,19 @@ func (s *covenantlessService) SubmitOffchainTx(
 		signedCheckpoints = append(signedCheckpoints, tx)
 	}
 
-	return
+	return signedCheckpoints, finalVirtualTx, virtualTxid, nil
 }
 
 func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid string, finalCheckpoints []string) error {
-	var changes []domain.Event
+	var (
+		changes []domain.Event
+		err     error
+	)
 
-	offchainTx, err := s.repoManager.OffchainTxs().GetOffchainTx(ctx, txid)
-	if err != nil {
-		return fmt.Errorf("offchain tx %s not found", err)
+	offchainTx, exists := s.liveStore.OffchainTxs().Get(txid)
+	if !exists {
+		err = fmt.Errorf("offchain tx: %v not found", txid)
+		return err
 	}
 
 	defer func() {
@@ -663,7 +688,7 @@ func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid strin
 			changes = append(changes, change)
 		}
 
-		if err := s.repoManager.Events().Save(
+		if err = s.repoManager.Events().Save(
 			ctx, domain.OffchainTxTopic, txid, changes,
 		); err != nil {
 			log.WithError(err).Fatal("failed to save offchain tx events")
@@ -686,6 +711,7 @@ func (s *covenantlessService) FinalizeOffchainTx(ctx context.Context, txid strin
 		return err
 	}
 	changes = []domain.Event{event}
+	s.liveStore.OffchainTxs().Remove(txid)
 
 	return nil
 }
@@ -718,8 +744,6 @@ func (s *covenantlessService) GetBoardingAddress(
 }
 
 func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) (string, error) {
-	// vtxoKeysInputs keeps track of the vtxos that are inputs of the intent
-	vtxoKeysInputs := make([]domain.VtxoKey, 0)
 	// the vtxo to swap for new ones, require forfeit transactions
 	vtxosInputs := make([]domain.Vtxo, 0)
 	// the boarding utxos to add in the commitment tx
@@ -728,7 +752,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
 
 	outpoints := bip322signature.GetOutpoints()
-
 	if len(outpoints) != len(message.InputTapTrees) {
 		return "", fmt.Errorf("number of outpoints and taptrees do not match")
 	}
@@ -767,7 +790,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			VOut: outpoint.Index,
 		}
 
-		if s.liveStore.OffChainTxInputs().Includes(vtxoKey) {
+		if s.liveStore.OffchainTxs().Includes(vtxoKey) {
 			return "", fmt.Errorf("vtxo %s is currently being spent", vtxoKey.String())
 		}
 
@@ -823,10 +846,8 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 						return "", fmt.Errorf("boarding input amount is higher than max utxo amount:%d", s.utxoMaxAmount)
 					}
 				}
-				if s.utxoMinAmount >= 0 {
-					if tx.TxOut[outpoint.Index].Value < s.utxoMinAmount {
-						return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
-					}
+				if tx.TxOut[outpoint.Index].Value < s.utxoMinAmount {
+					return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
 				}
 
 				boardingTxs[vtxoKey.Txid] = tx
@@ -835,10 +856,11 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			tx := boardingTxs[vtxoKey.Txid]
 			prevout := tx.TxOut[vtxoKey.VOut]
 			prevouts[outpoint] = prevout
-			boardingInput, err := s.newBoardingInput(tx, ports.Input{
+			input := ports.Input{
 				VtxoKey:    vtxoKey,
 				Tapscripts: tapscripts,
-			})
+			}
+			boardingInput, err := newBoardingInput(tx, input, s.pubkey, s.boardingExitDelay)
 			if err != nil {
 				return "", err
 			}
@@ -876,8 +898,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			Value:    int64(vtxo.Amount),
 			PkScript: pkScript,
 		}
-
-		vtxoKeysInputs = append(vtxoKeysInputs, vtxo.VtxoKey)
 
 		// We want to validate the taproot tree of an input vtxo only if it requires
 		// to be forfeited. Note and swept vtxos can't go onchain, so there's no reason to
@@ -951,13 +971,11 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			if isOnchain {
 				if s.utxoMaxAmount >= 0 {
 					if amount > uint64(s.utxoMaxAmount) {
-						return "", fmt.Errorf("receiver amount is higher than max utxo amount:%d", s.vtxoMaxAmount)
+						return "", fmt.Errorf("receiver amount is higher than max utxo amount: %d", s.utxoMaxAmount)
 					}
 				}
-				if s.utxoMinAmount >= 0 {
-					if amount < uint64(s.utxoMinAmount) {
-						return "", fmt.Errorf("receiver amount is lower than min utxo amount:%d", s.vtxoMinAmount)
-					}
+				if amount < uint64(s.utxoMinAmount) {
+					return "", fmt.Errorf("receiver amount is lower than min utxo amount: %d", s.utxoMinAmount)
 				}
 
 				_, addrs, _, err := txscript.ExtractPkScriptAddrs(output.PkScript, s.chainParams())
@@ -973,13 +991,11 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			} else {
 				if s.vtxoMaxAmount >= 0 {
 					if amount > uint64(s.vtxoMaxAmount) {
-						return "", fmt.Errorf("receiver amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
+						return "", fmt.Errorf("receiver amount is higher than max vtxo amount: %d", s.vtxoMaxAmount)
 					}
 				}
-				if s.vtxoMinAmount >= 0 {
-					if amount < uint64(s.vtxoMinAmount) {
-						return "", fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
-					}
+				if amount < uint64(s.vtxoMinSettlementAmount) {
+					return "", fmt.Errorf("receiver amount is lower than min vtxo amount: %d", s.vtxoMinSettlementAmount)
 				}
 
 				hasOffChainReceiver = true
@@ -1008,19 +1024,15 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 		}
 	}
 
-	if err := s.liveStore.TxRequest().Push(*request, boardingInputs, message.Musig2Data); err != nil {
+	if err := s.liveStore.TxRequests().Push(*request, boardingInputs, message.Musig2Data); err != nil {
 		return "", err
 	}
-
-	// prevent the vtxos from being spent in a concurrent intent
-	s.liveStore.RoundInputs().Add(vtxoKeysInputs)
 
 	return request.Id, nil
 }
 
 func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error) {
 	vtxosInputs := make([]domain.Vtxo, 0)
-	vtxoKeys := make([]domain.VtxoKey, 0)
 	boardingInputs := make([]ports.BoardingInput, 0)
 
 	now := time.Now().Unix()
@@ -1028,7 +1040,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 	boardingTxs := make(map[string]wire.MsgTx, 0) // txid -> txhex
 
 	for _, input := range inputs {
-		if s.liveStore.OffChainTxInputs().Includes(input.VtxoKey) {
+		if s.liveStore.OffchainTxs().Includes(input.VtxoKey) {
 			return "", fmt.Errorf("vtxo %s is currently being spent", input.String())
 		}
 
@@ -1062,11 +1074,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 				}
 
 				// validate the vtxo script
-				// TODO: fix in PR #501
-				if err := vtxoScript.Validate(s.pubkey, common.RelativeLocktime{
-					Type:  s.unilateralExitDelay.Type,
-					Value: s.unilateralExitDelay.Value * 2,
-				}); err != nil {
+				if err := vtxoScript.Validate(s.pubkey, s.boardingExitDelay); err != nil {
 					return "", fmt.Errorf("invalid vtxo script: %s", err)
 				}
 
@@ -1085,17 +1093,15 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 						return "", fmt.Errorf("boarding input amount is higher than max utxo amount:%d", s.utxoMaxAmount)
 					}
 				}
-				if s.utxoMinAmount >= 0 {
-					if tx.TxOut[input.VOut].Value < s.utxoMinAmount {
-						return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
-					}
+				if tx.TxOut[input.VOut].Value < s.utxoMinAmount {
+					return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
 				}
 
 				boardingTxs[input.Txid] = tx
 			}
 
 			tx := boardingTxs[input.Txid]
-			boardingInput, err := s.newBoardingInput(tx, input)
+			boardingInput, err := newBoardingInput(tx, input, s.pubkey, s.boardingExitDelay)
 			if err != nil {
 				return "", err
 			}
@@ -1145,7 +1151,6 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		}
 
 		vtxosInputs = append(vtxosInputs, vtxo)
-		vtxoKeys = append(vtxoKeys, vtxo.VtxoKey)
 	}
 
 	request, err := domain.NewTxRequest(vtxosInputs)
@@ -1153,57 +1158,24 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		return "", err
 	}
 
-	if err := s.liveStore.TxRequest().Push(*request, boardingInputs, nil); err != nil {
+	if err := s.liveStore.TxRequests().Push(*request, boardingInputs, nil); err != nil {
 		return "", err
 	}
-
-	s.liveStore.RoundInputs().Add(vtxoKeys)
 
 	return request.Id, nil
 }
 
-func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input) (*ports.BoardingInput, error) {
-	if len(tx.TxOut) <= int(input.VOut) {
-		return nil, fmt.Errorf("output not found")
+func (s *covenantlessService) ConfirmRegistration(ctx context.Context, intentId string) error {
+	if s.liveStore.ConfirmationSessions() == nil {
+		return fmt.Errorf("confirmation session not started")
 	}
 
-	output := tx.TxOut[input.VOut]
-
-	boardingScript, err := tree.ParseVtxoScript(input.Tapscripts)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
-	}
-
-	tapKey, _, err := boardingScript.TapTree()
-	if err != nil {
-		return nil, fmt.Errorf("failed to get taproot key: %s", err)
-	}
-
-	expectedScriptPubkey, err := common.P2TRScript(tapKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get script pubkey: %s", err)
-	}
-
-	if !bytes.Equal(output.PkScript, expectedScriptPubkey) {
-		return nil, fmt.Errorf(
-			"invalid boarding utxo taproot key: got %x expected %x",
-			output.PkScript, expectedScriptPubkey,
-		)
-	}
-
-	if err := boardingScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
-		return nil, err
-	}
-
-	return &ports.BoardingInput{
-		Amount: uint64(output.Value),
-		Input:  input,
-	}, nil
+	return s.liveStore.ConfirmationSessions().Confirm(intentId)
 }
 
 func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error {
 	// Check credentials
-	request, ok := s.liveStore.TxRequest().View(creds)
+	request, ok := s.liveStore.TxRequests().View(creds)
 	if !ok {
 		return fmt.Errorf("invalid credentials")
 	}
@@ -1213,12 +1185,12 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 	for _, rcv := range receivers {
 		if s.vtxoMaxAmount >= 0 {
 			if rcv.Amount > uint64(s.vtxoMaxAmount) {
-				return fmt.Errorf("receiver amount is higher than max vtxo amount:%d", s.vtxoMaxAmount)
+				return fmt.Errorf("receiver amount is higher than max vtxo amount: %d", s.vtxoMaxAmount)
 			}
 		}
-		if s.vtxoMinAmount >= 0 {
-			if rcv.Amount < uint64(s.vtxoMinAmount) {
-				return fmt.Errorf("receiver amount is lower than min vtxo amount:%d", s.vtxoMinAmount)
+		if s.vtxoMinSettlementAmount >= 0 {
+			if rcv.Amount < uint64(s.vtxoMinSettlementAmount) {
+				return fmt.Errorf("receiver amount is lower than min vtxo amount: %d", s.vtxoMinSettlementAmount)
 			}
 		}
 
@@ -1249,11 +1221,7 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 		return err
 	}
 
-	return s.liveStore.TxRequest().Update(*request, data)
-}
-
-func (s *covenantlessService) UpdateTxRequestStatus(_ context.Context, id string) error {
-	return s.liveStore.TxRequest().UpdatePingTimestamp(id)
+	return s.liveStore.TxRequests().Update(*request, data)
 }
 
 func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
@@ -1265,9 +1233,7 @@ func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string
 		return err
 	}
 
-	go func() {
-		s.checkForfeitsAndBoardingSigsSent(s.liveStore.CurrentRound().Get())
-	}()
+	go s.checkForfeitsAndBoardingSigsSent()
 
 	return nil
 }
@@ -1289,43 +1255,18 @@ func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx str
 			return r
 		}
 
-		newRound := *r
-		newRound.CommitmentTx = combined
-		return &newRound
+		ur := *r
+		ur.CommitmentTx = combined
+		return &ur
 	})
 
 	if combineErr != nil {
 		return fmt.Errorf("failed to verify and combine partial tx: %w", combineErr)
 	}
 
-	go func() {
-		s.checkForfeitsAndBoardingSigsSent(s.liveStore.CurrentRound().Get())
-	}()
+	go s.checkForfeitsAndBoardingSigsSent()
 
 	return nil
-}
-
-func (s *covenantlessService) checkForfeitsAndBoardingSigsSent(currentRound *domain.Round) {
-	roundTx, _ := psbt.NewFromRawBytes(strings.NewReader(currentRound.CommitmentTx), true)
-	numOfInputsSigned := 0
-	for _, v := range roundTx.Inputs {
-		if len(v.TaprootScriptSpendSig) > 0 {
-			if len(v.TaprootScriptSpendSig[0].Signature) > 0 {
-				numOfInputsSigned++
-			}
-		}
-	}
-
-	// Condition: all forfeit txs are signed and
-	// the number of signed boarding inputs matches
-	// numOfBoardingInputs we expect
-	numOfBoardingInputs := s.liveStore.BoardingInputs().Get()
-	if s.liveStore.ForfeitTxs().AllSigned() && numOfBoardingInputs == numOfInputsSigned {
-		select {
-		case s.forfeitsBoardingSigsChan <- struct{}{}:
-		default:
-		}
-	}
 }
 
 func (s *covenantlessService) ListVtxos(ctx context.Context, address string) ([]domain.Vtxo, []domain.Vtxo, error) {
@@ -1343,7 +1284,7 @@ func (s *covenantlessService) ListVtxos(ctx context.Context, address string) ([]
 	return s.repoManager.Vtxos().GetAllNonRedeemedVtxos(ctx, pubkey)
 }
 
-func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan domain.Event {
+func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan []domain.Event {
 	return s.eventsCh
 }
 
@@ -1397,7 +1338,7 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 		VtxoTreeExpiry:      int64(s.vtxoTreeExpiry.Value),
 		UnilateralExitDelay: int64(s.unilateralExitDelay.Value),
 		BoardingExitDelay:   int64(s.boardingExitDelay.Value),
-		RoundInterval:       s.roundInterval,
+		RoundInterval:       int64(s.roundInterval.Seconds()),
 		Network:             s.network.Name,
 		Dust:                dust,
 		ForfeitAddress:      forfeitAddr,
@@ -1409,7 +1350,7 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 		},
 		UtxoMinAmount: s.utxoMinAmount,
 		UtxoMaxAmount: s.utxoMaxAmount,
-		VtxoMinAmount: s.vtxoMinAmount,
+		VtxoMinAmount: s.vtxoMinSettlementAmount,
 		VtxoMaxAmount: s.vtxoMaxAmount,
 	}, nil
 }
@@ -1417,7 +1358,7 @@ func (s *covenantlessService) GetInfo(ctx context.Context) (*ServiceInfo, error)
 func (s *covenantlessService) GetTxRequestQueue(
 	ctx context.Context, requestIds ...string,
 ) ([]TxRequestInfo, error) {
-	requests, err := s.liveStore.TxRequest().ViewAll(requestIds)
+	requests, err := s.liveStore.TxRequests().ViewAll(requestIds)
 	if err != nil {
 		return nil, err
 	}
@@ -1485,7 +1426,6 @@ func (s *covenantlessService) GetTxRequestQueue(
 			Receivers:      receivers,
 			Inputs:         request.Inputs,
 			BoardingInputs: request.BoardingInputs,
-			LastPing:       request.PingTimestamp,
 			SigningType:    signingType,
 			Cosigners:      cosigners,
 		})
@@ -1498,19 +1438,23 @@ func (s *covenantlessService) DeleteTxRequests(
 	ctx context.Context, requestIds ...string,
 ) error {
 	if len(requestIds) == 0 {
-		return s.liveStore.TxRequest().DeleteAll()
+		return s.liveStore.TxRequests().DeleteAll()
 	}
-	return s.liveStore.TxRequest().Delete(requestIds)
+	return s.liveStore.TxRequests().Delete(requestIds)
 }
 
 // DeleteTxRequestsByProof deletes transaction requests matching the BIP322 proof.
 func (s *covenantlessService) DeleteTxRequestsByProof(
-	ctx context.Context, sig bip322.Signature, message tree.IntentMessage,
+	ctx context.Context, sig bip322.Signature, message tree.DeleteIntentMessage,
 ) error {
-	outpoints := sig.GetOutpoints()
-	if len(outpoints) != len(message.InputTapTrees) {
-		return fmt.Errorf("number of outpoints and taptrees do not match")
+	if message.ExpireAt > 0 {
+		expireAt := time.Unix(message.ExpireAt, 0)
+		if time.Now().After(expireAt) {
+			return fmt.Errorf("proof of ownership expired")
+		}
 	}
+
+	outpoints := sig.GetOutpoints()
 
 	boardingTxs := make(map[string]wire.MsgTx)
 	prevouts := make(map[wire.OutPoint]*wire.TxOut)
@@ -1574,7 +1518,7 @@ func (s *covenantlessService) DeleteTxRequestsByProof(
 		return fmt.Errorf("failed to verify signature: %s", err)
 	}
 
-	allRequests, err := s.liveStore.TxRequest().ViewAll(nil)
+	allRequests, err := s.liveStore.TxRequests().ViewAll(nil)
 	if err != nil {
 		return err
 	}
@@ -1601,59 +1545,18 @@ func (s *covenantlessService) DeleteTxRequestsByProof(
 		idsToDelete = append(idsToDelete, id)
 	}
 
-	return s.liveStore.TxRequest().Delete(idsToDelete)
-}
-
-func calcNextMarketHour(marketHourStartTime, marketHourEndTime time.Time, period, marketHourDelta time.Duration, now time.Time) (time.Time, time.Time, error) {
-	// Validate input parameters
-	if period <= 0 {
-		return time.Time{}, time.Time{}, fmt.Errorf("period must be greater than 0")
-	}
-	if !marketHourEndTime.After(marketHourStartTime) {
-		return time.Time{}, time.Time{}, fmt.Errorf("market hour end time must be after start time")
+	if len(idsToDelete) == 0 {
+		return fmt.Errorf("no matching tx requests found for BIP322 proof")
 	}
 
-	// Calculate the duration of the market hour
-	duration := marketHourEndTime.Sub(marketHourStartTime)
-
-	// Calculate the number of periods since the initial marketHourStartTime
-	elapsed := now.Sub(marketHourStartTime)
-	var n int64
-	if elapsed >= 0 {
-		n = int64(elapsed / period)
-	} else {
-		n = int64((elapsed - period + 1) / period)
-	}
-
-	// Calculate the current market hour start and end times
-	currentStartTime := marketHourStartTime.Add(time.Duration(n) * period)
-	currentEndTime := currentStartTime.Add(duration)
-
-	// Adjust if now is before the currentStartTime
-	if now.Before(currentStartTime) {
-		n -= 1
-		currentStartTime = marketHourStartTime.Add(time.Duration(n) * period)
-		currentEndTime = currentStartTime.Add(duration)
-	}
-
-	timeUntilEnd := currentEndTime.Sub(now)
-
-	if !now.Before(currentStartTime) && now.Before(currentEndTime) && timeUntilEnd >= marketHourDelta {
-		// Return the current market hour
-		return currentStartTime, currentEndTime, nil
-	} else {
-		// Move to the next market hour
-		n += 1
-		nextStartTime := marketHourStartTime.Add(time.Duration(n) * period)
-		nextEndTime := nextStartTime.Add(duration)
-		return nextStartTime, nextEndTime, nil
-	}
+	return s.liveStore.TxRequests().Delete(idsToDelete)
 }
 
 func (s *covenantlessService) RegisterCosignerNonces(
 	ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, encodedNonces string,
 ) error {
-	session, ok := s.liveStore.TreeSigingSessions().GetSession(roundID)
+	//TODO move all to live store ?
+	session, ok := s.liveStore.TreeSigingSessions().Get(roundID)
 	if !ok {
 		return fmt.Errorf(`signing session not found for round "%s"`, roundID)
 	}
@@ -1691,7 +1594,8 @@ func (s *covenantlessService) RegisterCosignerNonces(
 func (s *covenantlessService) RegisterCosignerSignatures(
 	ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, encodedSignatures string,
 ) error {
-	session, ok := s.liveStore.TreeSigingSessions().GetSession(roundID)
+	// TODO move all to live store ?
+	session, ok := s.liveStore.TreeSigingSessions().Get(roundID)
 	if !ok {
 		return fmt.Errorf(`signing session not found for round "%s"`, roundID)
 	}
@@ -1726,6 +1630,27 @@ func (s *covenantlessService) RegisterCosignerSignatures(
 	return nil
 }
 
+func (s *covenantlessService) GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error) {
+	return s.repoManager.MarketHourRepo().Get(ctx)
+}
+
+func (s *covenantlessService) UpdateMarketHourConfig(
+	ctx context.Context,
+	marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration,
+) error {
+	marketHour := domain.NewMarketHour(
+		marketHourStartTime,
+		marketHourEndTime,
+		period,
+		roundInterval,
+	)
+	if err := s.repoManager.MarketHourRepo().Upsert(ctx, *marketHour); err != nil {
+		return fmt.Errorf("failed to upsert market hours: %w", err)
+	}
+
+	return nil
+}
+
 func (s *covenantlessService) start() {
 	defer func() {
 		if r := recover(); r != nil {
@@ -1743,37 +1668,32 @@ func (s *covenantlessService) startRound() {
 	round := domain.NewRound()
 	//nolint:all
 	round.StartRegistration()
-	s.liveStore.CurrentRound().Upsert(func(_ *domain.Round) *domain.Round {
-		return round
-	})
+	s.liveStore.CurrentRound().Upsert(func(m *domain.Round) *domain.Round { return round })
+
 	close(s.forfeitsBoardingSigsChan)
 	s.forfeitsBoardingSigsChan = make(chan struct{}, 1)
 
 	defer func() {
-		roundEndTime := time.Now().Add(time.Duration(s.roundInterval) * time.Second)
-		sleepingTime := s.roundInterval / 6
-		if sleepingTime < 1 {
-			sleepingTime = 1
-		}
-		time.Sleep(time.Duration(sleepingTime) * time.Second)
-		s.startFinalization(roundEndTime)
+		roundTiming := newRoundTiming(s.roundInterval)
+		<-time.After(roundTiming.registrationDuration())
+		s.startConfirmation(roundTiming)
 	}()
 
 	log.Debugf("started registration stage for new round: %s", round.Id)
 }
-func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
-	currentRound := s.liveStore.CurrentRound().Get()
-	log.Debugf("started finalization stage for round: %s", currentRound.Id)
+
+func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
+	round := s.getCurrentRound()
+	log.Debugf("started confirmation stage for round: %s", round.Id)
+
 	ctx := context.Background()
-	round := currentRound
 
-	roundRemainingDuration := time.Duration((s.roundInterval/3)*2-1) * time.Second
-	thirdOfRemainingDuration := roundRemainingDuration / 3
+	var registeredRequests []ports.TimedTxRequest
+	roundAborted := false
 
-	var roundAborted bool
-	var vtxoKeys []domain.VtxoKey
 	defer func() {
-		s.liveStore.TreeSigingSessions().DeleteSession(round.Id)
+		s.liveStore.ConfirmationSessions().Reset()
+
 		if roundAborted {
 			s.startRound()
 			return
@@ -1784,24 +1704,19 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		}
 
 		if round.IsFailed() {
-			s.liveStore.RoundInputs().Remove(vtxoKeys)
+			s.liveStore.TxRequests().DeleteVtxos()
 			s.startRound()
 			return
 		}
 
-		s.finalizeRound(roundEndTime)
+		s.startFinalization(roundTiming, registeredRequests)
 	}()
 
-	if round.IsFailed() {
-		return
-	}
-
 	// TODO: understand how many tx requests must be popped from the queue and actually registered for the round
-	num := s.liveStore.TxRequest().Len()
-	if num == 0 {
+	num := s.liveStore.TxRequests().Len()
+	if num < s.roundMinParticipantsCount {
 		roundAborted = true
-		err := fmt.Errorf("no tx requests registered")
-		round.Fail(fmt.Errorf("round aborted: %s", err))
+		err := fmt.Errorf("not enough tx requests registered %d/%d", num, s.roundMinParticipantsCount)
 		log.WithError(err).Debugf("round %s aborted", round.Id)
 		return
 	}
@@ -1809,18 +1724,23 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		num = s.roundMaxParticipantsCount
 	}
 
-	// nolint:all
-	availableBalance, _, _ := s.wallet.MainAccountBalance(ctx)
-
-	requests, boardingInputs, musig2data := s.liveStore.TxRequest().Pop(num)
-
-	for _, req := range requests {
-		for _, in := range req.Inputs {
-			vtxoKeys = append(vtxoKeys, in.VtxoKey)
-		}
+	availableBalance, _, err := s.wallet.MainAccountBalance(ctx)
+	if err != nil {
+		round.Fail(fmt.Errorf("failed to get main account balance: %s", err))
+		log.WithError(err).Warn("failed to get main account balance")
+		return
 	}
 
-	s.liveStore.BoardingInputs().Set(len(boardingInputs))
+	forfeitAddress, err := s.wallet.GetForfeitAddress(ctx)
+	if err != nil {
+		round.Fail(fmt.Errorf("failed to get forfeit address: %s", err))
+		log.WithError(err).Warn("failed to get forfeit address")
+		return
+	}
+
+	// TODO take into account available liquidity
+	requests := s.liveStore.TxRequests().Pop(num)
+
 	totAmount := uint64(0)
 	for _, request := range requests {
 		totAmount += request.TotalOutputAmount()
@@ -1832,9 +1752,94 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		return
 	}
 
-	if _, err := round.RegisterTxRequests(requests); err != nil {
-		round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
-		log.WithError(err).Warn("failed to register tx requests")
+	s.propagateBatchStartedEvent(requests, forfeitAddress)
+
+	confirmedRequests := make([]ports.TimedTxRequest, 0)
+	notConfirmedRequests := make([]ports.TimedTxRequest, 0)
+
+	// TODO think about moving to live store
+	confirmationSessions := s.liveStore.ConfirmationSessions().Get()
+	select {
+	case <-time.After(roundTiming.confirmationDuration()):
+		for _, req := range requests {
+			if confirmationSessions.IntentsHashes[req.HashID()] {
+				confirmedRequests = append(confirmedRequests, req)
+				continue
+			}
+			notConfirmedRequests = append(notConfirmedRequests, req)
+		}
+	case <-confirmationSessions.ConfirmedC:
+		confirmedRequests = requests
+	}
+
+	close(confirmationSessions.ConfirmedC)
+
+	repushToQueue := notConfirmedRequests
+	if int64(len(confirmedRequests)) < s.roundMinParticipantsCount {
+		repushToQueue = append(repushToQueue, confirmedRequests...)
+		confirmedRequests = make([]ports.TimedTxRequest, 0)
+	}
+
+	// register confirmed requests if we have enough participants
+	if len(confirmedRequests) > 0 {
+		txRequests := make([]domain.TxRequest, 0, len(confirmedRequests))
+		numOfBoardingInputs := 0
+		for _, req := range confirmedRequests {
+			txRequests = append(txRequests, req.TxRequest)
+			numOfBoardingInputs += len(req.BoardingInputs)
+		}
+
+		s.liveStore.BoardingInputs().Set(numOfBoardingInputs)
+
+		if _, err := round.RegisterTxRequests(txRequests); err != nil {
+			round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
+			log.WithError(err).Warn("failed to register tx requests")
+			return
+		}
+		registeredRequests = confirmedRequests
+	}
+
+	if len(repushToQueue) > 0 {
+		for _, req := range repushToQueue {
+			if err := s.liveStore.TxRequests().Push(req.TxRequest, req.BoardingInputs, req.Musig2Data); err != nil {
+				log.WithError(err).Warn("failed to re-push requests to the queue")
+				continue
+			}
+		}
+
+		// make the round fail if we don't register this round
+		if len(confirmedRequests) == 0 {
+			round.Fail(fmt.Errorf("not enough participants confirmed"))
+			log.Warn("not enough participants confirmed")
+			return
+		}
+	}
+}
+
+func (s *covenantlessService) startFinalization(roundTiming roundTiming, requests []ports.TimedTxRequest) {
+	round := s.getCurrentRound()
+	log.Debugf("started finalization stage for round: %s", round.Id)
+	ctx := context.Background()
+
+	thirdOfRemainingDuration := roundTiming.finalizationDuration()
+
+	defer func() {
+		s.liveStore.TreeSigingSessions().Delete(round.Id)
+
+		if err := s.saveEvents(ctx, round.Id, round.Events()); err != nil {
+			log.WithError(err).Warn("failed to store new round events")
+		}
+
+		if round.IsFailed() {
+			s.liveStore.TxRequests().DeleteVtxos()
+			s.startRound()
+			return
+		}
+
+		s.finalizeRound(roundTiming)
+	}()
+
+	if round.IsFailed() {
 		return
 	}
 
@@ -1845,9 +1850,19 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		return
 	}
 
+	txRequests := make([]domain.TxRequest, 0, len(requests))
+	boardingInputs := make([]ports.BoardingInput, 0)
+	musig2data := make([]*tree.Musig2, 0)
+	for _, req := range requests {
+		txRequests = append(txRequests, req.TxRequest)
+		boardingInputs = append(boardingInputs, req.BoardingInputs...)
+		musig2data = append(musig2data, req.Musig2Data)
+	}
+
 	// add server pubkey in musig2data and count the number of unique keys
 	uniqueSignerPubkeys := make(map[string]struct{})
 	serverPubKeyHex := hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed())
+
 	for _, data := range musig2data {
 		if data == nil {
 			continue
@@ -1859,7 +1874,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	}
 	log.Debugf("building tx for round %s", round.Id)
 	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
-		s.pubkey, requests, boardingInputs, connectorAddresses, musig2data,
+		s.pubkey, txRequests, boardingInputs, connectorAddresses, musig2data,
 	)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create round tx: %s", err))
@@ -1868,7 +1883,7 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	}
 	log.Debugf("round tx created for round %s", round.Id)
 
-	if err := s.liveStore.ForfeitTxs().Init(connectors, requests); err != nil {
+	if err := s.liveStore.ForfeitTxs().Init(connectors, txRequests); err != nil {
 		round.Fail(fmt.Errorf("failed to initialize forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to initialize forfeit txs")
 		return
@@ -1920,13 +1935,17 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		}
 
 		coordinator.AddNonce(s.serverSigningPubKey, nonces)
+		signingSession := s.liveStore.TreeSigingSessions().New(round.Id, uniqueSignerPubkeys)
 
-		signingSession := s.liveStore.TreeSigingSessions().NewSession(round.Id, uniqueSignerPubkeys)
 		log.Debugf("signing session created for round %s with %d signers", round.Id, len(uniqueSignerPubkeys))
+
 		s.liveStore.CurrentRound().Upsert(func(r *domain.Round) *domain.Round {
-			r.CommitmentTx = unsignedRoundTx
-			return r
+			ur := *r
+			ur.Txid = unsignedPsbt.UnsignedTx.TxHash().String()
+			ur.CommitmentTx = unsignedRoundTx
+			return &ur
 		})
+
 		// send back the unsigned tree & all cosigners pubkeys
 		listOfCosignersPubkeys := make([]string, 0, len(uniqueSignerPubkeys))
 		for pubkey := range uniqueSignerPubkeys {
@@ -1935,10 +1954,8 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 
 		s.propagateRoundSigningStartedEvent(vtxoTree, listOfCosignersPubkeys)
 
-		noncesTimer := time.NewTimer(thirdOfRemainingDuration)
-
 		select {
-		case <-noncesTimer.C:
+		case <-time.After(thirdOfRemainingDuration):
 			err := fmt.Errorf(
 				"musig2 signing session timed out (nonce collection), collected %d/%d nonces",
 				len(signingSession.Nonces), len(uniqueSignerPubkeys),
@@ -1947,7 +1964,6 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 			log.Warn(err)
 			return
 		case <-signingSession.NonceDoneC:
-			noncesTimer.Stop()
 			for pubkey, nonce := range signingSession.Nonces {
 				coordinator.AddNonce(&pubkey, nonce)
 			}
@@ -1980,12 +1996,10 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 
 		log.Debugf("tree signed by us for round %s", round.Id)
 
-		signaturesTimer := time.NewTimer(thirdOfRemainingDuration)
-
 		log.Debugf("waiting for cosigners to sign the tree")
 
 		select {
-		case <-signaturesTimer.C:
+		case <-time.After(thirdOfRemainingDuration):
 			err := fmt.Errorf(
 				"musig2 signing session timed out (signatures collection), collected %d/%d signatures",
 				len(signingSession.Signatures), len(uniqueSignerPubkeys),
@@ -1994,7 +2008,6 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 			log.Warn(err)
 			return
 		case <-signingSession.SigDoneC:
-			signaturesTimer.Stop()
 			for pubkey, sig := range signingSession.Signatures {
 				coordinator.AddSignatures(&pubkey, sig)
 			}
@@ -2014,8 +2027,9 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 		vtxoTree = signedTree
 	}
 
+	currentRound := s.liveStore.CurrentRound().Get()
 	_, err = round.StartFinalization(
-		connectorAddress, connectors, vtxoTree, unsignedRoundTx,
+		connectorAddress, connectors, vtxoTree, currentRound.Txid, currentRound.CommitmentTx,
 		s.liveStore.ForfeitTxs().GetConnectorsIndexes(), s.vtxoTreeExpiry.Seconds(),
 	)
 	if err != nil {
@@ -2027,47 +2041,12 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 	log.Debugf("started finalization stage for round: %s", round.Id)
 }
 
-func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree tree.TxTree, cosignersPubkeys []string) {
-	ev := RoundSigningStarted{
-		RoundEvent: domain.RoundEvent{
-			Id:   s.liveStore.CurrentRound().Get().Id,
-			Type: domain.EventTypeUndefined,
-		},
-		UnsignedVtxoTree: unsignedVtxoTree,
-		UnsignedRoundTx:  s.liveStore.CurrentRound().Get().CommitmentTx,
-		CosignersPubkeys: cosignersPubkeys,
-	}
-
-	s.eventsCh <- ev
-}
-
-func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combinedNonces tree.TreeNonces) {
-	ev := RoundSigningNoncesGenerated{
-		RoundEvent: domain.RoundEvent{
-			Id:   s.liveStore.CurrentRound().Get().Id,
-			Type: domain.EventTypeUndefined,
-		},
-		Nonces: combinedNonces,
-	}
-
-	s.eventsCh <- ev
-}
-
-func (s *covenantlessService) finalizeRound(roundEndTime time.Time) {
+func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 	defer s.startRound()
 
 	ctx := context.Background()
-	round := s.liveStore.CurrentRound().Get()
-
-	defer func() {
-		vtxoKeys := make([]domain.VtxoKey, 0)
-		for _, req := range round.TxRequests {
-			for _, in := range req.Inputs {
-				vtxoKeys = append(vtxoKeys, in.VtxoKey)
-			}
-		}
-		s.liveStore.RoundInputs().Remove(vtxoKeys)
-	}()
+	round := s.getCurrentRound()
+	defer s.liveStore.TxRequests().DeleteVtxos()
 
 	if round.IsFailed() {
 		return
@@ -2104,7 +2083,7 @@ func (s *covenantlessService) finalizeRound(roundEndTime time.Time) {
 	forfeitTxs := make([]domain.ForfeitTx, 0)
 
 	if s.liveStore.ForfeitTxs().Len() > 0 || includesBoardingInputs {
-		remainingTime := time.Until(roundEndTime)
+		remainingTime := roundTiming.remainingDuration()
 		select {
 		case <-s.forfeitsBoardingSigsChan:
 			log.Debug("all forfeit txs and boarding inputs signatures have been sent")
@@ -2112,7 +2091,6 @@ func (s *covenantlessService) finalizeRound(roundEndTime time.Time) {
 			log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
 		}
 
-		round := s.liveStore.CurrentRound().Get()
 		roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.CommitmentTx), true)
 		if err != nil {
 			log.Debugf("failed to parse round tx: %s", round.CommitmentTx)
@@ -2150,6 +2128,15 @@ func (s *covenantlessService) finalizeRound(roundEndTime time.Time) {
 		}
 
 		if len(boardingInputsIndexes) > 0 {
+			numOfInputsSigned := 0
+			for _, v := range roundTx.Inputs {
+				if len(v.TaprootScriptSpendSig) > 0 {
+					if len(v.TaprootScriptSpendSig[0].Signature) > 0 {
+						numOfInputsSigned++
+					}
+				}
+			}
+			log.Debugf("number of boarding inputs signed: %d", numOfInputsSigned)
 			txToSign, err = s.wallet.SignTransactionTapscript(ctx, txToSign, boardingInputsIndexes)
 			if err != nil {
 				changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
@@ -2178,13 +2165,12 @@ func (s *covenantlessService) finalizeRound(roundEndTime time.Time) {
 		return
 	}
 
-	txid, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx)
-	if err != nil {
+	if _, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx); err != nil {
 		changes = round.Fail(fmt.Errorf("failed to broadcast round tx: %s", err))
 		return
 	}
 
-	changes, err = round.EndFinalization(forfeitTxs, txid, signedRoundTx)
+	changes, err = round.EndFinalization(forfeitTxs, signedRoundTx)
 	if err != nil {
 		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
 		log.WithError(err).Warn("failed to finalize round")
@@ -2260,7 +2246,75 @@ func (s *covenantlessService) listenToScannerNotifications() {
 
 func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	lastEvent := round.Events()[len(round.Events())-1]
-	s.eventsCh <- lastEvent
+	events := make([]domain.Event, 0)
+	switch ev := lastEvent.(type) {
+	// RoundFinalizationStarted event must be handled differently
+	// because it contains the vtxoTree and connectorsTree
+	// and we need to propagate them in specific BatchTree events
+	case domain.RoundFinalizationStarted:
+		events = append(
+			events,
+			batchTreeSignatureEvents(ev.VtxoTree, 0, round.Id)...,
+		)
+		events = append(
+			events,
+			batchTreeEvents(ev.Connectors, 1, round.Id)...,
+		)
+	case domain.RoundFinalized:
+		lastEvent = RoundFinalized{lastEvent.(domain.RoundFinalized), round.Txid}
+	}
+
+	events = append(events, lastEvent)
+	s.eventsCh <- events
+}
+
+func (s *covenantlessService) propagateBatchStartedEvent(requests []ports.TimedTxRequest, forfeitAddr string) {
+	intentIdsHashes := make([][32]byte, 0, len(requests))
+	for _, req := range requests {
+		intentIdsHashes = append(intentIdsHashes, req.HashID())
+	}
+
+	s.liveStore.ConfirmationSessions().Init(intentIdsHashes)
+
+	ev := BatchStarted{
+		RoundEvent: domain.RoundEvent{
+			Id:   s.liveStore.CurrentRound().Get().Id,
+			Type: domain.EventTypeUndefined,
+		},
+		IntentIdsHashes: intentIdsHashes,
+		BatchExpiry:     s.vtxoTreeExpiry.Value,
+		ForfeitAddress:  forfeitAddr,
+	}
+	s.eventsCh <- []domain.Event{ev}
+}
+
+func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree tree.TxTree, cosignersPubkeys []string) {
+	round := s.liveStore.CurrentRound().Get()
+	events := append(
+		batchTreeEvents(unsignedVtxoTree, 0, round.Id),
+		RoundSigningStarted{
+			RoundEvent: domain.RoundEvent{
+				Id:   round.Id,
+				Type: domain.EventTypeUndefined,
+			},
+			UnsignedRoundTx:  round.CommitmentTx,
+			CosignersPubkeys: cosignersPubkeys,
+		},
+	)
+
+	s.eventsCh <- events
+}
+
+func (s *covenantlessService) propagateRoundSigningNoncesGeneratedEvent(combinedNonces tree.TreeNonces) {
+	ev := RoundSigningNoncesGenerated{
+		RoundEvent: domain.RoundEvent{
+			Id:   s.liveStore.CurrentRound().Get().Id,
+			Type: domain.EventTypeUndefined,
+		},
+		Nonces: combinedNonces,
+	}
+
+	s.eventsCh <- []domain.Event{ev}
 }
 
 func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
@@ -2271,51 +2325,36 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 
 	expirationTimestamp := s.sweeper.scheduler.AddNow(int64(s.vtxoTreeExpiry.Value))
 
+	log.Debugf("round %s sweeping scheduled at %s", round.Txid, fancyTime(expirationTimestamp, s.sweeper.scheduler.Unit()))
+
 	if err := s.sweeper.schedule(expirationTimestamp, round.Txid, round.VtxoTree); err != nil {
 		log.WithError(err).Warn("failed to schedule sweep tx")
 	}
 }
 
-func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
-	if len(round.VtxoTree) <= 0 {
-		return nil
-	}
+func (s *covenantlessService) checkForfeitsAndBoardingSigsSent() {
+	currentRound := s.getCurrentRound()
 
-	now := time.Now()
-	createdAt := now.Unix()
-	expireAt := round.ExpiryTimestamp()
-
-	leaves := round.VtxoTree.Leaves()
-	vtxos := make([]domain.Vtxo, 0)
-	for _, node := range leaves {
-		tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
-		if err != nil {
-			log.WithError(err).Warn("failed to parse tx")
-			continue
-		}
-		for i, out := range tx.UnsignedTx.TxOut {
-			if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
-				continue
+	roundTx, _ := psbt.NewFromRawBytes(strings.NewReader(currentRound.CommitmentTx), true)
+	numOfInputsSigned := 0
+	for _, v := range roundTx.Inputs {
+		if len(v.TaprootScriptSpendSig) > 0 {
+			if len(v.TaprootScriptSpendSig[0].Signature) > 0 {
+				numOfInputsSigned++
 			}
-
-			vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
-			if err != nil {
-				log.WithError(err).Warn("failed to parse vtxo tap key")
-				continue
-			}
-
-			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
-			vtxos = append(vtxos, domain.Vtxo{
-				VtxoKey:   domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
-				PubKey:    vtxoPubkey,
-				Amount:    uint64(out.Value),
-				RoundTxid: round.Txid,
-				CreatedAt: createdAt,
-				ExpireAt:  expireAt,
-			})
 		}
 	}
-	return vtxos
+
+	// Condition: all forfeit txs are signed and
+	// the number of signed boarding inputs matches
+	// numOfBoardingInputs we expect
+	numOfBoardingInputs := s.liveStore.BoardingInputs().Get()
+	if s.liveStore.ForfeitTxs().AllSigned() && numOfBoardingInputs == numOfInputsSigned {
+		select {
+		case s.forfeitsBoardingSigsChan <- struct{}{}:
+		default:
+		}
+	}
 }
 
 func (s *covenantlessService) getSpentVtxos(requests map[string]domain.TxRequest) []domain.Vtxo {
@@ -2354,13 +2393,13 @@ func (s *covenantlessService) stopWatchingVtxos(vtxos []domain.Vtxo) {
 func (s *covenantlessService) restoreWatchingVtxos() error {
 	ctx := context.Background()
 
-	expiredRounds, err := s.repoManager.Rounds().GetExpiredRoundsTxid(ctx)
+	unsweptRounds, err := s.repoManager.Rounds().GetUnsweptRoundsTxid(ctx)
 	if err != nil {
 		return err
 	}
 
 	vtxos := make([]domain.Vtxo, 0)
-	for _, txid := range expiredRounds {
+	for _, txid := range unsweptRounds {
 		fromRound, err := s.repoManager.Vtxos().GetVtxosForRound(ctx, txid)
 		if err != nil {
 			log.WithError(err).Warnf("failed to retrieve vtxos for round %s", txid)
@@ -2386,6 +2425,11 @@ func (s *covenantlessService) restoreWatchingVtxos() error {
 }
 
 func (s *covenantlessService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string, error) {
+	dustLimit, err := s.wallet.GetDustAmount(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
 	indexedScripts := make(map[string]struct{})
 
 	for _, vtxo := range vtxos {
@@ -2399,7 +2443,14 @@ func (s *covenantlessService) extractVtxosScripts(vtxos []domain.Vtxo) ([]string
 			return nil, err
 		}
 
-		script, err := common.P2TRScript(vtxoTapKey)
+		var script []byte
+
+		if vtxo.Amount < dustLimit {
+			script, err = common.SubDustScript(vtxoTapKey)
+		} else {
+			script, err = common.P2TRScript(vtxoTapKey)
+		}
+
 		if err != nil {
 			return nil, err
 		}
@@ -2433,6 +2484,10 @@ func (s *covenantlessService) chainParams() *chaincfg.Params {
 	default:
 		return nil
 	}
+}
+
+func (s *covenantlessService) getCurrentRound() *domain.Round {
+	return s.liveStore.CurrentRound().Get()
 }
 
 func (s *covenantlessService) markAsRedeemed(ctx context.Context, vtxo domain.Vtxo) error {
@@ -2490,23 +2545,59 @@ func (s *covenantlessService) verifyForfeitTxsSigs(txs []string) error {
 	}
 }
 
-func (s *covenantlessService) GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error) {
-	return s.repoManager.MarketHourRepo().Get(ctx)
+func fancyTime(timestamp int64, unit ports.TimeUnit) (fancyTime string) {
+	if unit == ports.UnixTime {
+		fancyTime = time.Unix(timestamp, 0).Format("2006-01-02 15:04:05")
+	} else {
+		fancyTime = fmt.Sprintf("block %d", timestamp)
+	}
+	return
 }
 
-func (s *covenantlessService) UpdateMarketHourConfig(
-	ctx context.Context,
-	marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration,
-) error {
-	marketHour := domain.NewMarketHour(
-		marketHourStartTime,
-		marketHourEndTime,
-		period,
-		roundInterval,
-	)
-	if err := s.repoManager.MarketHourRepo().Upsert(ctx, *marketHour); err != nil {
-		return fmt.Errorf("failed to upsert market hours: %w", err)
+func batchTreeEvents(txTree tree.TxTree, batchIndex int32, roundId string) []domain.Event {
+	events := make([]domain.Event, 0)
+
+	for _, lvl := range txTree {
+		for _, node := range lvl {
+			events = append(events, BatchTree{
+				RoundEvent: domain.RoundEvent{
+					Id:   roundId,
+					Type: domain.EventTypeUndefined,
+				},
+				BatchIndex: batchIndex,
+				Node:       node,
+			})
+		}
 	}
 
-	return nil
+	return events
+}
+
+func batchTreeSignatureEvents(txTree tree.TxTree, batchIndex int32, roundId string) []domain.Event {
+	events := make([]domain.Event, 0)
+
+	for level, lvl := range txTree {
+		for levelIndex, node := range lvl {
+			ptx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+			if err != nil {
+				log.WithError(err).Warn("failed to parse tx")
+				continue
+			}
+
+			sig := ptx.Inputs[0].TaprootKeySpendSig
+
+			events = append(events, BatchTreeSignature{
+				RoundEvent: domain.RoundEvent{
+					Id:   roundId,
+					Type: domain.EventTypeUndefined,
+				},
+				Topic:      []string{},
+				BatchIndex: batchIndex,
+				Level:      int32(level),
+				LevelIndex: int32(levelIndex),
+				Signature:  hex.EncodeToString(sig),
+			})
+		}
+	}
+	return events
 }

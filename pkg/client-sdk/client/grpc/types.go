@@ -33,10 +33,13 @@ func (o outs) toProto() []*arkv1.Output {
 // wrapper for GetEventStreamResponse and PingResponse
 type eventResponse interface {
 	GetRoundFailed() *arkv1.RoundFailed
+	GetBatchStarted() *arkv1.BatchStartedEvent
 	GetRoundFinalization() *arkv1.RoundFinalizationEvent
 	GetRoundFinalized() *arkv1.RoundFinalizedEvent
 	GetRoundSigning() *arkv1.RoundSigningEvent
 	GetRoundSigningNoncesGenerated() *arkv1.RoundSigningNoncesGeneratedEvent
+	GetBatchTree() *arkv1.BatchTreeEvent
+	GetBatchTreeSignature() *arkv1.BatchTreeSignatureEvent
 }
 
 type event struct {
@@ -50,16 +53,22 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 			Reason: ee.GetReason(),
 		}, nil
 	}
+
+	if ee := e.GetBatchStarted(); ee != nil {
+		return client.BatchStartedEvent{
+			ID:             ee.GetId(),
+			IntentIdHashes: ee.GetIntentIdHashes(),
+			BatchExpiry:    ee.GetBatchExpiry(),
+			ForfeitAddress: ee.GetForfeitAddress(),
+		}, nil
+	}
+
 	if ee := e.GetRoundFinalization(); ee != nil {
-		vtxoTree := treeFromProto{ee.GetVtxoTree()}.parse()
-		connectorTree := treeFromProto{ee.GetConnectors()}.parse()
 		connectorsIndex := connectorsIndexFromProto{ee.GetConnectorsIndex()}.parse()
 
 		return client.RoundFinalizationEvent{
 			ID:              ee.GetId(),
 			Tx:              ee.GetRoundTx(),
-			Tree:            vtxoTree,
-			Connectors:      connectorTree,
 			ConnectorsIndex: connectorsIndex,
 		}, nil
 	}
@@ -74,7 +83,6 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 	if ee := e.GetRoundSigning(); ee != nil {
 		return client.RoundSigningStartedEvent{
 			ID:               ee.GetId(),
-			UnsignedTree:     treeFromProto{ee.GetUnsignedVtxoTree()}.parse(),
 			UnsignedRoundTx:  ee.GetUnsignedRoundTx(),
 			CosignersPubkeys: ee.GetCosignersPubkeys(),
 		}, nil
@@ -88,6 +96,35 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		return client.RoundSigningNoncesGeneratedEvent{
 			ID:     ee.GetId(),
 			Nonces: nonces,
+		}, nil
+	}
+
+	if ee := e.GetBatchTree(); ee != nil {
+		treeTx := ee.GetTreeTx()
+
+		return client.BatchTreeEvent{
+			ID:         ee.GetId(),
+			Topic:      ee.GetTopic(),
+			BatchIndex: ee.GetBatchIndex(),
+			Node: tree.Node{
+				Txid:       treeTx.GetTxid(),
+				Tx:         treeTx.GetTx(),
+				ParentTxid: treeTx.GetParentTxid(),
+				Level:      treeTx.GetLevel(),
+				LevelIndex: treeTx.GetLevelIndex(),
+				Leaf:       treeTx.GetLeaf(),
+			},
+		}, nil
+	}
+
+	if ee := e.GetBatchTreeSignature(); ee != nil {
+		return client.BatchTreeSignatureEvent{
+			ID:         ee.GetId(),
+			Topic:      ee.GetTopic(),
+			BatchIndex: ee.GetBatchIndex(),
+			Level:      ee.GetLevel(),
+			LevelIndex: ee.GetLevelIndex(),
+			Signature:  ee.GetSignature(),
 		}, nil
 	}
 
@@ -161,26 +198,16 @@ func (t treeFromProto) parse() tree.TxTree {
 
 		for _, node := range level.Nodes {
 			nodes = append(nodes, tree.Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
+				Txid:       node.GetTxid(),
+				Tx:         node.GetTx(),
+				ParentTxid: node.GetParentTxid(),
+				Leaf:       node.GetLeaf(),
+				Level:      node.GetLevel(),
+				LevelIndex: node.GetLevelIndex(),
 			})
 		}
 
 		levels = append(levels, nodes)
-	}
-
-	for j, treeLvl := range levels {
-		for i, node := range treeLvl {
-			if len(levels.Children(node.Txid)) == 0 {
-				levels[j][i] = tree.Node{
-					Txid:       node.Txid,
-					Tx:         node.Tx,
-					ParentTxid: node.ParentTxid,
-					Leaf:       true,
-				}
-			}
-		}
 	}
 
 	return levels

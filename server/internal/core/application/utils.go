@@ -3,6 +3,7 @@ package application
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
 	"sort"
@@ -14,32 +15,37 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
+	"github.com/btcsuite/btcd/wire"
+	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	log "github.com/sirupsen/logrus"
-)
-
-const (
-	selectGapMinutes = float64(1)
-	deleteGapMinutes = float64(5)
 )
 
 type timedTxRequest struct {
 	domain.TxRequest
 	boardingInputs []ports.BoardingInput
 	timestamp      time.Time
-	pingTimestamp  time.Time
 	musig2Data     *tree.Musig2
 }
 
+func (t timedTxRequest) hashID() [32]byte {
+	return sha256.Sum256([]byte(t.Id))
+}
+
 type txRequestsQueue struct {
-	lock     *sync.RWMutex
-	requests map[string]*timedTxRequest
+	lock          *sync.RWMutex
+	requests      map[string]*timedTxRequest
+	vtxos         map[string]struct{}
+	vtxosToRemove []string
 }
 
 func newTxRequestsQueue() *txRequestsQueue {
-	requestsById := make(map[string]*timedTxRequest)
 	lock := &sync.RWMutex{}
-	return &txRequestsQueue{lock, requestsById}
+	requestsById := make(map[string]*timedTxRequest)
+	vtxos := make(map[string]struct{})
+	vtxosToRemove := make([]string, 0)
+	return &txRequestsQueue{lock, requestsById, vtxos, vtxosToRemove}
 }
 
 func (m *txRequestsQueue) len() int64 {
@@ -88,11 +94,17 @@ func (m *txRequestsQueue) push(
 	}
 
 	now := time.Now()
-	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, now, now, musig2Data}
+	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, now, musig2Data}
+	for _, vtxo := range request.Inputs {
+		if vtxo.IsNote() {
+			continue
+		}
+		m.vtxos[vtxo.String()] = struct{}{}
+	}
 	return nil
 }
 
-func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingInput, []*tree.Musig2) {
+func (m *txRequestsQueue) pop(num int64) []timedTxRequest {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -100,20 +112,6 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 	for _, p := range m.requests {
 		// Skip tx requests without registered receivers.
 		if len(p.Receivers) <= 0 {
-			continue
-		}
-
-		sinceLastPing := time.Since(p.pingTimestamp).Minutes()
-
-		// Skip tx requests for which users didn't notify to be online in the last minute.
-		if sinceLastPing > selectGapMinutes {
-			// Cleanup the request from the map if greater than deleteGapMinutes
-			// TODO move to dedicated function
-			if sinceLastPing > deleteGapMinutes {
-				log.Debugf("delete tx request %s : we didn't receive a ping in the last %d minutes", p.Id, int(deleteGapMinutes))
-				delete(m.requests, p.Id)
-			}
-
 			continue
 		}
 
@@ -127,16 +125,17 @@ func (m *txRequestsQueue) pop(num int64) ([]domain.TxRequest, []ports.BoardingIn
 		num = int64(len(requestsByTime))
 	}
 
-	requests := make([]domain.TxRequest, 0, num)
-	boardingInputs := make([]ports.BoardingInput, 0)
-	musig2Data := make([]*tree.Musig2, 0)
+	result := make([]timedTxRequest, 0, num)
+
 	for _, p := range requestsByTime[:num] {
-		boardingInputs = append(boardingInputs, p.boardingInputs...)
-		requests = append(requests, p.TxRequest)
-		musig2Data = append(musig2Data, p.musig2Data)
+		result = append(result, p)
+		for _, vtxo := range m.requests[p.Id].Inputs {
+			m.vtxosToRemove = append(m.vtxosToRemove, vtxo.String())
+		}
 		delete(m.requests, p.Id)
 	}
-	return requests, boardingInputs, musig2Data
+
+	return result
 }
 
 func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musig2) error {
@@ -176,24 +175,18 @@ func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musi
 	return nil
 }
 
-func (m *txRequestsQueue) updatePingTimestamp(id string) error {
-	m.lock.Lock()
-	defer m.lock.Unlock()
-
-	request, ok := m.requests[id]
-	if !ok {
-		return errTxRequestNotFound{id}
-	}
-
-	request.pingTimestamp = time.Now()
-	return nil
-}
-
 func (m *txRequestsQueue) delete(ids []string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
 	for _, id := range ids {
+		req, ok := m.requests[id]
+		if !ok {
+			continue
+		}
+		for _, vtxo := range req.Inputs {
+			delete(m.vtxos, vtxo.String())
+		}
 		delete(m.requests, id)
 	}
 	return nil
@@ -204,7 +197,17 @@ func (m *txRequestsQueue) deleteAll() error {
 	defer m.lock.Unlock()
 
 	m.requests = make(map[string]*timedTxRequest)
+	m.vtxos = make(map[string]struct{})
 	return nil
+}
+
+func (m *txRequestsQueue) deleteVtxos() {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	for _, vtxo := range m.vtxosToRemove {
+		delete(m.vtxos, vtxo)
+	}
+	m.vtxosToRemove = make([]string, 0)
 }
 
 func (m *txRequestsQueue) viewAll(ids []string) ([]timedTxRequest, error) {
@@ -241,6 +244,19 @@ func (m *txRequestsQueue) view(id string) (*domain.TxRequest, bool) {
 		Inputs:    request.Inputs,
 		Receivers: request.Receivers,
 	}, true
+}
+
+func (m *txRequestsQueue) includesAny(outpoints []domain.VtxoKey) (bool, string) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+
+	for _, out := range outpoints {
+		if _, exists := m.vtxos[out.String()]; exists {
+			return true, out.String()
+		}
+	}
+
+	return false, ""
 }
 
 type forfeitTxsMap struct {
@@ -390,52 +406,62 @@ func (m *forfeitTxsMap) allSigned() bool {
 	return true
 }
 
-type outpointMap struct {
-	lock      *sync.RWMutex
-	outpoints map[string]struct{}
+type offchainTxsMap struct {
+	lock        *sync.RWMutex
+	offchainTxs map[string]domain.OffchainTx
+	inputs      map[string]struct{}
 }
 
-func newOutpointMap() *outpointMap {
-	return &outpointMap{
-		lock:      &sync.RWMutex{},
-		outpoints: make(map[string]struct{}),
+func newOffchainTxsMap() *offchainTxsMap {
+	return &offchainTxsMap{
+		lock:        &sync.RWMutex{},
+		offchainTxs: make(map[string]domain.OffchainTx),
+		inputs:      make(map[string]struct{}),
 	}
 }
 
-func (r *outpointMap) add(outpoints []domain.VtxoKey) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	for _, out := range outpoints {
-		r.outpoints[out.String()] = struct{}{}
-	}
-}
-
-func (r *outpointMap) remove(outpoints []domain.VtxoKey) {
-	r.lock.Lock()
-	defer r.lock.Unlock()
-	for _, out := range outpoints {
-		delete(r.outpoints, out.String())
-	}
-}
-
-func (r *outpointMap) includes(outpoint domain.VtxoKey) bool {
-	r.lock.RLock()
-	defer r.lock.RUnlock()
-	_, exists := r.outpoints[outpoint.String()]
-	return exists
-}
-
-func (r *outpointMap) includesAny(outpoints []domain.VtxoKey) (bool, string) {
-	r.lock.RLock()
-	defer r.lock.RUnlock()
-
-	for _, out := range outpoints {
-		if _, exists := r.outpoints[out.String()]; exists {
-			return true, out.String()
+func (m *offchainTxsMap) add(offchainTx domain.OffchainTx) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+	m.offchainTxs[offchainTx.VirtualTxid] = offchainTx
+	for _, tx := range offchainTx.CheckpointTxs {
+		ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+		for _, in := range ptx.UnsignedTx.TxIn {
+			m.inputs[in.PreviousOutPoint.String()] = struct{}{}
 		}
 	}
+}
 
-	return false, ""
+func (m *offchainTxsMap) remove(virtualTxid string) {
+	m.lock.Lock()
+	defer m.lock.Unlock()
+
+	offchainTx, ok := m.offchainTxs[virtualTxid]
+	if !ok {
+		return
+	}
+
+	for _, tx := range offchainTx.CheckpointTxs {
+		ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
+		for _, in := range ptx.UnsignedTx.TxIn {
+			delete(m.inputs, in.PreviousOutPoint.String())
+		}
+	}
+	delete(m.offchainTxs, virtualTxid)
+}
+
+func (m *offchainTxsMap) get(virtualTxid string) (domain.OffchainTx, bool) {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	offchainTx, ok := m.offchainTxs[virtualTxid]
+	return offchainTx, ok
+}
+
+func (m *offchainTxsMap) includes(outpoint domain.VtxoKey) bool {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	_, exists := m.inputs[outpoint.String()]
+	return exists
 }
 
 // onchainOutputs iterates over all the nodes' outputs in the vtxo tree and checks their onchain state
@@ -552,25 +578,146 @@ func decodeTx(offchainTx domain.OffchainTx) (string, []domain.VtxoKey, []domain.
 				Txid: txid,
 				VOut: uint32(outIndex),
 			},
-			PubKey:    hex.EncodeToString(out.PkScript[2:]),
-			Amount:    uint64(out.Value),
-			ExpireAt:  offchainTx.ExpiryTimestamp,
-			RoundTxid: offchainTx.RootCommitmentTxid(),
-			RedeemTx:  offchainTx.VirtualTx,
-			CreatedAt: offchainTx.EndingTimestamp,
+			PubKey:         hex.EncodeToString(out.PkScript[2:]),
+			Amount:         uint64(out.Value),
+			ExpireAt:       offchainTx.ExpiryTimestamp,
+			CommitmentTxid: offchainTx.RootCommitmentTxId,
+			RedeemTx:       offchainTx.VirtualTx,
+			CreatedAt:      offchainTx.EndingTimestamp,
 		})
 	}
 
 	return txid, ins, outs, nil
 }
 
-func findFirstRoundToExpire(vtxos []domain.Vtxo) (expiration int64, roundTxid string) {
-	for i, vtxo := range vtxos {
-		if i == 0 || vtxo.ExpireAt < expiration {
-			roundTxid = vtxo.RoundTxid
-			expiration = vtxo.ExpireAt
-		}
+func newBoardingInput(
+	tx wire.MsgTx,
+	input ports.Input,
+	serverPubKey *secp256k1.PublicKey,
+	boardingExitDelay common.RelativeLocktime,
+) (*ports.BoardingInput, error) {
+	if len(tx.TxOut) <= int(input.VOut) {
+		return nil, fmt.Errorf("output not found")
 	}
 
-	return
+	output := tx.TxOut[input.VOut]
+
+	boardingScript, err := tree.ParseVtxoScript(input.Tapscripts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
+	}
+
+	tapKey, _, err := boardingScript.TapTree()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get taproot key: %s", err)
+	}
+
+	expectedScriptPubkey, err := common.P2TRScript(tapKey)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get script pubkey: %s", err)
+	}
+
+	if !bytes.Equal(output.PkScript, expectedScriptPubkey) {
+		return nil, fmt.Errorf(
+			"invalid boarding utxo taproot key: got %x expected %x",
+			output.PkScript, expectedScriptPubkey,
+		)
+	}
+
+	if err := boardingScript.Validate(serverPubKey, boardingExitDelay); err != nil {
+		return nil, err
+	}
+
+	return &ports.BoardingInput{
+		Amount: uint64(output.Value),
+		Input:  input,
+	}, nil
+}
+
+func calcNextMarketHour(marketHourStartTime, marketHourEndTime time.Time, period, marketHourDelta time.Duration, now time.Time) (time.Time, time.Time, error) {
+	// Validate input parameters
+	if period <= 0 {
+		return time.Time{}, time.Time{}, fmt.Errorf("period must be greater than 0")
+	}
+	if !marketHourEndTime.After(marketHourStartTime) {
+		return time.Time{}, time.Time{}, fmt.Errorf("market hour end time must be after start time")
+	}
+
+	// Calculate the duration of the market hour
+	duration := marketHourEndTime.Sub(marketHourStartTime)
+
+	// Calculate the number of periods since the initial marketHourStartTime
+	elapsed := now.Sub(marketHourStartTime)
+	var n int64
+	if elapsed >= 0 {
+		n = int64(elapsed / period)
+	} else {
+		n = int64((elapsed - period + 1) / period)
+	}
+
+	// Calculate the current market hour start and end times
+	currentStartTime := marketHourStartTime.Add(time.Duration(n) * period)
+	currentEndTime := currentStartTime.Add(duration)
+
+	// Adjust if now is before the currentStartTime
+	if now.Before(currentStartTime) {
+		n -= 1
+		currentStartTime = marketHourStartTime.Add(time.Duration(n) * period)
+		currentEndTime = currentStartTime.Add(duration)
+	}
+
+	timeUntilEnd := currentEndTime.Sub(now)
+
+	if !now.Before(currentStartTime) && now.Before(currentEndTime) && timeUntilEnd >= marketHourDelta {
+		// Return the current market hour
+		return currentStartTime, currentEndTime, nil
+	} else {
+		// Move to the next market hour
+		n += 1
+		nextStartTime := marketHourStartTime.Add(time.Duration(n) * period)
+		nextEndTime := nextStartTime.Add(duration)
+		return nextStartTime, nextEndTime, nil
+	}
+}
+
+func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
+	if len(round.VtxoTree) <= 0 {
+		return nil
+	}
+
+	now := time.Now()
+	createdAt := now.Unix()
+	expireAt := round.ExpiryTimestamp()
+
+	leaves := round.VtxoTree.Leaves()
+	vtxos := make([]domain.Vtxo, 0)
+	for _, node := range leaves {
+		tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+		if err != nil {
+			log.WithError(err).Warn("failed to parse tx")
+			continue
+		}
+		for i, out := range tx.UnsignedTx.TxOut {
+			if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
+				continue
+			}
+
+			vtxoTapKey, err := schnorr.ParsePubKey(out.PkScript[2:])
+			if err != nil {
+				log.WithError(err).Warn("failed to parse vtxo tap key")
+				continue
+			}
+
+			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
+			vtxos = append(vtxos, domain.Vtxo{
+				VtxoKey:        domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+				PubKey:         vtxoPubkey,
+				Amount:         uint64(out.Value),
+				CommitmentTxid: round.Txid,
+				CreatedAt:      createdAt,
+				ExpireAt:       expireAt,
+			})
+		}
+	}
+	return vtxos
 }

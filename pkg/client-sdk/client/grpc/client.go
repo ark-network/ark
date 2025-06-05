@@ -131,15 +131,34 @@ func (a *grpcClient) RegisterIntent(
 	return resp.GetRequestId(), nil
 }
 
-func (a *grpcClient) DeleteIntent(ctx context.Context, requestID, signature, message string) error {
-	req := &arkv1.DeleteIntentRequest{
-		RequestId: requestID,
-		Bip322Signature: &arkv1.Bip322Signature{
-			Message:   message,
-			Signature: signature,
-		},
+func (a *grpcClient) DeleteIntent(ctx context.Context, intentID, signature, message string) error {
+	var req *arkv1.DeleteIntentRequest
+
+	if intentID != "" {
+		req = &arkv1.DeleteIntentRequest{
+			Proof: &arkv1.DeleteIntentRequest_IntentId{
+				IntentId: intentID,
+			},
+		}
+	} else {
+		req = &arkv1.DeleteIntentRequest{
+			Proof: &arkv1.DeleteIntentRequest_Bip322Signature{
+				Bip322Signature: &arkv1.Bip322Signature{
+					Message:   message,
+					Signature: signature,
+				},
+			},
+		}
 	}
 	_, err := a.svc.DeleteIntent(ctx, req)
+	return err
+}
+
+func (a *grpcClient) ConfirmRegistration(ctx context.Context, intentID string) error {
+	req := &arkv1.ConfirmRegistrationRequest{
+		IntentId: intentID,
+	}
+	_, err := a.svc.ConfirmRegistration(ctx, req)
 	return err
 }
 
@@ -223,9 +242,7 @@ func (a *grpcClient) SubmitSignedForfeitTxs(
 	return err
 }
 
-func (a *grpcClient) GetEventStream(
-	ctx context.Context, requestID string,
-) (<-chan client.RoundEventChannel, func(), error) {
+func (a *grpcClient) GetEventStream(ctx context.Context) (<-chan client.RoundEventChannel, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
 
 	stream, err := a.svc.GetEventStream(ctx, &arkv1.GetEventStreamRequest{})
@@ -271,16 +288,6 @@ func (a *grpcClient) GetEventStream(
 	}
 
 	return eventsCh, closeFn, nil
-}
-
-func (a *grpcClient) Ping(
-	ctx context.Context, requestID string,
-) error {
-	req := &arkv1.PingRequest{
-		RequestId: requestID,
-	}
-	_, err := a.svc.Ping(ctx, req)
-	return err
 }
 
 func (a *grpcClient) SubmitOffchainTx(

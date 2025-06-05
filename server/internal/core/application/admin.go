@@ -128,7 +128,7 @@ func (a *adminService) GetRounds(ctx context.Context, after int64, before int64)
 }
 
 func (a *adminService) GetScheduledSweeps(ctx context.Context) ([]ScheduledSweep, error) {
-	sweepableRounds, err := a.repoManager.Rounds().GetExpiredRoundsTxid(ctx)
+	sweepableRounds, err := a.repoManager.Rounds().GetUnsweptRoundsTxid(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -213,15 +213,15 @@ func (a *adminService) CreateNotes(ctx context.Context, value uint32, quantity i
 				Txid: bip322Input.OutPoint.Hash.String(),
 				VOut: bip322Input.OutPoint.Index,
 			},
-			Amount:    uint64(note.Value),
-			PubKey:    hex.EncodeToString(bip322Input.WitnessUtxo.PkScript[2:]),
-			RoundTxid: "",
-			SpentBy:   "",
-			Spent:     false,
-			Redeemed:  false,
-			Swept:     false,
-			CreatedAt: now,
-			RedeemTx:  "",
+			Amount:         uint64(note.Value),
+			PubKey:         hex.EncodeToString(bip322Input.WitnessUtxo.PkScript[2:]),
+			CommitmentTxid: "",
+			SpentBy:        "",
+			Spent:          false,
+			Redeemed:       false,
+			Swept:          false,
+			CreatedAt:      now,
+			RedeemTx:       "",
 		}
 
 		notes = append(notes, note.String())

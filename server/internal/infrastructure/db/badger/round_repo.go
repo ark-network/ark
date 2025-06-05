@@ -87,7 +87,7 @@ func (r *roundRepository) GetRoundWithTxid(
 	return round, nil
 }
 
-func (r *roundRepository) GetExpiredRoundsTxid(
+func (r *roundRepository) GetUnsweptRoundsTxid(
 	ctx context.Context,
 ) ([]string, error) {
 	query := badgerhold.Where("Stage.Code").Eq(domain.RoundFinalizationStage).

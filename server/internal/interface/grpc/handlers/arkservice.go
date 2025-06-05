@@ -159,11 +159,20 @@ func (h *handler) RegisterIntent(
 func (h *handler) DeleteIntent(
 	ctx context.Context, req *arkv1.DeleteIntentRequest,
 ) (*arkv1.DeleteIntentResponse, error) {
-	requestID := req.GetRequestId()
-	bip322Signature := req.GetBip322Signature()
+	proof := req.GetProof()
 
-	if requestID != "" {
-		if err := h.svc.DeleteTxRequests(ctx, requestID); err != nil {
+	var intentID string
+	var bip322Signature *arkv1.Bip322Signature
+
+	switch proof := proof.(type) {
+	case *arkv1.DeleteIntentRequest_IntentId:
+		intentID = proof.IntentId
+	case *arkv1.DeleteIntentRequest_Bip322Signature:
+		bip322Signature = proof.Bip322Signature
+	}
+
+	if intentID != "" {
+		if err := h.svc.DeleteTxRequests(ctx, intentID); err != nil {
 			return nil, err
 		}
 		return &arkv1.DeleteIntentResponse{}, nil
@@ -183,7 +192,7 @@ func (h *handler) DeleteIntent(
 		return nil, status.Error(codes.InvalidArgument, "missing BIP0322 message")
 	}
 
-	var message tree.IntentMessage
+	var message tree.DeleteIntentMessage
 	if err := message.Decode(intentMessage); err != nil {
 		return nil, status.Error(codes.InvalidArgument, "invalid BIP0322 message")
 	}
@@ -216,6 +225,21 @@ func (h *handler) RegisterInputsForNextRound(
 	return &arkv1.RegisterInputsForNextRoundResponse{
 		RequestId: requestID,
 	}, nil
+}
+
+func (h *handler) ConfirmRegistration(
+	ctx context.Context, req *arkv1.ConfirmRegistrationRequest,
+) (*arkv1.ConfirmRegistrationResponse, error) {
+	intentId := req.GetIntentId()
+	if len(intentId) <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing intent id")
+	}
+
+	if err := h.svc.ConfirmRegistration(ctx, intentId); err != nil {
+		return nil, err
+	}
+
+	return &arkv1.ConfirmRegistrationResponse{}, nil
 }
 
 func (h *handler) RegisterOutputsForNextRound(
@@ -367,20 +391,6 @@ func (h *handler) GetEventStream(
 			}
 		}
 	}
-}
-
-func (h *handler) Ping(
-	ctx context.Context, req *arkv1.PingRequest,
-) (*arkv1.PingResponse, error) {
-	if req.GetRequestId() == "" {
-		return nil, status.Error(codes.InvalidArgument, "missing request id")
-	}
-
-	if err := h.svc.UpdateTxRequestStatus(ctx, req.GetRequestId()); err != nil {
-		return nil, err
-	}
-
-	return &arkv1.PingResponse{}, nil
 }
 
 func (h *handler) SubmitOffchainTx(
@@ -589,77 +599,127 @@ func (h *handler) listenToStop() {
 // listenToEvents forwards events from the application layer to the set of listeners
 func (h *handler) listenToEvents() {
 	channel := h.svc.GetEventsChannel(context.Background())
-	for event := range channel {
-		var ev *arkv1.GetEventStreamResponse
+	for events := range channel {
+		evs := make([]*arkv1.GetEventStreamResponse, 0, len(events))
 
-		switch e := event.(type) {
-		case domain.RoundFinalizationStarted:
-			ev = &arkv1.GetEventStreamResponse{
-				Event: &arkv1.GetEventStreamResponse_RoundFinalization{
-					RoundFinalization: &arkv1.RoundFinalizationEvent{
-						Id:              e.Id,
-						RoundTx:         e.RoundTx,
-						VtxoTree:        vtxoTree(e.VtxoTree).toProto(),
-						Connectors:      vtxoTree(e.Connectors).toProto(),
-						ConnectorsIndex: connectorsIndex(e.ConnectorsIndex).toProto(),
+		for _, event := range events {
+			switch e := event.(type) {
+			case domain.RoundFinalizationStarted:
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundFinalization{
+						RoundFinalization: &arkv1.RoundFinalizationEvent{
+							Id:              e.Id,
+							RoundTx:         e.RoundTx,
+							ConnectorsIndex: connectorsIndex(e.ConnectorsIndex).toProto(),
+						},
 					},
-				},
-			}
-		case domain.RoundFinalized:
-			ev = &arkv1.GetEventStreamResponse{
-				Event: &arkv1.GetEventStreamResponse_RoundFinalized{
-					RoundFinalized: &arkv1.RoundFinalizedEvent{
-						Id:        e.Id,
-						RoundTxid: e.Txid,
+				})
+			case application.RoundFinalized:
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundFinalized{
+						RoundFinalized: &arkv1.RoundFinalizedEvent{
+							Id:        e.Id,
+							RoundTxid: e.Txid,
+						},
 					},
-				},
-			}
-		case domain.RoundFailed:
-			ev = &arkv1.GetEventStreamResponse{
-				Event: &arkv1.GetEventStreamResponse_RoundFailed{
-					RoundFailed: &arkv1.RoundFailed{
-						Id:     e.Id,
-						Reason: e.Err,
+				})
+			case domain.RoundFailed:
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundFailed{
+						RoundFailed: &arkv1.RoundFailed{
+							Id:     e.Id,
+							Reason: e.Err,
+						},
 					},
-				},
-			}
-		case application.RoundSigningStarted:
-			ev = &arkv1.GetEventStreamResponse{
-				Event: &arkv1.GetEventStreamResponse_RoundSigning{
-					RoundSigning: &arkv1.RoundSigningEvent{
-						Id:               e.Id,
-						UnsignedVtxoTree: vtxoTree(e.UnsignedVtxoTree).toProto(),
-						UnsignedRoundTx:  e.UnsignedRoundTx,
-						CosignersPubkeys: e.CosignersPubkeys,
-					},
-				},
-			}
-		case application.RoundSigningNoncesGenerated:
-			serialized, err := e.SerializeNonces()
-			if err != nil {
-				logrus.WithError(err).Error("failed to serialize nonces")
-				continue
-			}
+				})
+			case application.BatchStarted:
+				hashes := make([]string, 0, len(e.IntentIdsHashes))
+				for _, hash := range e.IntentIdsHashes {
+					hashes = append(hashes, hex.EncodeToString(hash[:]))
+				}
 
-			ev = &arkv1.GetEventStreamResponse{
-				Event: &arkv1.GetEventStreamResponse_RoundSigningNoncesGenerated{
-					RoundSigningNoncesGenerated: &arkv1.RoundSigningNoncesGeneratedEvent{
-						Id:         e.Id,
-						TreeNonces: serialized,
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_BatchStarted{
+						BatchStarted: &arkv1.BatchStartedEvent{
+							Id:             e.Id,
+							IntentIdHashes: hashes,
+							BatchExpiry:    int64(e.BatchExpiry),
+							ForfeitAddress: e.ForfeitAddress,
+						},
 					},
-				},
+				})
+			case application.RoundSigningStarted:
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundSigning{
+						RoundSigning: &arkv1.RoundSigningEvent{
+							Id:               e.Id,
+							UnsignedRoundTx:  e.UnsignedRoundTx,
+							CosignersPubkeys: e.CosignersPubkeys,
+						},
+					},
+				})
+			case application.RoundSigningNoncesGenerated:
+				serialized, err := e.SerializeNonces()
+				if err != nil {
+					logrus.WithError(err).Error("failed to serialize nonces")
+					continue
+				}
+
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_RoundSigningNoncesGenerated{
+						RoundSigningNoncesGenerated: &arkv1.RoundSigningNoncesGeneratedEvent{
+							Id:         e.Id,
+							TreeNonces: serialized,
+						},
+					},
+				})
+			case application.BatchTree:
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_BatchTree{
+						BatchTree: &arkv1.BatchTreeEvent{
+							Id:         e.Id,
+							Topic:      e.Topic,
+							BatchIndex: e.BatchIndex,
+							TreeTx: &arkv1.Node{
+								Txid:       e.Node.Txid,
+								Tx:         e.Node.Tx,
+								ParentTxid: e.Node.ParentTxid,
+								Level:      e.Node.Level,
+								LevelIndex: e.Node.LevelIndex,
+								Leaf:       e.Node.Leaf,
+							},
+						},
+					},
+				})
+			case application.BatchTreeSignature:
+				evs = append(evs, &arkv1.GetEventStreamResponse{
+					Event: &arkv1.GetEventStreamResponse_BatchTreeSignature{
+						BatchTreeSignature: &arkv1.BatchTreeSignatureEvent{
+							Id:         e.Id,
+							Topic:      e.Topic,
+							BatchIndex: e.BatchIndex,
+							Level:      e.Level,
+							LevelIndex: e.LevelIndex,
+							Signature:  e.Signature,
+						},
+					},
+				})
 			}
 		}
 
-		if ev != nil {
+		// forward all events in the same routine in order to preserve the ordering
+		if len(evs) > 0 {
 			logrus.Debugf("forwarding event to %d listeners", len(h.eventsListenerHandler.listeners))
 			for _, l := range h.eventsListenerHandler.listeners {
 				go func(l *listener[*arkv1.GetEventStreamResponse]) {
-					l.ch <- ev
+					for _, ev := range evs {
+						l.ch <- ev
+					}
 				}(l)
 			}
 		}
 	}
+
 }
 
 func (h *handler) listenToTxEvents() {

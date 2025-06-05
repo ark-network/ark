@@ -2,7 +2,9 @@
 .vscode/
 .idea
 
-build/
-log/
+**/build/
+**/log/
 
-data/
+**/data/
+
+**/datadir/

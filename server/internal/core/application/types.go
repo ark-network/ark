@@ -16,14 +16,14 @@ type Service interface {
 	Stop()
 	RegisterIntent(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) (string, error)
 	SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error)
+	ConfirmRegistration(ctx context.Context, intentId string) error
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
 	SignRoundTx(ctx context.Context, roundTx string) error
 	GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error)
 	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
 	GetCurrentRound(ctx context.Context) (*domain.Round, error)
-	GetEventsChannel(ctx context.Context) <-chan domain.Event
-	UpdateTxRequestStatus(ctx context.Context, requestID string) error
+	GetEventsChannel(ctx context.Context) <-chan []domain.Event
 	ListVtxos(
 		ctx context.Context, address string,
 	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
@@ -53,7 +53,7 @@ type Service interface {
 	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
 	GetTxRequestQueue(ctx context.Context, requestIds ...string) ([]TxRequestInfo, error)
 	DeleteTxRequests(ctx context.Context, requestIds ...string) error
-	DeleteTxRequestsByProof(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) error
+	DeleteTxRequestsByProof(ctx context.Context, bip322signature bip322.Signature, message tree.DeleteIntentMessage) error
 }
 
 type ServiceInfo struct {
@@ -142,7 +142,6 @@ type TxRequestInfo struct {
 	BoardingInputs []ports.BoardingInput
 	SigningType    string
 	Cosigners      []string
-	LastPing       time.Time
 }
 
 type VtxoChainResp struct {

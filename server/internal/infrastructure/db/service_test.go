@@ -134,6 +134,7 @@ func TestMain(m *testing.M) {
 
 func TestService(t *testing.T) {
 	dbDir := t.TempDir()
+	pgDns := "postgresql://root:secret@127.0.0.1:5432/ark-db-test?sslmode=disable"
 	tests := []struct {
 		name   string
 		config db.ServiceConfig
@@ -154,6 +155,15 @@ func TestService(t *testing.T) {
 				DataStoreType:    "sqlite",
 				EventStoreConfig: []interface{}{"", nil},
 				DataStoreConfig:  []interface{}{dbDir},
+			},
+		},
+		{
+			name: "repo_manager_with_postgres_stores",
+			config: db.ServiceConfig{
+				EventStoreType:   "badger",
+				DataStoreType:    "postgres",
+				EventStoreConfig: []interface{}{"", nil},
+				DataStoreConfig:  []interface{}{pgDns},
 			},
 		},
 	}
@@ -221,6 +231,7 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 						},
 						VtxoTree:   vtxoTree,
 						Connectors: connectorsTree,
+						Txid:       "txid",
 						RoundTx:    emptyTx,
 					},
 				},
@@ -251,6 +262,7 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 						},
 						VtxoTree:   vtxoTree,
 						Connectors: connectorsTree,
+						Txid:       "txid",
 						RoundTx:    emptyTx,
 					},
 					domain.RoundFinalized{
@@ -258,7 +270,6 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 							Id:   "7578231e-428d-45ae-aaa4-e62c77ad5cec",
 							Type: domain.EventTypeRoundFinalized,
 						},
-						Txid:       randomString(32),
 						ForfeitTxs: []domain.ForfeitTx{f1Tx(), f2Tx(), f3Tx(), f4Tx()},
 						Timestamp:  1701190300,
 					},
@@ -283,8 +294,12 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 							Id:   "virtualTxid",
 							Type: domain.EventTypeOffchainTxAccepted,
 						},
-						CommitmentTxids: []string{randomString(32)},
-						FinalVirtualTx:  "fully signed virtual tx",
+						Id: "virtualTxid",
+						CommitmentTxids: map[string]string{
+							"0": randomString(32),
+							"1": randomString(32),
+						},
+						FinalVirtualTx: "fully signed virtual tx",
 						SignedCheckpointTxs: map[string]string{
 							"0": "list of server-signed txs",
 							"1": "indexed by txid",
@@ -306,8 +321,12 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 							Id:   "virtualTxid 2",
 							Type: domain.EventTypeOffchainTxAccepted,
 						},
-						CommitmentTxids: []string{randomString(32)},
-						FinalVirtualTx:  "fully signed virtual tx",
+						Id: "virtualTxid 2",
+						CommitmentTxids: map[string]string{
+							"0": randomString(32),
+							"1": randomString(32),
+						},
+						FinalVirtualTx: "fully signed virtual tx",
 						SignedCheckpointTxs: map[string]string{
 							"0": "list of server-signed txs",
 							"1": "indexed by txid",
@@ -374,6 +393,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.NotNil(t, roundById)
 		require.Condition(t, roundsMatch(*round, *roundById))
 
+		roundTxid := randomString(32)
 		newEvents := []domain.Event{
 			domain.TxRequestsRegistered{
 				RoundEvent: domain.RoundEvent{
@@ -389,10 +409,9 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 									Txid: randomString(32),
 									VOut: 0,
 								},
-								RoundTxid: randomString(32),
-								ExpireAt:  7980322,
-								PubKey:    randomString(32),
-								Amount:    300,
+								ExpireAt: 7980322,
+								PubKey:   randomString(32),
+								Amount:   300,
 							},
 						},
 						Receivers: []domain.Receiver{{
@@ -409,10 +428,9 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 									Txid: randomString(32),
 									VOut: 0,
 								},
-								RoundTxid: randomString(32),
-								ExpireAt:  7980322,
-								PubKey:    randomString(32),
-								Amount:    600,
+								ExpireAt: 7980322,
+								PubKey:   randomString(32),
+								Amount:   600,
 							},
 						},
 						Receivers: []domain.Receiver{
@@ -435,6 +453,7 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 				},
 				VtxoTree:   vtxoTree,
 				Connectors: connectorsTree,
+				Txid:       roundTxid,
 				RoundTx:    emptyTx,
 			},
 		}
@@ -453,14 +472,12 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.NotNil(t, roundById)
 		require.Condition(t, roundsMatch(*updatedRound, *roundById))
 
-		txid := randomString(32)
 		newEvents = []domain.Event{
 			domain.RoundFinalized{
 				RoundEvent: domain.RoundEvent{
 					Id:   roundId,
 					Type: domain.EventTypeRoundFinalized,
 				},
-				Txid:              txid,
 				ForfeitTxs:        []domain.ForfeitTx{f1Tx(), f2Tx(), f3Tx(), f4Tx()},
 				FinalCommitmentTx: emptyTx,
 				Timestamp:         now.Add(60 * time.Second).Unix(),
@@ -477,12 +494,12 @@ func testRoundRepository(t *testing.T, svc ports.RepoManager) {
 		require.NotNil(t, roundById)
 		require.Condition(t, roundsMatch(*finalizedRound, *roundById))
 
-		resultTree, err := svc.Rounds().GetVtxoTreeWithTxid(ctx, txid)
+		resultTree, err := svc.Rounds().GetVtxoTreeWithTxid(ctx, roundTxid)
 		require.NoError(t, err)
 		require.NotNil(t, resultTree)
 		require.Equal(t, finalizedRound.VtxoTree, resultTree)
 
-		roundByTxid, err := svc.Rounds().GetRoundWithTxid(ctx, txid)
+		roundByTxid, err := svc.Rounds().GetRoundWithTxid(ctx, roundTxid)
 		require.NoError(t, err)
 		require.NotNil(t, roundByTxid)
 		require.Condition(t, roundsMatch(*finalizedRound, *roundByTxid))
@@ -636,6 +653,12 @@ func testOffchainTxRepository(t *testing.T, svc ports.RepoManager) {
 		require.Error(t, err)
 		require.Nil(t, offchainTx)
 
+		checkpointTxid1 := "0000000000000000000000000000000000000000000000000000000000000001"
+		signedCheckpointPtx1 := "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA=signed"
+		checkpointTxid2 := "0000000000000000000000000000000000000000000000000000000000000002"
+		signedCheckpointPtx2 := "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAB=signed"
+		rootCommitmentTxid := "0000000000000000000000000000000000000000000000000000000000000003"
+		commitmentTxid := "0000000000000000000000000000000000000000000000000000000000000004"
 		events := []domain.Event{
 			domain.OffchainTxRequested{
 				OffchainTxEvent: domain.OffchainTxEvent{
@@ -651,9 +674,17 @@ func testOffchainTxRepository(t *testing.T, svc ports.RepoManager) {
 					Id:   virtualTxid,
 					Type: domain.EventTypeOffchainTxAccepted,
 				},
-				CommitmentTxids:     nil,
-				FinalVirtualTx:      "",
-				SignedCheckpointTxs: nil,
+				Id: virtualTxid,
+				CommitmentTxids: map[string]string{
+					checkpointTxid1: rootCommitmentTxid,
+					checkpointTxid2: commitmentTxid,
+				},
+				FinalVirtualTx: "",
+				SignedCheckpointTxs: map[string]string{
+					checkpointTxid1: signedCheckpointPtx1,
+					checkpointTxid2: signedCheckpointPtx2,
+				},
+				RootCommitmentTxid: rootCommitmentTxid,
 			},
 		}
 		offchainTx = domain.NewOffchainTxFromEvents(events)
@@ -664,6 +695,7 @@ func testOffchainTxRepository(t *testing.T, svc ports.RepoManager) {
 		require.NoError(t, err)
 		require.NotNil(t, offchainTx)
 		require.True(t, gotOffchainTx.IsAccepted())
+		require.Equal(t, rootCommitmentTxid, gotOffchainTx.RootCommitmentTxId)
 		require.Condition(t, offchainTxMatch(*offchainTx, *gotOffchainTx))
 
 		newEvents := []domain.Event{

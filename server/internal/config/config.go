@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"github.com/ark-network/ark/server/internal/infrastructure/live-store/inmemory"
 	"github.com/ark-network/ark/server/internal/infrastructure/live-store/redis"
@@ -32,8 +33,9 @@ var (
 		"badger": {},
 	}
 	supportedDbs = supportedType{
-		"badger": {},
-		"sqlite": {},
+		"badger":   {},
+		"sqlite":   {},
+		"postgres": {},
 	}
 	supportedSchedulers = supportedType{
 		"gocron": {},
@@ -61,6 +63,7 @@ type Config struct {
 	DbType              string
 	EventDbType         string
 	DbDir               string
+	DbUrl               string
 	EventDbDir          string
 	RoundInterval       int64
 	SchedulerType       string
@@ -84,6 +87,7 @@ type Config struct {
 	UnlockerFilePath string // file unlocker
 	UnlockerPassword string // env unlocker
 
+	RoundMinParticipantsCount int64
 	RoundMaxParticipantsCount int64
 	UtxoMaxAmount             int64
 	UtxoMinAmount             int64
@@ -102,6 +106,14 @@ type Config struct {
 	network   *common.Network
 }
 
+func (c *Config) String() string {
+	json, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("error while marshalling config JSON: %s", err)
+	}
+	return string(json)
+}
+
 var (
 	Datadir                   = "DATADIR"
 	WalletAddr                = "WALLET_ADDR"
@@ -109,6 +121,7 @@ var (
 	Port                      = "PORT"
 	EventDbType               = "EVENT_DB_TYPE"
 	DbType                    = "DB_TYPE"
+	DbUrl                     = "DB_URL"
 	SchedulerType             = "SCHEDULER_TYPE"
 	TxBuilderType             = "TX_BUILDER_TYPE"
 	LiveStoreType             = "LIVE_STORE_TYPE"
@@ -131,6 +144,7 @@ var (
 	MarketHourRoundInterval   = "MARKET_HOUR_ROUND_INTERVAL"
 	OtelCollectorEndpoint     = "OTEL_COLLECTOR_ENDPOINT"
 	RoundMaxParticipantsCount = "ROUND_MAX_PARTICIPANTS_COUNT"
+	RoundMinParticipantsCount = "ROUND_MIN_PARTICIPANTS_COUNT"
 	UtxoMaxAmount             = "UTXO_MAX_AMOUNT"
 	VtxoMaxAmount             = "VTXO_MAX_AMOUNT"
 	UtxoMinAmount             = "UTXO_MIN_AMOUNT"
@@ -139,7 +153,7 @@ var (
 	defaultDatadir             = common.AppDataDir("arkd", false)
 	defaultRoundInterval       = 30
 	DefaultPort                = 7070
-	defaultDbType              = "sqlite"
+	defaultDbType              = "postgres"
 	defaultEventDbType         = "badger"
 	defaultSchedulerType       = "gocron"
 	defaultTxBuilderType       = "covenantless"
@@ -161,6 +175,7 @@ var (
 	defaultVtxoMaxAmount       = -1 // -1 means no limit (default)
 
 	defaultRoundMaxParticipantsCount = 128
+	defaultRoundMinParticipantsCount = 1
 )
 
 func LoadConfig() (*Config, error) {
@@ -186,6 +201,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(MarketHourPeriod, defaultMarketHourPeriod)
 	viper.SetDefault(MarketHourRoundInterval, defaultMarketHourInterval)
 	viper.SetDefault(RoundMaxParticipantsCount, defaultRoundMaxParticipantsCount)
+	viper.SetDefault(RoundMinParticipantsCount, defaultRoundMinParticipantsCount)
 	viper.SetDefault(UtxoMaxAmount, defaultUtxoMaxAmount)
 	viper.SetDefault(UtxoMinAmount, defaultUtxoMinAmount)
 	viper.SetDefault(VtxoMaxAmount, defaultVtxoMaxAmount)
@@ -197,6 +213,14 @@ func LoadConfig() (*Config, error) {
 	}
 
 	dbPath := filepath.Join(viper.GetString(Datadir), "db")
+
+	var dbUrl string
+	if viper.GetString(DbType) == "postgres" {
+		dbUrl = viper.GetString(DbUrl)
+		if dbUrl == "" {
+			return nil, fmt.Errorf("DB_URL not provided")
+		}
+	}
 
 	return &Config{
 		Datadir:                   viper.GetString(Datadir),
@@ -210,6 +234,7 @@ func LoadConfig() (*Config, error) {
 		LiveStoreType:             viper.GetString(LiveStoreType),
 		NoTLS:                     viper.GetBool(NoTLS),
 		DbDir:                     dbPath,
+		DbUrl:                     dbUrl,
 		EventDbDir:                dbPath,
 		LogLevel:                  viper.GetInt(LogLevel),
 		VtxoTreeExpiry:            determineLocktimeType(viper.GetInt64(VtxoTreeExpiry)),
@@ -229,6 +254,7 @@ func LoadConfig() (*Config, error) {
 		MarketHourRoundInterval:   viper.GetDuration(MarketHourRoundInterval),
 		OtelCollectorEndpoint:     viper.GetString(OtelCollectorEndpoint),
 		RoundMaxParticipantsCount: viper.GetInt64(RoundMaxParticipantsCount),
+		RoundMinParticipantsCount: viper.GetInt64(RoundMinParticipantsCount),
 		UtxoMaxAmount:             viper.GetInt64(UtxoMaxAmount),
 		UtxoMinAmount:             viper.GetInt64(UtxoMinAmount),
 		VtxoMaxAmount:             viper.GetInt64(VtxoMaxAmount),
@@ -322,6 +348,14 @@ func (c *Config) Validate() error {
 		)
 	}
 
+	if c.VtxoMinAmount == 0 {
+		return fmt.Errorf("vtxo min amount must be greater than 0")
+	}
+
+	if c.UtxoMinAmount == 0 {
+		return fmt.Errorf("utxo min amount must be greater than 0")
+	}
+
 	if err := c.repoManager(); err != nil {
 		return err
 	}
@@ -398,6 +432,8 @@ func (c *Config) repoManager() error {
 		dataStoreConfig = []interface{}{c.DbDir, logger}
 	case "sqlite":
 		dataStoreConfig = []interface{}{c.DbDir}
+	case "postgres":
+		dataStoreConfig = []interface{}{c.DbUrl}
 	default:
 		return fmt.Errorf("unknown db type")
 	}
@@ -506,7 +542,8 @@ func (c *Config) appService() error {
 		*c.network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay,
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
-		c.RoundMaxParticipantsCount, c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount, c.liveStore,
+		c.RoundMinParticipantsCount, c.RoundMaxParticipantsCount,
+		c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount, c.liveStore,
 	)
 	if err != nil {
 		return err

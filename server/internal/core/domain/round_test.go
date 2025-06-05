@@ -19,9 +19,9 @@ var (
 						Txid: txid,
 						VOut: 0,
 					},
-					PubKey:    pubkey,
-					Amount:    2000,
-					RoundTxid: txid,
+					PubKey:         pubkey,
+					Amount:         2000,
+					CommitmentTxid: txid,
 				},
 			},
 			Receivers: []domain.Receiver{
@@ -47,18 +47,18 @@ var (
 						Txid: txid,
 						VOut: 0,
 					},
-					PubKey:    pubkey,
-					Amount:    1000,
-					RoundTxid: txid,
+					PubKey:         pubkey,
+					Amount:         1000,
+					CommitmentTxid: txid,
 				},
 				{
 					VtxoKey: domain.VtxoKey{
 						Txid: txid,
 						VOut: 0,
 					},
-					PubKey:    pubkey,
-					Amount:    1000,
-					RoundTxid: txid,
+					PubKey:         pubkey,
+					Amount:         1000,
+					CommitmentTxid: txid,
 				},
 			},
 			Receivers: []domain.Receiver{{
@@ -325,7 +325,7 @@ func testStartFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx, map[string]domain.Outpoint{
+			events, err = round.StartFinalization("", connectors, vtxoTree, "txid1", roundTx, map[string]domain.Outpoint{
 				txid: {
 					Txid: txid,
 					VOut: 0,
@@ -359,6 +359,7 @@ func testStartFinalization(t *testing.T) {
 				round       *domain.Round
 				connectors  tree.TxTree
 				tree        tree.TxTree
+				txid        string
 				roundTx     string
 				expiration  int64
 				expectedErr string
@@ -444,6 +445,7 @@ func testStartFinalization(t *testing.T) {
 					connectors:  connectors,
 					tree:        vtxoTree,
 					expiration:  expiration,
+					txid:        "txid",
 					roundTx:     roundTx,
 					expectedErr: "not in a valid stage to start finalization",
 				},
@@ -451,7 +453,7 @@ func testStartFinalization(t *testing.T) {
 
 			for _, f := range fixtures {
 				// TODO fix this
-				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.roundTx, map[string]domain.Outpoint{
+				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.txid, f.roundTx, map[string]domain.Outpoint{
 					txid: {
 						Txid: txid,
 						VOut: 0,
@@ -476,7 +478,7 @@ func testEndFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, vtxoTree, roundTx, map[string]domain.Outpoint{
+			events, err = round.StartFinalization("", connectors, vtxoTree, "txid", roundTx, map[string]domain.Outpoint{
 				txid: {
 					Txid: txid,
 					VOut: 0,
@@ -485,7 +487,7 @@ func testEndFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.EndFinalization(forfeitTxs, txid, finalRoundTx)
+			events, err = round.EndFinalization(forfeitTxs, finalRoundTx)
 			require.NoError(t, err)
 			require.Len(t, events, 1)
 			require.False(t, round.IsStarted())
@@ -496,7 +498,6 @@ func testEndFinalization(t *testing.T) {
 			require.True(t, ok)
 			require.Equal(t, domain.EventTypeRoundFinalized, event.Type)
 			require.Equal(t, round.Id, event.Id)
-			require.Exactly(t, txid, event.Txid)
 			require.Exactly(t, forfeitTxs, event.ForfeitTxs)
 			require.Exactly(t, round.EndingTimestamp, event.Timestamp)
 		})
@@ -509,7 +510,6 @@ func testEndFinalization(t *testing.T) {
 			fixtures := []struct {
 				round       *domain.Round
 				forfeitTxs  []domain.ForfeitTx
-				txid        string
 				expectedErr string
 			}{
 				{
@@ -521,26 +521,13 @@ func testEndFinalization(t *testing.T) {
 						TxRequests: requestsById,
 					},
 					forfeitTxs:  nil,
-					txid:        txid,
 					expectedErr: "missing list of signed forfeit txs",
 				},
 				{
 					round: &domain.Round{
 						Id: "0",
-						Stage: domain.Stage{
-							Code: int(domain.RoundFinalizationStage),
-						},
 					},
 					forfeitTxs:  forfeitTxs,
-					txid:        "",
-					expectedErr: "missing round txid",
-				},
-				{
-					round: &domain.Round{
-						Id: "0",
-					},
-					forfeitTxs:  forfeitTxs,
-					txid:        txid,
 					expectedErr: "not in a valid stage to end finalization",
 				},
 				{
@@ -551,7 +538,6 @@ func testEndFinalization(t *testing.T) {
 						},
 					},
 					forfeitTxs:  forfeitTxs,
-					txid:        txid,
 					expectedErr: "not in a valid stage to end finalization",
 				},
 				{
@@ -563,7 +549,6 @@ func testEndFinalization(t *testing.T) {
 						},
 					},
 					forfeitTxs:  []domain.ForfeitTx{emptyForfeitTx, emptyForfeitTx, emptyForfeitTx, emptyForfeitTx},
-					txid:        txid,
 					expectedErr: "not in a valid stage to end finalization",
 				},
 				{
@@ -575,13 +560,12 @@ func testEndFinalization(t *testing.T) {
 						},
 					},
 					forfeitTxs:  []domain.ForfeitTx{emptyForfeitTx, emptyForfeitTx, emptyForfeitTx, emptyForfeitTx},
-					txid:        txid,
 					expectedErr: "round already finalized",
 				},
 			}
 
 			for _, f := range fixtures {
-				events, err := f.round.EndFinalization(f.forfeitTxs, f.txid, finalRoundTx)
+				events, err := f.round.EndFinalization(f.forfeitTxs, finalRoundTx)
 				require.EqualError(t, err, f.expectedErr)
 				require.Empty(t, events)
 			}

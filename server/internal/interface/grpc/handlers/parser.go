@@ -108,7 +108,7 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 				Vout: vv.VOut,
 			},
 			Amount:    vv.Amount,
-			RoundTxid: vv.RoundTxid,
+			RoundTxid: vv.CommitmentTxid,
 			Spent:     vv.Spent,
 			ExpireAt:  vv.ExpireAt,
 			SpentBy:   vv.SpentBy,
@@ -150,6 +150,9 @@ func (t vtxoTree) toProto() *arkv1.Tree {
 				Txid:       node.Txid,
 				Tx:         node.Tx,
 				ParentTxid: node.ParentTxid,
+				Level:      node.Level,
+				LevelIndex: node.LevelIndex,
+				Leaf:       node.Leaf,
 			})
 		}
 
@@ -251,7 +254,6 @@ func (i txReqsInfo) toProto() []*arkv1.TxRequestInfo {
 			BoardingInputs:      boardingInputs,
 			SigningType:         req.SigningType,
 			CosignersPublicKeys: req.Cosigners,
-			LastPing:            req.LastPing.Unix(),
 		})
 	}
 	return list

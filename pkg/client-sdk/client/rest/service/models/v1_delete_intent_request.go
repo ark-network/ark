@@ -21,8 +21,8 @@ type V1DeleteIntentRequest struct {
 	// bip322 signature
 	Bip322Signature *V1Bip322Signature `json:"bip322Signature,omitempty"`
 
-	// request Id
-	RequestID string `json:"requestId,omitempty"`
+	// intent Id
+	IntentID string `json:"intentId,omitempty"`
 }
 
 // Validate validates this v1 delete intent request
