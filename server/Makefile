@@ -1,4 +1,4 @@
-.PHONY: build clean cov help intergrationtest lint run run-mutinynet test vet migrate sqlc
+.PHONY: build clean cov help integrationtest lint run run-mutinynet test vet migrate sqlc
 
 define setup_env
     $(eval include $(1))
@@ -89,26 +89,25 @@ droppgtest:
 # createdb: create db inside docker container
 createdb:
 	@docker exec ark-pg createdb --username=root --owner=root ark-db
+	@docker exec ark-pg createdb --username=root --owner=root ark-event-db
 
 # dropdb: drops db inside docker container
 dropdb:
 	@docker exec ark-pg dropdb ark-db
+	@docker exec ark-pg dropdb ark-event-db
 
 # createtestdb: create test db inside docker container
 createtestdb:
 	@docker exec ark-pg-test createdb --username=root --owner=root ark-db-test
+	@docker exec ark-pg-test createdb --username=root --owner=root ark-event-db-test
 
 # droptestdb: drops test db inside docker container
 droptestdb:
 	@docker exec ark-pg-test dropdb ark-db-test
+	@docker exec ark-pg-test dropdb ark-event-db-test
 
 # recreatetestdb: drops and creates test db
 recreatetestdb: droptestdb createtestdb
-
-# pgcreatetestdb: starts docker container and creates test db, used in CI
-pgcreatetestdb:
-	@chmod u+x ./scripts/create_testdb
-	@./scripts/create_testdb
 
 # psql: connects to postgres terminal running inside docker container
 psql:

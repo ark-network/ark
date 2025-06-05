@@ -63,6 +63,7 @@ type Config struct {
 	EventDbType         string
 	DbDir               string
 	DbUrl               string
+	EventDbUrl          string
 	EventDbDir          string
 	RoundInterval       int64
 	SchedulerType       string
@@ -119,6 +120,7 @@ var (
 	EventDbType               = "EVENT_DB_TYPE"
 	DbType                    = "DB_TYPE"
 	DbUrl                     = "DB_URL"
+	EventDbUrl                = "EVENT_DB_URL"
 	SchedulerType             = "SCHEDULER_TYPE"
 	TxBuilderType             = "TX_BUILDER_TYPE"
 	LogLevel                  = "LOG_LEVEL"
@@ -208,8 +210,16 @@ func LoadConfig() (*Config, error) {
 
 	dbPath := filepath.Join(viper.GetString(Datadir), "db")
 
+	var eventDbUrl string
+	if viper.GetString(EventDbType) == "postgres" {
+		eventDbUrl = viper.GetString(EventDbUrl)
+		if eventDbUrl == "" {
+			return nil, fmt.Errorf("EVENT_DB_URL not provided")
+		}
+	}
+
 	var dbUrl string
-	if viper.GetString(DbType) == "postgres" || viper.GetString(EventDbType) == "postgres" {
+	if viper.GetString(DbType) == "postgres" {
 		dbUrl = viper.GetString(DbUrl)
 		if dbUrl == "" {
 			return nil, fmt.Errorf("DB_URL not provided")
@@ -229,6 +239,7 @@ func LoadConfig() (*Config, error) {
 		DbDir:                     dbPath,
 		DbUrl:                     dbUrl,
 		EventDbDir:                dbPath,
+		EventDbUrl:                eventDbUrl,
 		LogLevel:                  viper.GetInt(LogLevel),
 		VtxoTreeExpiry:            determineLocktimeType(viper.GetInt64(VtxoTreeExpiry)),
 		UnilateralExitDelay:       determineLocktimeType(viper.GetInt64(UnilateralExitDelay)),
@@ -414,7 +425,7 @@ func (c *Config) repoManager() error {
 	case "badger":
 		eventStoreConfig = []interface{}{c.EventDbDir, logger}
 	case "postgres":
-		eventStoreConfig = []interface{}{c.DbUrl}
+		eventStoreConfig = []interface{}{c.EventDbUrl}
 	default:
 		return fmt.Errorf("unknown event db type")
 	}
