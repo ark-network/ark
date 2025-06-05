@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -248,11 +249,18 @@ func testRoundEventRepository(t *testing.T, svc ports.RepoManager) {
 		ctx := context.Background()
 
 		for _, f := range fixtures {
-			svc.RegisterEventsHandler(f.handler)
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			svc.RegisterEventsHandler(func(round *domain.Round) {
+				f.handler(round)
+				wg.Done()
+			})
 
 			round, err := svc.Events().Save(ctx, f.roundId, f.events...)
 			require.NoError(t, err)
 			require.NotNil(t, round)
+
+			wg.Wait()
 
 			round, err = svc.Events().Load(ctx, f.roundId)
 			require.NoError(t, err)
