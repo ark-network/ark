@@ -28,7 +28,8 @@ const minAllowedSequence = 512
 
 var (
 	supportedEventDbs = supportedType{
-		"badger": {},
+		"badger":   {},
+		"postgres": {},
 	}
 	supportedDbs = supportedType{
 		"badger":   {},
@@ -149,7 +150,7 @@ var (
 	defaultRoundInterval       = 30
 	DefaultPort                = 7070
 	defaultDbType              = "postgres"
-	defaultEventDbType         = "badger"
+	defaultEventDbType         = "postgres"
 	defaultSchedulerType       = "gocron"
 	defaultTxBuilderType       = "covenantless"
 	defaultEsploraURL          = "https://blockstream.info/api"
@@ -208,7 +209,7 @@ func LoadConfig() (*Config, error) {
 	dbPath := filepath.Join(viper.GetString(Datadir), "db")
 
 	var dbUrl string
-	if viper.GetString(DbType) == "postgres" {
+	if viper.GetString(DbType) == "postgres" || viper.GetString(EventDbType) == "postgres" {
 		dbUrl = viper.GetString(DbUrl)
 		if dbUrl == "" {
 			return nil, fmt.Errorf("DB_URL not provided")
@@ -412,6 +413,8 @@ func (c *Config) repoManager() error {
 	switch c.EventDbType {
 	case "badger":
 		eventStoreConfig = []interface{}{c.EventDbDir, logger}
+	case "postgres":
+		eventStoreConfig = []interface{}{c.DbUrl}
 	default:
 		return fmt.Errorf("unknown event db type")
 	}

@@ -161,9 +161,9 @@ func TestService(t *testing.T) {
 		{
 			name: "repo_manager_with_postgres_stores",
 			config: db.ServiceConfig{
-				EventStoreType:   "badger",
+				EventStoreType:   "postgres",
 				DataStoreType:    "postgres",
-				EventStoreConfig: []interface{}{"", nil},
+				EventStoreConfig: []interface{}{pgDns},
 				DataStoreConfig:  []interface{}{pgDns},
 			},
 		},

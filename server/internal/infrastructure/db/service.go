@@ -36,7 +36,8 @@ var pgMigration embed.FS
 
 var (
 	eventStoreTypes = map[string]func(...interface{}) (domain.EventRepository, error){
-		"badger": badgerdb.NewEventRepository,
+		"badger":   badgerdb.NewEventRepository,
+		"postgres": pgdb.NewEventRepository,
 	}
 	roundStoreTypes = map[string]func(...interface{}) (domain.RoundRepository, error){
 		"badger":   badgerdb.NewRoundRepository,
@@ -114,6 +115,25 @@ func NewService(config ServiceConfig, txDecoder ports.TxDecoder) (ports.RepoMana
 	switch config.EventStoreType {
 	case "badger":
 		eventStore, err = eventStoreFactory(config.EventStoreConfig...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open event store: %s", err)
+		}
+	case "postgres":
+		if len(config.DataStoreConfig) != 1 {
+			return nil, fmt.Errorf("invalid data store config for postgres")
+		}
+
+		dsn, ok := config.DataStoreConfig[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("invalid DSN for postgres")
+		}
+
+		db, err := pgdb.OpenDb(dsn)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open postgres db: %s", err)
+		}
+
+		eventStore, err = eventStoreFactory(db)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open event store: %s", err)
 		}
