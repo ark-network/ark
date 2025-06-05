@@ -237,7 +237,7 @@ func (e indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosReq
 			IsSwept:        vtxo.Swept,
 			IsSpent:        vtxo.Spent,
 			SpentBy:        vtxo.SpentBy,
-			CommitmentTxid: vtxo.RoundTxid,
+			CommitmentTxid: vtxo.CommitmentTxid,
 		}
 	}
 
@@ -279,7 +279,7 @@ func (e indexerService) GetVtxosByOutpoint(
 			IsSwept:        vtxo.Swept,
 			IsSpent:        vtxo.Spent,
 			SpentBy:        vtxo.SpentBy,
-			CommitmentTxid: vtxo.RoundTxid,
+			CommitmentTxid: vtxo.CommitmentTxid,
 		}
 	}
 

@@ -108,7 +108,7 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 				Vout: vv.VOut,
 			},
 			Amount:    vv.Amount,
-			RoundTxid: vv.RoundTxid,
+			RoundTxid: vv.CommitmentTxid,
 			Spent:     vv.Spent,
 			ExpireAt:  vv.ExpireAt,
 			SpentBy:   vv.SpentBy,

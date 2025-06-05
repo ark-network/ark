@@ -24,6 +24,7 @@ type RoundFinalizationStarted struct {
 	VtxoTree           tree.TxTree
 	Connectors         tree.TxTree
 	ConnectorAddress   string
+	Txid               string
 	RoundTx            string
 	ConnectorsIndex    map[string]Outpoint
 	VtxoTreeExpiration int64
@@ -31,7 +32,6 @@ type RoundFinalizationStarted struct {
 
 type RoundFinalized struct {
 	RoundEvent
-	Txid              string
 	ForfeitTxs        []ForfeitTx
 	FinalCommitmentTx string
 	Timestamp         int64

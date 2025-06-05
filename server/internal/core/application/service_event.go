@@ -35,6 +35,11 @@ type RoundSigningNoncesGenerated struct {
 	Nonces tree.TreeNonces // aggregated nonces
 }
 
+type RoundFinalized struct {
+	domain.RoundFinalized
+	Txid string
+}
+
 func (e RoundSigningNoncesGenerated) SerializeNonces() (string, error) {
 	var serialized bytes.Buffer
 

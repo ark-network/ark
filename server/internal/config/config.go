@@ -2,6 +2,7 @@ package config
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -30,8 +31,9 @@ var (
 		"badger": {},
 	}
 	supportedDbs = supportedType{
-		"badger": {},
-		"sqlite": {},
+		"badger":   {},
+		"sqlite":   {},
+		"postgres": {},
 	}
 	supportedSchedulers = supportedType{
 		"gocron": {},
@@ -59,6 +61,7 @@ type Config struct {
 	DbType              string
 	EventDbType         string
 	DbDir               string
+	DbUrl               string
 	EventDbDir          string
 	RoundInterval       int64
 	SchedulerType       string
@@ -99,6 +102,14 @@ type Config struct {
 	network   *common.Network
 }
 
+func (c *Config) String() string {
+	json, err := json.MarshalIndent(c, "", "  ")
+	if err != nil {
+		return fmt.Sprintf("error while marshalling config JSON: %s", err)
+	}
+	return string(json)
+}
+
 var (
 	Datadir                   = "DATADIR"
 	WalletAddr                = "WALLET_ADDR"
@@ -106,6 +117,7 @@ var (
 	Port                      = "PORT"
 	EventDbType               = "EVENT_DB_TYPE"
 	DbType                    = "DB_TYPE"
+	DbUrl                     = "DB_URL"
 	SchedulerType             = "SCHEDULER_TYPE"
 	TxBuilderType             = "TX_BUILDER_TYPE"
 	LogLevel                  = "LOG_LEVEL"
@@ -136,7 +148,7 @@ var (
 	defaultDatadir             = common.AppDataDir("arkd", false)
 	defaultRoundInterval       = 30
 	DefaultPort                = 7070
-	defaultDbType              = "sqlite"
+	defaultDbType              = "postgres"
 	defaultEventDbType         = "badger"
 	defaultSchedulerType       = "gocron"
 	defaultTxBuilderType       = "covenantless"
@@ -195,6 +207,14 @@ func LoadConfig() (*Config, error) {
 
 	dbPath := filepath.Join(viper.GetString(Datadir), "db")
 
+	var dbUrl string
+	if viper.GetString(DbType) == "postgres" {
+		dbUrl = viper.GetString(DbUrl)
+		if dbUrl == "" {
+			return nil, fmt.Errorf("DB_URL not provided")
+		}
+	}
+
 	return &Config{
 		Datadir:                   viper.GetString(Datadir),
 		WalletAddr:                viper.GetString(WalletAddr),
@@ -206,6 +226,7 @@ func LoadConfig() (*Config, error) {
 		TxBuilderType:             viper.GetString(TxBuilderType),
 		NoTLS:                     viper.GetBool(NoTLS),
 		DbDir:                     dbPath,
+		DbUrl:                     dbUrl,
 		EventDbDir:                dbPath,
 		LogLevel:                  viper.GetInt(LogLevel),
 		VtxoTreeExpiry:            determineLocktimeType(viper.GetInt64(VtxoTreeExpiry)),
@@ -400,6 +421,8 @@ func (c *Config) repoManager() error {
 		dataStoreConfig = []interface{}{c.DbDir, logger}
 	case "sqlite":
 		dataStoreConfig = []interface{}{c.DbDir}
+	case "postgres":
+		dataStoreConfig = []interface{}{c.DbUrl}
 	default:
 		return fmt.Errorf("unknown db type")
 	}
