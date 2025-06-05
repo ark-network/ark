@@ -65,26 +65,21 @@ service IndexerService {
       get: "/v1/commitmentTx/{txid}/swept"
     };
   }
-  rpc SubscribeForAddresses(SubscribeForAddressesRequest) returns (SubscribeForAddressesResponse) {
+  rpc SubscribeForScripts(SubscribeForScriptsRequest) returns (SubscribeForScriptsResponse) {
     option (google.api.http) = {
-      post: "/v1/vtxos/subscribe"
+      post: "/v1/script/subscribe"
       body: "*"
     };
   };
-  rpc UnsubscribeForAddresses(UnsubscribeForAddressesRequest) returns (UnsubscribeForAddressesResponse) {
+  rpc UnsubscribeForScripts(UnsubscribeForScriptsRequest) returns (UnsubscribeForScriptsResponse) {
     option (google.api.http) = {
-      post: "/v1/vtxos/unsubscribe"
+      post: "/v1/script/unsubscribe"
       body: "*"
     };
   };
   rpc GetSubscription(GetSubscriptionRequest) returns (stream GetSubscriptionResponse) {
     option (google.api.http) = {
-      get: "/v1/vtxos/subscription/{subscription_id}"
-    };
-  };
-  rpc DeleteSubscription(DeleteSubscriptionRequest) returns (DeleteSubscriptionResponse) {
-    option (google.api.http) = {
-      delete: "/v1/vtxos/subscription/{subscription_id}"
+      get: "/v1/script/subscription/{subscription_id}"
     };
   };
 }
@@ -283,22 +278,23 @@ message IndexerPageResponse {
   int32 total = 3;
 }
 
-message SubscribeForAddressesRequest {
-  repeated string addresses = 1;
-  optional string subscription_id = 2;
+message SubscribeForScriptsRequest {
+  repeated string scripts = 1;
+  // if set, update an existing subscription
+  string subscription_id = 2;
 }
 
-message SubscribeForAddressesResponse {
+message SubscribeForScriptsResponse {
   string subscription_id = 1;
 }
 
-message UnsubscribeForAddressesRequest {
+message UnsubscribeForScriptsRequest {
   string subscription_id = 1;
-  // if empty, unsubscribe all addresses
-  repeated string addresses = 2; 
+  // if empty, unsubscribe all scripts
+  repeated string scripts = 2; 
 }
 
-message UnsubscribeForAddressesResponse {}
+message UnsubscribeForScriptsResponse {}
 
 message GetSubscriptionRequest {
   string subscription_id = 1;
@@ -309,9 +305,3 @@ message GetSubscriptionResponse {
   repeated IndexerVtxo new_vtxos = 2;
   repeated IndexerVtxo spent_vtxos = 3;
 }
-
-message DeleteSubscriptionRequest {
-  string subscription_id = 1;
-}
-
-message DeleteSubscriptionResponse {}

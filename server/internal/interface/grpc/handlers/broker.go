@@ -85,24 +85,20 @@ func (h *broker[T]) addTopics(id string, topics []string) error {
 	return fmt.Errorf("subscription %s not found", id)
 }
 
-func (h *broker[T]) removeTopics(id string, topics []string) error {
+func (h *broker[T]) removeTopics(id string, toRemove []string) (bool, error) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
 	for _, listener := range h.listeners {
 		if listener.id == id {
-			for _, topic := range topics {
-				for i, t := range listener.topics {
-					if t == topic {
-						listener.topics = append(listener.topics[:i], listener.topics[i+1:]...)
-					}
-				}
-			}
-			return nil
+			listener.topics = slices.DeleteFunc(listener.topics, func(t string) bool {
+				return slices.Contains(toRemove, t)
+			})
+			return len(listener.topics) == 0, nil
 		}
 	}
 
-	return fmt.Errorf("subscription %s not found", id)
+	return false, fmt.Errorf("subscription %s not found", id)
 }
 
 func (h *broker[T]) removeAllTopics(id string) error {

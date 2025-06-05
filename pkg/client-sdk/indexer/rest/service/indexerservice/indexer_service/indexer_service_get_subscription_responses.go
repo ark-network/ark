@@ -91,12 +91,12 @@ func (o *IndexerServiceGetSubscriptionOK) Code() int {
 
 func (o *IndexerServiceGetSubscriptionOK) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/vtxos/subscription/{subscriptionId}][%d] indexerServiceGetSubscriptionOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/script/subscription/{subscriptionId}][%d] indexerServiceGetSubscriptionOK %s", 200, payload)
 }
 
 func (o *IndexerServiceGetSubscriptionOK) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/vtxos/subscription/{subscriptionId}][%d] indexerServiceGetSubscriptionOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/script/subscription/{subscriptionId}][%d] indexerServiceGetSubscriptionOK %s", 200, payload)
 }
 
 func (o *IndexerServiceGetSubscriptionOK) GetPayload() *IndexerServiceGetSubscriptionOKBody {
@@ -165,12 +165,12 @@ func (o *IndexerServiceGetSubscriptionDefault) Code() int {
 
 func (o *IndexerServiceGetSubscriptionDefault) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/vtxos/subscription/{subscriptionId}][%d] IndexerService_GetSubscription default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/script/subscription/{subscriptionId}][%d] IndexerService_GetSubscription default %s", o._statusCode, payload)
 }
 
 func (o *IndexerServiceGetSubscriptionDefault) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/vtxos/subscription/{subscriptionId}][%d] IndexerService_GetSubscription default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/script/subscription/{subscriptionId}][%d] IndexerService_GetSubscription default %s", o._statusCode, payload)
 }
 
 func (o *IndexerServiceGetSubscriptionDefault) GetPayload() *models.RPCStatus {

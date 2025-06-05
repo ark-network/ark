@@ -19,14 +19,14 @@ import (
 type indexerService struct {
 	indexerSvc application.IndexerService
 
-	addressSubsHandler          *broker[*arkv1.GetSubscriptionResponse]
+	scriptSubsHandler           *broker[*arkv1.GetSubscriptionResponse]
 	subscriptionTimeoutDuration time.Duration
 }
 
 func NewIndexerService(indexerSvc application.IndexerService, subscriptionTimeoutDuration time.Duration) arkv1.IndexerServiceServer {
 	svc := &indexerService{
 		indexerSvc:                  indexerSvc,
-		addressSubsHandler:          newBroker[*arkv1.GetSubscriptionResponse](),
+		scriptSubsHandler:           newBroker[*arkv1.GetSubscriptionResponse](),
 		subscriptionTimeoutDuration: subscriptionTimeoutDuration,
 	}
 
@@ -417,10 +417,10 @@ func (h *indexerService) GetSubscription(req *arkv1.GetSubscriptionRequest, stre
 		return status.Error(codes.InvalidArgument, "missing subscription id")
 	}
 
-	h.addressSubsHandler.stopTimeout(subscriptionId)
-	defer h.addressSubsHandler.startTimeout(subscriptionId, h.subscriptionTimeoutDuration)
+	h.scriptSubsHandler.stopTimeout(subscriptionId)
+	defer h.scriptSubsHandler.startTimeout(subscriptionId, h.subscriptionTimeoutDuration)
 
-	ch, err := h.addressSubsHandler.getListenerChannel(subscriptionId)
+	ch, err := h.scriptSubsHandler.getListenerChannel(subscriptionId)
 	if err != nil {
 		return status.Error(codes.InvalidArgument, "subscription not found")
 	}
@@ -437,37 +437,38 @@ func (h *indexerService) GetSubscription(req *arkv1.GetSubscriptionRequest, stre
 	}
 }
 
-func (h *indexerService) UnsubscribeForAddresses(ctx context.Context, req *arkv1.UnsubscribeForAddressesRequest) (*arkv1.UnsubscribeForAddressesResponse, error) {
+func (h *indexerService) UnsubscribeForScripts(ctx context.Context, req *arkv1.UnsubscribeForScriptsRequest) (*arkv1.UnsubscribeForScriptsResponse, error) {
 	subscriptionId := req.GetSubscriptionId()
 	if len(subscriptionId) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing subscription id")
 	}
 
-	addresses := req.GetAddresses()
-	if len(addresses) == 0 {
+	scripts := req.GetScripts()
+	if len(scripts) == 0 {
 		// remove all topics
-		if err := h.addressSubsHandler.removeAllTopics(subscriptionId); err != nil {
+		if err := h.scriptSubsHandler.removeAllTopics(subscriptionId); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
-		return &arkv1.UnsubscribeForAddressesResponse{}, nil
+		h.scriptSubsHandler.removeListener(subscriptionId)
+		return &arkv1.UnsubscribeForScriptsResponse{}, nil
 	}
 
-	vtxoScripts, err := parseAddresses(addresses)
+	isEmpty, err := h.scriptSubsHandler.removeTopics(subscriptionId, scripts)
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	if err := h.addressSubsHandler.removeTopics(subscriptionId, vtxoScripts); err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+	if isEmpty {
+		h.scriptSubsHandler.removeListener(subscriptionId)
 	}
 
-	return &arkv1.UnsubscribeForAddressesResponse{}, nil
+	return &arkv1.UnsubscribeForScriptsResponse{}, nil
 }
 
-func (h *indexerService) SubscribeForAddresses(ctx context.Context, req *arkv1.SubscribeForAddressesRequest) (*arkv1.SubscribeForAddressesResponse, error) {
-	vtxoScripts, err := parseAddresses(req.GetAddresses())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+func (h *indexerService) SubscribeForScripts(ctx context.Context, req *arkv1.SubscribeForScriptsRequest) (*arkv1.SubscribeForScriptsResponse, error) {
+	scripts := req.GetScripts()
+	if len(scripts) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing scripts")
 	}
 
 	subscriptionId := req.GetSubscriptionId()
@@ -479,38 +480,26 @@ func (h *indexerService) SubscribeForAddresses(ctx context.Context, req *arkv1.S
 		listener := &listener[*arkv1.GetSubscriptionResponse]{
 			id:     subscriptionId,
 			ch:     make(chan *arkv1.GetSubscriptionResponse),
-			topics: vtxoScripts,
+			topics: scripts,
 		}
 
-		h.addressSubsHandler.pushListener(listener)
-		h.addressSubsHandler.startTimeout(subscriptionId, h.subscriptionTimeoutDuration)
+		h.scriptSubsHandler.pushListener(listener)
+		h.scriptSubsHandler.startTimeout(subscriptionId, h.subscriptionTimeoutDuration)
 	} else {
 		// update listener topic
-		if err := h.addressSubsHandler.addTopics(subscriptionId, vtxoScripts); err != nil {
+		if err := h.scriptSubsHandler.addTopics(subscriptionId, scripts); err != nil {
 			return nil, status.Error(codes.InvalidArgument, err.Error())
 		}
 	}
-	return &arkv1.SubscribeForAddressesResponse{
+	return &arkv1.SubscribeForScriptsResponse{
 		SubscriptionId: subscriptionId,
 	}, nil
-
-}
-
-func (h *indexerService) DeleteSubscription(ctx context.Context, req *arkv1.DeleteSubscriptionRequest) (*arkv1.DeleteSubscriptionResponse, error) {
-	subscriptionId := req.GetSubscriptionId()
-	if len(subscriptionId) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "missing subscription id")
-	}
-
-	h.addressSubsHandler.removeListener(subscriptionId)
-
-	return &arkv1.DeleteSubscriptionResponse{}, nil
 }
 
 func (h *indexerService) listenToTxEvents() {
 	eventsCh := h.indexerSvc.GetTransactionEventsChannel(context.Background())
 	for event := range eventsCh {
-		if len(h.addressSubsHandler.listeners) <= 0 {
+		if len(h.scriptSubsHandler.listeners) <= 0 {
 			continue
 		}
 
@@ -524,7 +513,7 @@ func (h *indexerService) listenToTxEvents() {
 			allSpentVtxos[vtxo.PubKey] = append(allSpentVtxos[vtxo.PubKey], newIndexerVtxo(vtxo))
 		}
 
-		for _, l := range h.addressSubsHandler.listeners {
+		for _, l := range h.scriptSubsHandler.listeners {
 			spendableVtxos := make([]*arkv1.IndexerVtxo, 0)
 			spentVtxos := make([]*arkv1.IndexerVtxo, 0)
 

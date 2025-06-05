@@ -14,10 +14,9 @@ type Indexer interface {
 	GetVtxoChain(ctx context.Context, outpoint Outpoint, opts ...RequestOption) (*VtxoChainResponse, error)
 	GetVirtualTxs(ctx context.Context, txids []string, opts ...RequestOption) (*VirtualTxsResponse, error)
 	GetSweptCommitmentTx(ctx context.Context, txid string) ([]string, error)
-	SubscribeForAddresses(ctx context.Context, subscriptionId string, addresses []string) (string, error)
-	UnsubscribeForAddresses(ctx context.Context, subscriptionId string, addresses []string) error
+	SubscribeForScripts(ctx context.Context, subscriptionId string, scripts []string) (string, error)
+	UnsubscribeForScripts(ctx context.Context, subscriptionId string, scripts []string) error
 	GetSubscription(ctx context.Context, subscriptionId string) (<-chan *AddressEvent, func(), error)
-	DeleteSubscription(ctx context.Context, subscriptionId string) error
 }
 
 type CommitmentTxLeavesResponse struct {

@@ -509,23 +509,11 @@ func newRestClient(
 	return svc.IndexerService, nil
 }
 
-func (a *restClient) DeleteSubscription(ctx context.Context, subscriptionId string) error {
-	params := indexer_service.NewIndexerServiceDeleteSubscriptionParams().
-		WithDefaults().WithSubscriptionID(subscriptionId)
-
-	_, err := a.svc.IndexerServiceDeleteSubscription(params)
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (a *restClient) GetSubscription(ctx context.Context, subscriptionId string) (<-chan *indexer.AddressEvent, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
 	eventsCh := make(chan *indexer.AddressEvent)
 	chunkCh := make(chan chunk)
-	url := fmt.Sprintf("%s/v1/vtxos/subscribe/%s", a.serverURL, subscriptionId)
+	url := fmt.Sprintf("%s/v1/script/subscription/%s", a.serverURL, subscriptionId)
 
 	go listenToStream(url, chunkCh)
 
@@ -594,17 +582,17 @@ func (a *restClient) GetSubscription(ctx context.Context, subscriptionId string)
 	return eventsCh, cancel, nil
 }
 
-func (a *restClient) SubscribeForAddresses(ctx context.Context, subscriptionId string, addresses []string) (string, error) {
-	body := &models.V1SubscribeForAddressesRequest{
-		Addresses: addresses,
+func (a *restClient) SubscribeForScripts(ctx context.Context, subscriptionId string, scripts []string) (string, error) {
+	body := &models.V1SubscribeForScriptsRequest{
+		Scripts: scripts,
 	}
 
 	if len(subscriptionId) > 0 {
 		body.SubscriptionID = subscriptionId
 	}
 
-	params := indexer_service.NewIndexerServiceSubscribeForAddressesParams().WithDefaults().WithBody(body)
-	resp, err := a.svc.IndexerServiceSubscribeForAddresses(params)
+	params := indexer_service.NewIndexerServiceSubscribeForScriptsParams().WithDefaults().WithBody(body)
+	resp, err := a.svc.IndexerServiceSubscribeForScripts(params)
 	if err != nil {
 		return "", err
 	}
@@ -612,13 +600,13 @@ func (a *restClient) SubscribeForAddresses(ctx context.Context, subscriptionId s
 	return resp.Payload.SubscriptionID, nil
 }
 
-func (a *restClient) UnsubscribeForAddresses(ctx context.Context, subscriptionId string, addresses []string) error {
-	body := &models.V1UnsubscribeForAddressesRequest{
-		Addresses: addresses,
+func (a *restClient) UnsubscribeForScripts(ctx context.Context, subscriptionId string, scripts []string) error {
+	body := &models.V1UnsubscribeForScriptsRequest{
+		Scripts: scripts,
 	}
 
-	params := indexer_service.NewIndexerServiceUnsubscribeForAddressesParams().WithDefaults().WithBody(body)
-	_, err := a.svc.IndexerServiceUnsubscribeForAddresses(params)
+	params := indexer_service.NewIndexerServiceUnsubscribeForScriptsParams().WithDefaults().WithBody(body)
+	_, err := a.svc.IndexerServiceUnsubscribeForScripts(params)
 	if err != nil {
 		return err
 	}

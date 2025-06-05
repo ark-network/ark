@@ -30,10 +30,9 @@ type IndexerServiceClient interface {
 	GetVtxoChain(ctx context.Context, in *GetVtxoChainRequest, opts ...grpc.CallOption) (*GetVtxoChainResponse, error)
 	GetVirtualTxs(ctx context.Context, in *GetVirtualTxsRequest, opts ...grpc.CallOption) (*GetVirtualTxsResponse, error)
 	GetSweptCommitmentTx(ctx context.Context, in *GetSweptCommitmentTxRequest, opts ...grpc.CallOption) (*GetSweptCommitmentTxResponse, error)
-	SubscribeForAddresses(ctx context.Context, in *SubscribeForAddressesRequest, opts ...grpc.CallOption) (*SubscribeForAddressesResponse, error)
-	UnsubscribeForAddresses(ctx context.Context, in *UnsubscribeForAddressesRequest, opts ...grpc.CallOption) (*UnsubscribeForAddressesResponse, error)
+	SubscribeForScripts(ctx context.Context, in *SubscribeForScriptsRequest, opts ...grpc.CallOption) (*SubscribeForScriptsResponse, error)
+	UnsubscribeForScripts(ctx context.Context, in *UnsubscribeForScriptsRequest, opts ...grpc.CallOption) (*UnsubscribeForScriptsResponse, error)
 	GetSubscription(ctx context.Context, in *GetSubscriptionRequest, opts ...grpc.CallOption) (IndexerService_GetSubscriptionClient, error)
-	DeleteSubscription(ctx context.Context, in *DeleteSubscriptionRequest, opts ...grpc.CallOption) (*DeleteSubscriptionResponse, error)
 }
 
 type indexerServiceClient struct {
@@ -152,18 +151,18 @@ func (c *indexerServiceClient) GetSweptCommitmentTx(ctx context.Context, in *Get
 	return out, nil
 }
 
-func (c *indexerServiceClient) SubscribeForAddresses(ctx context.Context, in *SubscribeForAddressesRequest, opts ...grpc.CallOption) (*SubscribeForAddressesResponse, error) {
-	out := new(SubscribeForAddressesResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/SubscribeForAddresses", in, out, opts...)
+func (c *indexerServiceClient) SubscribeForScripts(ctx context.Context, in *SubscribeForScriptsRequest, opts ...grpc.CallOption) (*SubscribeForScriptsResponse, error) {
+	out := new(SubscribeForScriptsResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/SubscribeForScripts", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *indexerServiceClient) UnsubscribeForAddresses(ctx context.Context, in *UnsubscribeForAddressesRequest, opts ...grpc.CallOption) (*UnsubscribeForAddressesResponse, error) {
-	out := new(UnsubscribeForAddressesResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/UnsubscribeForAddresses", in, out, opts...)
+func (c *indexerServiceClient) UnsubscribeForScripts(ctx context.Context, in *UnsubscribeForScriptsRequest, opts ...grpc.CallOption) (*UnsubscribeForScriptsResponse, error) {
+	out := new(UnsubscribeForScriptsResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/UnsubscribeForScripts", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -202,15 +201,6 @@ func (x *indexerServiceGetSubscriptionClient) Recv() (*GetSubscriptionResponse, 
 	return m, nil
 }
 
-func (c *indexerServiceClient) DeleteSubscription(ctx context.Context, in *DeleteSubscriptionRequest, opts ...grpc.CallOption) (*DeleteSubscriptionResponse, error) {
-	out := new(DeleteSubscriptionResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/DeleteSubscription", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // IndexerServiceServer is the server API for IndexerService service.
 // All implementations should embed UnimplementedIndexerServiceServer
 // for forward compatibility
@@ -227,10 +217,9 @@ type IndexerServiceServer interface {
 	GetVtxoChain(context.Context, *GetVtxoChainRequest) (*GetVtxoChainResponse, error)
 	GetVirtualTxs(context.Context, *GetVirtualTxsRequest) (*GetVirtualTxsResponse, error)
 	GetSweptCommitmentTx(context.Context, *GetSweptCommitmentTxRequest) (*GetSweptCommitmentTxResponse, error)
-	SubscribeForAddresses(context.Context, *SubscribeForAddressesRequest) (*SubscribeForAddressesResponse, error)
-	UnsubscribeForAddresses(context.Context, *UnsubscribeForAddressesRequest) (*UnsubscribeForAddressesResponse, error)
+	SubscribeForScripts(context.Context, *SubscribeForScriptsRequest) (*SubscribeForScriptsResponse, error)
+	UnsubscribeForScripts(context.Context, *UnsubscribeForScriptsRequest) (*UnsubscribeForScriptsResponse, error)
 	GetSubscription(*GetSubscriptionRequest, IndexerService_GetSubscriptionServer) error
-	DeleteSubscription(context.Context, *DeleteSubscriptionRequest) (*DeleteSubscriptionResponse, error)
 }
 
 // UnimplementedIndexerServiceServer should be embedded to have forward compatible implementations.
@@ -273,17 +262,14 @@ func (UnimplementedIndexerServiceServer) GetVirtualTxs(context.Context, *GetVirt
 func (UnimplementedIndexerServiceServer) GetSweptCommitmentTx(context.Context, *GetSweptCommitmentTxRequest) (*GetSweptCommitmentTxResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSweptCommitmentTx not implemented")
 }
-func (UnimplementedIndexerServiceServer) SubscribeForAddresses(context.Context, *SubscribeForAddressesRequest) (*SubscribeForAddressesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SubscribeForAddresses not implemented")
+func (UnimplementedIndexerServiceServer) SubscribeForScripts(context.Context, *SubscribeForScriptsRequest) (*SubscribeForScriptsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubscribeForScripts not implemented")
 }
-func (UnimplementedIndexerServiceServer) UnsubscribeForAddresses(context.Context, *UnsubscribeForAddressesRequest) (*UnsubscribeForAddressesResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method UnsubscribeForAddresses not implemented")
+func (UnimplementedIndexerServiceServer) UnsubscribeForScripts(context.Context, *UnsubscribeForScriptsRequest) (*UnsubscribeForScriptsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnsubscribeForScripts not implemented")
 }
 func (UnimplementedIndexerServiceServer) GetSubscription(*GetSubscriptionRequest, IndexerService_GetSubscriptionServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetSubscription not implemented")
-}
-func (UnimplementedIndexerServiceServer) DeleteSubscription(context.Context, *DeleteSubscriptionRequest) (*DeleteSubscriptionResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method DeleteSubscription not implemented")
 }
 
 // UnsafeIndexerServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -513,38 +499,38 @@ func _IndexerService_GetSweptCommitmentTx_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IndexerService_SubscribeForAddresses_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SubscribeForAddressesRequest)
+func _IndexerService_SubscribeForScripts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubscribeForScriptsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IndexerServiceServer).SubscribeForAddresses(ctx, in)
+		return srv.(IndexerServiceServer).SubscribeForScripts(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.IndexerService/SubscribeForAddresses",
+		FullMethod: "/ark.v1.IndexerService/SubscribeForScripts",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IndexerServiceServer).SubscribeForAddresses(ctx, req.(*SubscribeForAddressesRequest))
+		return srv.(IndexerServiceServer).SubscribeForScripts(ctx, req.(*SubscribeForScriptsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _IndexerService_UnsubscribeForAddresses_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(UnsubscribeForAddressesRequest)
+func _IndexerService_UnsubscribeForScripts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnsubscribeForScriptsRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(IndexerServiceServer).UnsubscribeForAddresses(ctx, in)
+		return srv.(IndexerServiceServer).UnsubscribeForScripts(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.IndexerService/UnsubscribeForAddresses",
+		FullMethod: "/ark.v1.IndexerService/UnsubscribeForScripts",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IndexerServiceServer).UnsubscribeForAddresses(ctx, req.(*UnsubscribeForAddressesRequest))
+		return srv.(IndexerServiceServer).UnsubscribeForScripts(ctx, req.(*UnsubscribeForScriptsRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -568,24 +554,6 @@ type indexerServiceGetSubscriptionServer struct {
 
 func (x *indexerServiceGetSubscriptionServer) Send(m *GetSubscriptionResponse) error {
 	return x.ServerStream.SendMsg(m)
-}
-
-func _IndexerService_DeleteSubscription_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(DeleteSubscriptionRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(IndexerServiceServer).DeleteSubscription(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.IndexerService/DeleteSubscription",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IndexerServiceServer).DeleteSubscription(ctx, req.(*DeleteSubscriptionRequest))
-	}
-	return interceptor(ctx, in, info, handler)
 }
 
 // IndexerService_ServiceDesc is the grpc.ServiceDesc for IndexerService service.
@@ -644,16 +612,12 @@ var IndexerService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _IndexerService_GetSweptCommitmentTx_Handler,
 		},
 		{
-			MethodName: "SubscribeForAddresses",
-			Handler:    _IndexerService_SubscribeForAddresses_Handler,
+			MethodName: "SubscribeForScripts",
+			Handler:    _IndexerService_SubscribeForScripts_Handler,
 		},
 		{
-			MethodName: "UnsubscribeForAddresses",
-			Handler:    _IndexerService_UnsubscribeForAddresses_Handler,
-		},
-		{
-			MethodName: "DeleteSubscription",
-			Handler:    _IndexerService_DeleteSubscription_Handler,
+			MethodName: "UnsubscribeForScripts",
+			Handler:    _IndexerService_UnsubscribeForScripts_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

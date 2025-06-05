@@ -54,8 +54,6 @@ type ClientOption func(*runtime.ClientOperation)
 
 // ClientService is the interface for Client methods
 type ClientService interface {
-	IndexerServiceDeleteSubscription(params *IndexerServiceDeleteSubscriptionParams, opts ...ClientOption) (*IndexerServiceDeleteSubscriptionOK, error)
-
 	IndexerServiceGetCommitmentTx(params *IndexerServiceGetCommitmentTxParams, opts ...ClientOption) (*IndexerServiceGetCommitmentTxOK, error)
 
 	IndexerServiceGetCommitmentTxLeaves(params *IndexerServiceGetCommitmentTxLeavesParams, opts ...ClientOption) (*IndexerServiceGetCommitmentTxLeavesOK, error)
@@ -82,48 +80,11 @@ type ClientService interface {
 
 	IndexerServiceGetVtxosByOutpoint(params *IndexerServiceGetVtxosByOutpointParams, opts ...ClientOption) (*IndexerServiceGetVtxosByOutpointOK, error)
 
-	IndexerServiceSubscribeForAddresses(params *IndexerServiceSubscribeForAddressesParams, opts ...ClientOption) (*IndexerServiceSubscribeForAddressesOK, error)
+	IndexerServiceSubscribeForScripts(params *IndexerServiceSubscribeForScriptsParams, opts ...ClientOption) (*IndexerServiceSubscribeForScriptsOK, error)
 
-	IndexerServiceUnsubscribeForAddresses(params *IndexerServiceUnsubscribeForAddressesParams, opts ...ClientOption) (*IndexerServiceUnsubscribeForAddressesOK, error)
+	IndexerServiceUnsubscribeForScripts(params *IndexerServiceUnsubscribeForScriptsParams, opts ...ClientOption) (*IndexerServiceUnsubscribeForScriptsOK, error)
 
 	SetTransport(transport runtime.ClientTransport)
-}
-
-/*
-IndexerServiceDeleteSubscription indexer service delete subscription API
-*/
-func (a *Client) IndexerServiceDeleteSubscription(params *IndexerServiceDeleteSubscriptionParams, opts ...ClientOption) (*IndexerServiceDeleteSubscriptionOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewIndexerServiceDeleteSubscriptionParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "IndexerService_DeleteSubscription",
-		Method:             "DELETE",
-		PathPattern:        "/v1/vtxos/subscription/{subscriptionId}",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &IndexerServiceDeleteSubscriptionReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*IndexerServiceDeleteSubscriptionOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*IndexerServiceDeleteSubscriptionDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
 /*
@@ -285,7 +246,7 @@ func (a *Client) IndexerServiceGetSubscription(params *IndexerServiceGetSubscrip
 	op := &runtime.ClientOperation{
 		ID:                 "IndexerService_GetSubscription",
 		Method:             "GET",
-		PathPattern:        "/v1/vtxos/subscription/{subscriptionId}",
+		PathPattern:        "/v1/script/subscription/{subscriptionId}",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
@@ -608,22 +569,22 @@ func (a *Client) IndexerServiceGetVtxosByOutpoint(params *IndexerServiceGetVtxos
 }
 
 /*
-IndexerServiceSubscribeForAddresses indexer service subscribe for addresses API
+IndexerServiceSubscribeForScripts indexer service subscribe for scripts API
 */
-func (a *Client) IndexerServiceSubscribeForAddresses(params *IndexerServiceSubscribeForAddressesParams, opts ...ClientOption) (*IndexerServiceSubscribeForAddressesOK, error) {
+func (a *Client) IndexerServiceSubscribeForScripts(params *IndexerServiceSubscribeForScriptsParams, opts ...ClientOption) (*IndexerServiceSubscribeForScriptsOK, error) {
 	// TODO: Validate the params before sending
 	if params == nil {
-		params = NewIndexerServiceSubscribeForAddressesParams()
+		params = NewIndexerServiceSubscribeForScriptsParams()
 	}
 	op := &runtime.ClientOperation{
-		ID:                 "IndexerService_SubscribeForAddresses",
+		ID:                 "IndexerService_SubscribeForScripts",
 		Method:             "POST",
-		PathPattern:        "/v1/vtxos/subscribe",
+		PathPattern:        "/v1/script/subscribe",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
 		Params:             params,
-		Reader:             &IndexerServiceSubscribeForAddressesReader{formats: a.formats},
+		Reader:             &IndexerServiceSubscribeForScriptsReader{formats: a.formats},
 		Context:            params.Context,
 		Client:             params.HTTPClient,
 	}
@@ -635,32 +596,32 @@ func (a *Client) IndexerServiceSubscribeForAddresses(params *IndexerServiceSubsc
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*IndexerServiceSubscribeForAddressesOK)
+	success, ok := result.(*IndexerServiceSubscribeForScriptsOK)
 	if ok {
 		return success, nil
 	}
 	// unexpected success response
-	unexpectedSuccess := result.(*IndexerServiceSubscribeForAddressesDefault)
+	unexpectedSuccess := result.(*IndexerServiceSubscribeForScriptsDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
 /*
-IndexerServiceUnsubscribeForAddresses indexer service unsubscribe for addresses API
+IndexerServiceUnsubscribeForScripts indexer service unsubscribe for scripts API
 */
-func (a *Client) IndexerServiceUnsubscribeForAddresses(params *IndexerServiceUnsubscribeForAddressesParams, opts ...ClientOption) (*IndexerServiceUnsubscribeForAddressesOK, error) {
+func (a *Client) IndexerServiceUnsubscribeForScripts(params *IndexerServiceUnsubscribeForScriptsParams, opts ...ClientOption) (*IndexerServiceUnsubscribeForScriptsOK, error) {
 	// TODO: Validate the params before sending
 	if params == nil {
-		params = NewIndexerServiceUnsubscribeForAddressesParams()
+		params = NewIndexerServiceUnsubscribeForScriptsParams()
 	}
 	op := &runtime.ClientOperation{
-		ID:                 "IndexerService_UnsubscribeForAddresses",
+		ID:                 "IndexerService_UnsubscribeForScripts",
 		Method:             "POST",
-		PathPattern:        "/v1/vtxos/unsubscribe",
+		PathPattern:        "/v1/script/unsubscribe",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
 		Params:             params,
-		Reader:             &IndexerServiceUnsubscribeForAddressesReader{formats: a.formats},
+		Reader:             &IndexerServiceUnsubscribeForScriptsReader{formats: a.formats},
 		Context:            params.Context,
 		Client:             params.HTTPClient,
 	}
@@ -672,12 +633,12 @@ func (a *Client) IndexerServiceUnsubscribeForAddresses(params *IndexerServiceUns
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*IndexerServiceUnsubscribeForAddressesOK)
+	success, ok := result.(*IndexerServiceUnsubscribeForScriptsOK)
 	if ok {
 		return success, nil
 	}
 	// unexpected success response
-	unexpectedSuccess := result.(*IndexerServiceUnsubscribeForAddressesDefault)
+	unexpectedSuccess := result.(*IndexerServiceUnsubscribeForScriptsDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

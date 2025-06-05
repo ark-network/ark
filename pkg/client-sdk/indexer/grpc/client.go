@@ -472,16 +472,6 @@ func (a *grpcClient) GetSweptCommitmentTx(ctx context.Context, txid string) ([]s
 	return resp.GetSweptBy(), nil
 }
 
-func (a *grpcClient) DeleteSubscription(ctx context.Context, subscriptionId string) error {
-	_, err := a.svc.DeleteSubscription(ctx, &arkv1.DeleteSubscriptionRequest{
-		SubscriptionId: subscriptionId,
-	})
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
 func (a *grpcClient) GetSubscription(ctx context.Context, subscriptionId string) (<-chan *indexer.AddressEvent, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
 
@@ -528,29 +518,29 @@ func (a *grpcClient) GetSubscription(ctx context.Context, subscriptionId string)
 	return eventsCh, closeFn, nil
 }
 
-func (a *grpcClient) SubscribeForAddresses(ctx context.Context, subscriptionId string, addresses []string) (string, error) {
-	req := &arkv1.SubscribeForAddressesRequest{
-		Addresses: addresses,
+func (a *grpcClient) SubscribeForScripts(ctx context.Context, subscriptionId string, scripts []string) (string, error) {
+	req := &arkv1.SubscribeForScriptsRequest{
+		Scripts: scripts,
 	}
 	if len(subscriptionId) > 0 {
-		req.SubscriptionId = &subscriptionId
+		req.SubscriptionId = subscriptionId
 	}
 
-	resp, err := a.svc.SubscribeForAddresses(ctx, req)
+	resp, err := a.svc.SubscribeForScripts(ctx, req)
 	if err != nil {
 		return "", err
 	}
 	return resp.GetSubscriptionId(), nil
 }
 
-func (a *grpcClient) UnsubscribeForAddresses(ctx context.Context, subscriptionId string, addresses []string) error {
-	req := &arkv1.UnsubscribeForAddressesRequest{
-		Addresses: addresses,
+func (a *grpcClient) UnsubscribeForScripts(ctx context.Context, subscriptionId string, scripts []string) error {
+	req := &arkv1.UnsubscribeForScriptsRequest{
+		Scripts: scripts,
 	}
 	if len(subscriptionId) > 0 {
 		req.SubscriptionId = subscriptionId
 	}
-	_, err := a.svc.UnsubscribeForAddresses(ctx, req)
+	_, err := a.svc.UnsubscribeForScripts(ctx, req)
 	return err
 }
 
