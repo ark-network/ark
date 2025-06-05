@@ -1166,7 +1166,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 }
 
 func (s *covenantlessService) ConfirmRegistration(ctx context.Context, intentId string) error {
-	if s.liveStore.ConfirmationSessions() == nil {
+	if !s.liveStore.ConfirmationSessions().Initialized() {
 		return fmt.Errorf("confirmation session not started")
 	}
 
@@ -1683,8 +1683,7 @@ func (s *covenantlessService) startRound() {
 }
 
 func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
-	round := s.getCurrentRound()
-	log.Debugf("started confirmation stage for round: %s", round.Id)
+	log.Debugf("started confirmation stage for round: %s", s.liveStore.CurrentRound().Get().Id)
 
 	ctx := context.Background()
 
@@ -1699,11 +1698,11 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 			return
 		}
 
-		if err := s.saveEvents(ctx, round.Id, round.Events()); err != nil {
+		if err := s.saveEvents(ctx, s.liveStore.CurrentRound().Get().Id, s.liveStore.CurrentRound().Get().Events()); err != nil {
 			log.WithError(err).Warn("failed to store new round events")
 		}
 
-		if round.IsFailed() {
+		if s.liveStore.CurrentRound().Get().IsFailed() {
 			s.liveStore.TxRequests().DeleteVtxos()
 			s.startRound()
 			return
@@ -1717,7 +1716,7 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 	if num < s.roundMinParticipantsCount {
 		roundAborted = true
 		err := fmt.Errorf("not enough tx requests registered %d/%d", num, s.roundMinParticipantsCount)
-		log.WithError(err).Debugf("round %s aborted", round.Id)
+		log.WithError(err).Debugf("round %s aborted", s.liveStore.CurrentRound().Get().Id)
 		return
 	}
 	if num > s.roundMaxParticipantsCount {
@@ -1726,14 +1725,14 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 
 	availableBalance, _, err := s.wallet.MainAccountBalance(ctx)
 	if err != nil {
-		round.Fail(fmt.Errorf("failed to get main account balance: %s", err))
+		s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to get main account balance: %s", err))
 		log.WithError(err).Warn("failed to get main account balance")
 		return
 	}
 
 	forfeitAddress, err := s.wallet.GetForfeitAddress(ctx)
 	if err != nil {
-		round.Fail(fmt.Errorf("failed to get forfeit address: %s", err))
+		s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to get forfeit address: %s", err))
 		log.WithError(err).Warn("failed to get forfeit address")
 		return
 	}
@@ -1747,8 +1746,8 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 	}
 	if availableBalance <= totAmount {
 		err := fmt.Errorf("not enough liquidity")
-		round.Fail(err)
-		log.WithError(err).Debugf("round %s aborted, balance: %d", round.Id, availableBalance)
+		s.liveStore.CurrentRound().Get().Fail(err)
+		log.WithError(err).Debugf("round %s aborted, balance: %d", s.liveStore.CurrentRound().Get().Id, availableBalance)
 		return
 	}
 
@@ -1791,8 +1790,8 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 
 		s.liveStore.BoardingInputs().Set(numOfBoardingInputs)
 
-		if _, err := round.RegisterTxRequests(txRequests); err != nil {
-			round.Fail(fmt.Errorf("failed to register tx requests: %s", err))
+		if _, err := s.liveStore.CurrentRound().Get().RegisterTxRequests(txRequests); err != nil {
+			s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to register tx requests: %s", err))
 			log.WithError(err).Warn("failed to register tx requests")
 			return
 		}
@@ -1809,7 +1808,7 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 
 		// make the round fail if we don't register this round
 		if len(confirmedRequests) == 0 {
-			round.Fail(fmt.Errorf("not enough participants confirmed"))
+			s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("not enough participants confirmed"))
 			log.Warn("not enough participants confirmed")
 			return
 		}
@@ -1817,20 +1816,19 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 }
 
 func (s *covenantlessService) startFinalization(roundTiming roundTiming, requests []ports.TimedTxRequest) {
-	round := s.getCurrentRound()
-	log.Debugf("started finalization stage for round: %s", round.Id)
+	log.Debugf("started finalization stage for round: %s", s.liveStore.CurrentRound().Get().Id)
 	ctx := context.Background()
 
 	thirdOfRemainingDuration := roundTiming.finalizationDuration()
 
 	defer func() {
-		s.liveStore.TreeSigingSessions().Delete(round.Id)
+		s.liveStore.TreeSigingSessions().Delete(s.liveStore.CurrentRound().Get().Id)
 
-		if err := s.saveEvents(ctx, round.Id, round.Events()); err != nil {
+		if err := s.saveEvents(ctx, s.liveStore.CurrentRound().Get().Id, s.liveStore.CurrentRound().Get().Events()); err != nil {
 			log.WithError(err).Warn("failed to store new round events")
 		}
 
-		if round.IsFailed() {
+		if s.liveStore.CurrentRound().Get().IsFailed() {
 			s.liveStore.TxRequests().DeleteVtxos()
 			s.startRound()
 			return
@@ -1839,13 +1837,13 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		s.finalizeRound(roundTiming)
 	}()
 
-	if round.IsFailed() {
+	if s.liveStore.CurrentRound().Get().IsFailed() {
 		return
 	}
 
 	connectorAddresses, err := s.repoManager.Rounds().GetSweptRoundsConnectorAddress(ctx)
 	if err != nil {
-		round.Fail(fmt.Errorf("failed to retrieve swept rounds: %s", err))
+		s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to retrieve swept rounds: %s", err))
 		log.WithError(err).Warn("failed to retrieve swept rounds")
 		return
 	}
@@ -1872,19 +1870,19 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		}
 		data.CosignersPublicKeys = append(data.CosignersPublicKeys, serverPubKeyHex)
 	}
-	log.Debugf("building tx for round %s", round.Id)
+	log.Debugf("building tx for round %s", s.liveStore.CurrentRound().Get().Id)
 	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
 		s.pubkey, txRequests, boardingInputs, connectorAddresses, musig2data,
 	)
 	if err != nil {
-		round.Fail(fmt.Errorf("failed to create round tx: %s", err))
+		s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to create round tx: %s", err))
 		log.WithError(err).Warn("failed to create round tx")
 		return
 	}
-	log.Debugf("round tx created for round %s", round.Id)
+	log.Debugf("round tx created for round %s", s.liveStore.CurrentRound().Get().Id)
 
 	if err := s.liveStore.ForfeitTxs().Init(connectors, txRequests); err != nil {
-		round.Fail(fmt.Errorf("failed to initialize forfeit txs: %s", err))
+		s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to initialize forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to initialize forfeit txs")
 		return
 	}
@@ -1902,7 +1900,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 
 		unsignedPsbt, err := psbt.NewFromRawBytes(strings.NewReader(unsignedRoundTx), true)
 		if err != nil {
-			round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
+			s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to parse round tx: %s", err))
 			log.WithError(err).Warn("failed to parse round tx")
 			return
 		}
@@ -1915,29 +1913,29 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 
 		coordinator, err := tree.NewTreeCoordinatorSession(sharedOutputAmount, vtxoTree, root.CloneBytes())
 		if err != nil {
-			round.Fail(fmt.Errorf("failed to create tree coordinator: %s", err))
+			s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to create tree coordinator: %s", err))
 			log.WithError(err).Warn("failed to create tree coordinator")
 			return
 		}
 
 		serverSignerSession := tree.NewTreeSignerSession(s.serverSigningKey)
 		if err := serverSignerSession.Init(root.CloneBytes(), sharedOutputAmount, vtxoTree); err != nil {
-			round.Fail(fmt.Errorf("failed to create tree signer session: %s", err))
+			s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to create tree signer session: %s", err))
 			log.WithError(err).Warn("failed to create tree signer session")
 			return
 		}
 
 		nonces, err := serverSignerSession.GetNonces()
 		if err != nil {
-			round.Fail(fmt.Errorf("failed to get nonces: %s", err))
+			s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to get nonces: %s", err))
 			log.WithError(err).Warn("failed to get nonces")
 			return
 		}
 
 		coordinator.AddNonce(s.serverSigningPubKey, nonces)
-		signingSession := s.liveStore.TreeSigingSessions().New(round.Id, uniqueSignerPubkeys)
+		signingSession := s.liveStore.TreeSigingSessions().New(s.liveStore.CurrentRound().Get().Id, uniqueSignerPubkeys)
 
-		log.Debugf("signing session created for round %s with %d signers", round.Id, len(uniqueSignerPubkeys))
+		log.Debugf("signing session created for round %s with %d signers", s.liveStore.CurrentRound().Get().Id, len(uniqueSignerPubkeys))
 
 		s.liveStore.CurrentRound().Upsert(func(r *domain.Round) *domain.Round {
 			ur := *r
@@ -1960,7 +1958,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 				"musig2 signing session timed out (nonce collection), collected %d/%d nonces",
 				len(signingSession.Nonces), len(uniqueSignerPubkeys),
 			)
-			round.Fail(err)
+			s.liveStore.CurrentRound().Get().Fail(err)
 			log.Warn(err)
 			return
 		case <-signingSession.NonceDoneC:
@@ -1969,16 +1967,16 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 			}
 		}
 
-		log.Debugf("nonces collected for round %s", round.Id)
+		log.Debugf("nonces collected for round %s", s.liveStore.CurrentRound().Get().Id)
 
 		aggregatedNonces, err := coordinator.AggregateNonces()
 		if err != nil {
-			round.Fail(fmt.Errorf("failed to aggregate nonces: %s", err))
+			s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to aggregate nonces: %s", err))
 			log.WithError(err).Warn("failed to aggregate nonces")
 			return
 		}
 
-		log.Debugf("nonces aggregated for round %s", round.Id)
+		log.Debugf("nonces aggregated for round %s", s.liveStore.CurrentRound().Get().Id)
 
 		serverSignerSession.SetAggregatedNonces(aggregatedNonces)
 
@@ -1988,13 +1986,13 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		// sign the tree as server
 		serverTreeSigs, err := serverSignerSession.Sign()
 		if err != nil {
-			round.Fail(fmt.Errorf("failed to sign tree: %s", err))
+			s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to sign tree: %s", err))
 			log.WithError(err).Warn("failed to sign tree")
 			return
 		}
 		coordinator.AddSignatures(s.serverSigningPubKey, serverTreeSigs)
 
-		log.Debugf("tree signed by us for round %s", round.Id)
+		log.Debugf("tree signed by us for round %s", s.liveStore.CurrentRound().Get().Id)
 
 		log.Debugf("waiting for cosigners to sign the tree")
 
@@ -2004,7 +2002,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 				"musig2 signing session timed out (signatures collection), collected %d/%d signatures",
 				len(signingSession.Signatures), len(uniqueSignerPubkeys),
 			)
-			round.Fail(err)
+			s.liveStore.CurrentRound().Get().Fail(err)
 			log.Warn(err)
 			return
 		case <-signingSession.SigDoneC:
@@ -2013,57 +2011,56 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 			}
 		}
 
-		log.Debugf("signatures collected for round %s", round.Id)
+		log.Debugf("signatures collected for round %s", s.liveStore.CurrentRound().Get().Id)
 
 		signedTree, err := coordinator.SignTree()
 		if err != nil {
-			round.Fail(fmt.Errorf("failed to aggregate tree signatures: %s", err))
+			s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to aggregate tree signatures: %s", err))
 			log.WithError(err).Warn("failed to aggregate tree signatures")
 			return
 		}
 
-		log.Debugf("vtxo tree signed for round %s", round.Id)
+		log.Debugf("vtxo tree signed for round %s", s.liveStore.CurrentRound().Get().Id)
 
 		vtxoTree = signedTree
 	}
 
 	currentRound := s.liveStore.CurrentRound().Get()
-	_, err = round.StartFinalization(
+	_, err = s.liveStore.CurrentRound().Get().StartFinalization(
 		connectorAddress, connectors, vtxoTree, currentRound.Txid, currentRound.CommitmentTx,
 		s.liveStore.ForfeitTxs().GetConnectorsIndexes(), s.vtxoTreeExpiry.Seconds(),
 	)
 	if err != nil {
-		round.Fail(fmt.Errorf("failed to start finalization: %s", err))
+		s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to start finalization: %s", err))
 		log.WithError(err).Warn("failed to start finalization")
 		return
 	}
 
-	log.Debugf("started finalization stage for round: %s", round.Id)
+	log.Debugf("started finalization stage for round: %s", s.liveStore.CurrentRound().Get().Id)
 }
 
 func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 	defer s.startRound()
 
 	ctx := context.Background()
-	round := s.getCurrentRound()
 	defer s.liveStore.TxRequests().DeleteVtxos()
 
-	if round.IsFailed() {
+	if s.liveStore.CurrentRound().Get().IsFailed() {
 		return
 	}
 
 	var changes []domain.Event
 	defer func() {
-		if err := s.saveEvents(ctx, round.Id, changes); err != nil {
+		if err := s.saveEvents(ctx, s.liveStore.CurrentRound().Get().Id, changes); err != nil {
 			log.WithError(err).Warn("failed to store new round events")
 			return
 		}
 	}()
 
-	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.CommitmentTx), true)
+	roundTx, err := psbt.NewFromRawBytes(strings.NewReader(s.liveStore.CurrentRound().Get().CommitmentTx), true)
 	if err != nil {
-		log.Debugf("failed to parse round tx: %s", round.CommitmentTx)
-		changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
+		log.Debugf("failed to parse round tx: %s", s.liveStore.CurrentRound().Get().CommitmentTx)
+		changes = s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to parse round tx: %s", err))
 		log.WithError(err).Warn("failed to parse round tx")
 		return
 	}
@@ -2079,7 +2076,7 @@ func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 		}
 	}
 
-	txToSign := round.CommitmentTx
+	txToSign := s.liveStore.CurrentRound().Get().CommitmentTx
 	forfeitTxs := make([]domain.ForfeitTx, 0)
 
 	if s.liveStore.ForfeitTxs().Len() > 0 || includesBoardingInputs {
@@ -2091,24 +2088,24 @@ func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 			log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
 		}
 
-		roundTx, err := psbt.NewFromRawBytes(strings.NewReader(round.CommitmentTx), true)
+		roundTx, err := psbt.NewFromRawBytes(strings.NewReader(s.liveStore.CurrentRound().Get().CommitmentTx), true)
 		if err != nil {
-			log.Debugf("failed to parse round tx: %s", round.CommitmentTx)
-			changes = round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
+			log.Debugf("failed to parse round tx: %s", s.liveStore.CurrentRound().Get().CommitmentTx)
+			changes = s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to parse round tx: %s", err))
 			log.WithError(err).Warn("failed to parse round tx")
 			return
 		}
-		txToSign = round.CommitmentTx
+		txToSign = s.liveStore.CurrentRound().Get().CommitmentTx
 
 		forfeitTxList, err := s.liveStore.ForfeitTxs().Pop()
 		if err != nil {
-			changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
+			changes = s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to finalize round: %s", err))
 			log.WithError(err).Warn("failed to finalize round")
 			return
 		}
 
 		if err := s.verifyForfeitTxsSigs(forfeitTxList); err != nil {
-			changes = round.Fail(err)
+			changes = s.liveStore.CurrentRound().Get().Fail(err)
 			log.WithError(err).Warn("failed to validate forfeit txs")
 			return
 		}
@@ -2118,7 +2115,7 @@ func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 			if len(in.TaprootLeafScript) > 0 {
 				if len(in.TaprootScriptSpendSig) == 0 {
 					err = fmt.Errorf("missing tapscript spend sig for input %d", i)
-					changes = round.Fail(err)
+					changes = s.liveStore.CurrentRound().Get().Fail(err)
 					log.WithError(err).Warn("missing boarding sig")
 					return
 				}
@@ -2128,18 +2125,9 @@ func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 		}
 
 		if len(boardingInputsIndexes) > 0 {
-			numOfInputsSigned := 0
-			for _, v := range roundTx.Inputs {
-				if len(v.TaprootScriptSpendSig) > 0 {
-					if len(v.TaprootScriptSpendSig[0].Signature) > 0 {
-						numOfInputsSigned++
-					}
-				}
-			}
-			log.Debugf("number of boarding inputs signed: %d", numOfInputsSigned)
 			txToSign, err = s.wallet.SignTransactionTapscript(ctx, txToSign, boardingInputsIndexes)
 			if err != nil {
-				changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
+				changes = s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to sign round tx: %s", err))
 				log.WithError(err).Warn("failed to sign round tx")
 				return
 			}
@@ -2156,28 +2144,28 @@ func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 		}
 	}
 
-	log.Debugf("signing transaction %s\n", round.Id)
+	log.Debugf("signing transaction %s\n", s.liveStore.CurrentRound().Get().Id)
 
 	signedRoundTx, err := s.wallet.SignTransaction(ctx, txToSign, true)
 	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to sign round tx: %s", err))
+		changes = s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to sign round tx: %s", err))
 		log.WithError(err).Warn("failed to sign round tx")
 		return
 	}
 
 	if _, err := s.wallet.BroadcastTransaction(ctx, signedRoundTx); err != nil {
-		changes = round.Fail(fmt.Errorf("failed to broadcast round tx: %s", err))
+		changes = s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to broadcast round tx: %s", err))
 		return
 	}
 
-	changes, err = round.EndFinalization(forfeitTxs, signedRoundTx)
+	changes, err = s.liveStore.CurrentRound().Get().EndFinalization(forfeitTxs, signedRoundTx)
 	if err != nil {
-		changes = round.Fail(fmt.Errorf("failed to finalize round: %s", err))
+		changes = s.liveStore.CurrentRound().Get().Fail(fmt.Errorf("failed to finalize round: %s", err))
 		log.WithError(err).Warn("failed to finalize round")
 		return
 	}
 
-	log.Debugf("finalized round %s with round tx %s", round.Id, round.Txid)
+	log.Debugf("finalized round %s with round tx %s", s.liveStore.CurrentRound().Get().Id, s.liveStore.CurrentRound().Get().Txid)
 }
 
 func (s *covenantlessService) listenToScannerNotifications() {
@@ -2333,9 +2321,7 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 }
 
 func (s *covenantlessService) checkForfeitsAndBoardingSigsSent() {
-	currentRound := s.getCurrentRound()
-
-	roundTx, _ := psbt.NewFromRawBytes(strings.NewReader(currentRound.CommitmentTx), true)
+	roundTx, _ := psbt.NewFromRawBytes(strings.NewReader(s.liveStore.CurrentRound().Get().CommitmentTx), true)
 	numOfInputsSigned := 0
 	for _, v := range roundTx.Inputs {
 		if len(v.TaprootScriptSpendSig) > 0 {
@@ -2484,10 +2470,6 @@ func (s *covenantlessService) chainParams() *chaincfg.Params {
 	default:
 		return nil
 	}
-}
-
-func (s *covenantlessService) getCurrentRound() *domain.Round {
-	return s.liveStore.CurrentRound().Get()
 }
 
 func (s *covenantlessService) markAsRedeemed(ctx context.Context, vtxo domain.Vtxo) error {

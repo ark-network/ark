@@ -59,6 +59,7 @@ type ConfirmationSessionsStore interface {
 	Confirm(intentId string) error
 	Get() *ConfirmationSessions
 	Reset()
+	Initialized() bool
 }
 
 type TreeSigningSessionsStore interface {

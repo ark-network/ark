@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"fmt"
 	"github.com/btcsuite/btcd/btcutil/psbt"
+	log "github.com/sirupsen/logrus"
 	"sort"
 	"strings"
 	"sync"
@@ -425,16 +426,16 @@ func (m *forfeitTxsStore) AllSigned() bool {
 	return true
 }
 
-func (s *forfeitTxsStore) Len() int {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return len(s.forfeitTxs)
+func (m *forfeitTxsStore) Len() int {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return len(m.forfeitTxs)
 }
 
-func (s *forfeitTxsStore) GetConnectorsIndexes() map[string]domain.Outpoint {
-	s.lock.RLock()
-	defer s.lock.RUnlock()
-	return s.connectorsIndex
+func (m *forfeitTxsStore) GetConnectorsIndexes() map[string]domain.Outpoint {
+	m.lock.RLock()
+	defer m.lock.RUnlock()
+	return m.connectorsIndex
 }
 
 type offChainTxStore struct {
@@ -519,6 +520,7 @@ type confirmationSessionsStore struct {
 	numIntents          int
 	numConfirmedIntents int
 	confirmedC          chan struct{}
+	initialized         bool
 }
 
 func NewConfirmationSessionsStore() ports.ConfirmationSessionsStore {
@@ -538,13 +540,15 @@ func (c *confirmationSessionsStore) Init(intentIDsHashes [][32]byte) {
 
 	c.intentsHashes = hashes
 	c.numIntents = len(intentIDsHashes)
+	c.initialized = true
+	log.Info("[SELE]initialized")
 }
 
-func (s *confirmationSessionsStore) Confirm(intentId string) error {
+func (c *confirmationSessionsStore) Confirm(intentId string) error {
 	hash := sha256.Sum256([]byte(intentId))
-	s.lock.Lock()
-	defer s.lock.Unlock()
-	alreadyConfirmed, ok := s.intentsHashes[hash]
+	c.lock.Lock()
+	defer c.lock.Unlock()
+	alreadyConfirmed, ok := c.intentsHashes[hash]
 	if !ok {
 		return fmt.Errorf("intent hash not found")
 	}
@@ -553,12 +557,12 @@ func (s *confirmationSessionsStore) Confirm(intentId string) error {
 		return nil
 	}
 
-	s.numConfirmedIntents++
-	s.intentsHashes[hash] = true
+	c.numConfirmedIntents++
+	c.intentsHashes[hash] = true
 
-	if s.numConfirmedIntents == s.numIntents {
+	if c.numConfirmedIntents == c.numIntents {
 		select {
-		case s.confirmedC <- struct{}{}:
+		case c.confirmedC <- struct{}{}:
 		default:
 		}
 	}
@@ -585,6 +589,14 @@ func (c *confirmationSessionsStore) Reset() {
 	c.intentsHashes = make(map[[32]byte]bool)
 	c.numIntents = 0
 	c.numConfirmedIntents = 0
+	c.initialized = false
+	log.Info("[SELE]reset")
+}
+
+func (c *confirmationSessionsStore) Initialized() bool {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+	return c.initialized
 }
 
 type treeSigningSessionsStore struct {
