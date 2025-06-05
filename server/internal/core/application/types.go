@@ -48,6 +48,9 @@ type Service interface {
 	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
 	GetTxRequestQueue(ctx context.Context, requestIds ...string) ([]TxRequestInfo, error)
 	DeleteTxRequests(ctx context.Context, requestIds ...string) error
+
+	// TODO remove this in v7
+	GetIndexerTxChannel(ctx context.Context) <-chan TransactionEvent
 }
 
 type ServiceInfo struct {

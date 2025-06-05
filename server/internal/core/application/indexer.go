@@ -13,7 +13,6 @@ import (
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	log "github.com/sirupsen/logrus"
 )
 
 const (
@@ -46,83 +45,85 @@ type indexerService struct {
 	pubkey      *secp256k1.PublicKey
 	repoManager ports.RepoManager
 
-	transactionEventsCh chan TransactionEvent
+	transactionEventsCh <-chan TransactionEvent
 }
 
 func NewIndexerService(
 	pubkey *secp256k1.PublicKey,
 	repoManager ports.RepoManager,
+	applicationService Service,
 ) IndexerService {
 	svc := &indexerService{
 		pubkey:              pubkey,
 		repoManager:         repoManager,
-		transactionEventsCh: make(chan TransactionEvent),
+		transactionEventsCh: applicationService.GetIndexerTxChannel(context.Background()),
 	}
 
-	repoManager.Events().RegisterEventsHandler(
-		domain.RoundTopic, func(events []domain.Event) {
-			round := domain.NewRoundFromEvents(events)
+	// TODO: replace applicationService by event handlers in v7
+	// repoManager.Events().RegisterEventsHandler(
+	// 	domain.RoundTopic, func(events []domain.Event) {
+	// 		round := domain.NewRoundFromEvents(events)
 
-			if !round.IsEnded() {
-				return
-			}
+	// 		if !round.IsEnded() {
+	// 			return
+	// 		}
 
-			spentVtxoKeys := getSpentVtxos(round.TxRequests)
-			spentVtxos, err := svc.repoManager.Vtxos().GetVtxos(context.Background(), spentVtxoKeys)
-			if err != nil {
-				log.WithError(err).Warn("failed to get spent vtxos")
-				return
-			}
+	// 		spentVtxoKeys := getSpentVtxos(round.TxRequests)
+	// 		spentVtxos, err := svc.repoManager.Vtxos().GetVtxos(context.Background(), spentVtxoKeys)
+	// 		if err != nil {
+	// 			log.WithError(err).Warn("failed to get spent vtxos")
+	// 			return
+	// 		}
 
-			newVtxos := getNewVtxosFromRound(round)
+	// 		newVtxos := getNewVtxosFromRound(round)
 
-			go func() {
-				svc.transactionEventsCh <- RoundTransactionEvent{
-					RoundTxid:      round.Txid,
-					SpentVtxos:     spentVtxos,
-					SpendableVtxos: newVtxos,
-					TxHex:          round.CommitmentTx,
-				}
-			}()
-		},
-	)
+	// 		go func() {
+	// 			svc.transactionEventsCh <- RoundTransactionEvent{
+	// 				RoundTxid:      round.Txid,
+	// 				SpentVtxos:     spentVtxos,
+	// 				SpendableVtxos: newVtxos,
+	// 				TxHex:          round.CommitmentTx,
+	// 			}
+	// 		}()
+	// 	},
+	// )
 
-	repoManager.Events().RegisterEventsHandler(
-		domain.OffchainTxTopic, func(events []domain.Event) {
-			offchainTx := domain.NewOffchainTxFromEvents(events)
+	// repoManager.Events().RegisterEventsHandler(
+	// 	domain.OffchainTxTopic, func(events []domain.Event) {
+	// 		offchainTx := domain.NewOffchainTxFromEvents(events)
 
-			if !offchainTx.IsFinalized() {
-				return
-			}
+	// 		if !offchainTx.IsFinalized() {
+	// 			return
+	// 		}
 
-			txid, spentVtxoKeys, newVtxos, err := decodeTx(*offchainTx)
-			if err != nil {
-				log.WithError(err).Warn("failed to decode virtual tx")
-				return
-			}
+	// 		txid, spentVtxoKeys, newVtxos, err := decodeTx(*offchainTx)
+	// 		if err != nil {
+	// 			log.WithError(err).Warn("failed to decode virtual tx")
+	// 			return
+	// 		}
 
-			spentVtxos, err := svc.repoManager.Vtxos().GetVtxos(context.Background(), spentVtxoKeys)
-			if err != nil {
-				log.WithError(err).Warn("failed to get spent vtxos")
-				return
-			}
+	// 		spentVtxos, err := svc.repoManager.Vtxos().GetVtxos(context.Background(), spentVtxoKeys)
+	// 		if err != nil {
+	// 			log.WithError(err).Warn("failed to get spent vtxos")
+	// 			return
+	// 		}
 
-			go func() {
-				defer func() {
-					if r := recover(); r != nil {
-						log.Errorf("recovered from panic in sendTxEvent: %v", r)
-					}
-				}()
+	// 		go func() {
+	// 			defer func() {
+	// 				if r := recover(); r != nil {
+	// 					log.Errorf("recovered from panic in sendTxEvent: %v", r)
+	// 				}
+	// 			}()
 
-				svc.transactionEventsCh <- RedeemTransactionEvent{
-					RedeemTxid:     txid,
-					SpentVtxos:     spentVtxos,
-					SpendableVtxos: newVtxos,
-					TxHex:          offchainTx.VirtualTx,
-				}
-			}()
-		},
-	)
+	// 			svc.transactionEventsCh <- RedeemTransactionEvent{
+	// 				RedeemTxid:     txid,
+	// 				SpentVtxos:     spentVtxos,
+	// 				SpendableVtxos: newVtxos,
+	// 				TxHex:          offchainTx.VirtualTx,
+	// 			}
+	// 		}()
+	// 	},
+	// )
 
 	return svc
 }

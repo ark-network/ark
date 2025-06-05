@@ -53,6 +53,8 @@ type covenantlessService struct {
 
 	eventsCh            chan domain.RoundEvent
 	transactionEventsCh chan TransactionEvent
+	// TODO remove this in v7
+	indexerTxEventsCh chan TransactionEvent
 
 	// cached data for the current round
 	currentRoundLock    sync.Mutex
@@ -159,6 +161,7 @@ func NewService(
 		utxoMinAmount:             utxoMinAmount,
 		vtxoMaxAmount:             vtxoMaxAmount,
 		vtxoMinAmount:             vtxoMinAmount,
+		indexerTxEventsCh:         make(chan TransactionEvent),
 	}
 
 	repoManager.RegisterEventsHandler(
@@ -570,12 +573,15 @@ func (s *covenantlessService) SubmitRedeemTx(
 			spentVtxos[i].SpentBy = redeemTxid
 		}
 
-		s.transactionEventsCh <- RedeemTransactionEvent{
+		event := RedeemTransactionEvent{
 			RedeemTxid:     redeemTxid,
 			SpentVtxos:     spentVtxos,
 			SpendableVtxos: newVtxos,
 			TxHex:          signedRedeemTx,
 		}
+
+		s.transactionEventsCh <- event
+		s.indexerTxEventsCh <- event
 	}(ptx, signedRedeemTx, redeemTxid)
 
 	return signedRedeemTx, redeemTxid, nil
@@ -859,10 +865,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 	}
 
 	if bip322signature.ContainsOutputs() {
-		if err != nil {
-			return "", fmt.Errorf("unable to verify outputs amount, failed to get dust: %s", err)
-		}
-
 		hasOffChainReceiver := false
 		receivers := make([]domain.Receiver, 0)
 
@@ -1276,6 +1278,11 @@ func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan domai
 
 func (s *covenantlessService) GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent {
 	return s.transactionEventsCh
+}
+
+// TODO remove this in v7
+func (s *covenantlessService) GetIndexerTxChannel(ctx context.Context) <-chan TransactionEvent {
+	return s.indexerTxEventsCh
 }
 
 func (s *covenantlessService) GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error) {
@@ -2053,13 +2060,15 @@ func (s *covenantlessService) finalizeRound(notes []note.Note, recoveredVtxos []
 			spentVtxos[i].Spent = true
 			spentVtxos[i].SpentBy = round.Txid
 		}
-		s.transactionEventsCh <- RoundTransactionEvent{
+		event := RoundTransactionEvent{
 			RoundTxid:             round.Txid,
 			SpentVtxos:            spentVtxos,
 			SpendableVtxos:        s.getNewVtxos(round),
 			ClaimedBoardingInputs: boardingInputs,
 			TxHex:                 signedRoundTx,
 		}
+		s.transactionEventsCh <- event
+		s.indexerTxEventsCh <- event
 	}()
 
 	log.Debugf("finalized round %s with round tx %s", round.Id, round.Txid)

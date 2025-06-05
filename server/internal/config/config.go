@@ -429,7 +429,7 @@ func (c *Config) IndexerService() (application.IndexerService, error) {
 		return nil, err
 	}
 
-	return application.NewIndexerService(pubKey, c.repo), nil
+	return application.NewIndexerService(pubKey, c.repo, c.svc), nil
 }
 
 func (c *Config) repoManager() error {
