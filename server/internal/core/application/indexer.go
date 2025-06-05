@@ -38,92 +38,21 @@ type IndexerService interface {
 	GetVtxoChain(ctx context.Context, vtxoKey Outpoint, page *Page) (*VtxoChainResp, error)
 	GetVirtualTxs(ctx context.Context, txids []string, page *Page) (*VirtualTxsResp, error)
 	GetSweptCommitmentTx(ctx context.Context, txid string) (*SweptCommitmentTxResp, error)
-	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
 }
 
 type indexerService struct {
 	pubkey      *secp256k1.PublicKey
 	repoManager ports.RepoManager
-
-	transactionEventsCh <-chan TransactionEvent
 }
 
 func NewIndexerService(
 	pubkey *secp256k1.PublicKey,
 	repoManager ports.RepoManager,
-	applicationService Service,
 ) IndexerService {
 	svc := &indexerService{
-		pubkey:              pubkey,
-		repoManager:         repoManager,
-		transactionEventsCh: applicationService.GetIndexerTxChannel(context.Background()),
+		pubkey:      pubkey,
+		repoManager: repoManager,
 	}
-
-	// TODO: replace applicationService by event handlers in v7
-	// repoManager.Events().RegisterEventsHandler(
-	// 	domain.RoundTopic, func(events []domain.Event) {
-	// 		round := domain.NewRoundFromEvents(events)
-
-	// 		if !round.IsEnded() {
-	// 			return
-	// 		}
-
-	// 		spentVtxoKeys := getSpentVtxos(round.TxRequests)
-	// 		spentVtxos, err := svc.repoManager.Vtxos().GetVtxos(context.Background(), spentVtxoKeys)
-	// 		if err != nil {
-	// 			log.WithError(err).Warn("failed to get spent vtxos")
-	// 			return
-	// 		}
-
-	// 		newVtxos := getNewVtxosFromRound(round)
-
-	// 		go func() {
-	// 			svc.transactionEventsCh <- RoundTransactionEvent{
-	// 				RoundTxid:      round.Txid,
-	// 				SpentVtxos:     spentVtxos,
-	// 				SpendableVtxos: newVtxos,
-	// 				TxHex:          round.CommitmentTx,
-	// 			}
-	// 		}()
-	// 	},
-	// )
-
-	// repoManager.Events().RegisterEventsHandler(
-	// 	domain.OffchainTxTopic, func(events []domain.Event) {
-	// 		offchainTx := domain.NewOffchainTxFromEvents(events)
-
-	// 		if !offchainTx.IsFinalized() {
-	// 			return
-	// 		}
-
-	// 		txid, spentVtxoKeys, newVtxos, err := decodeTx(*offchainTx)
-	// 		if err != nil {
-	// 			log.WithError(err).Warn("failed to decode virtual tx")
-	// 			return
-	// 		}
-
-	// 		spentVtxos, err := svc.repoManager.Vtxos().GetVtxos(context.Background(), spentVtxoKeys)
-	// 		if err != nil {
-	// 			log.WithError(err).Warn("failed to get spent vtxos")
-	// 			return
-	// 		}
-
-	// 		go func() {
-	// 			defer func() {
-	// 				if r := recover(); r != nil {
-	// 					log.Errorf("recovered from panic in sendTxEvent: %v", r)
-	// 				}
-	// 			}()
-
-	// 			svc.transactionEventsCh <- RedeemTransactionEvent{
-	// 				RedeemTxid:     txid,
-	// 				SpentVtxos:     spentVtxos,
-	// 				SpendableVtxos: newVtxos,
-	// 				TxHex:          offchainTx.VirtualTx,
-	// 			}
-	// 		}()
-	// 	},
-	// )
 
 	return svc
 }
@@ -309,10 +238,6 @@ func (i *indexerService) GetTransactionHistory(
 		Records: txsPaged,
 		Page:    pageResp,
 	}, nil
-}
-
-func (i *indexerService) GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent {
-	return i.transactionEventsCh
 }
 
 func filterByDate(txs []TxHistoryRecord, start, end int64) []TxHistoryRecord {

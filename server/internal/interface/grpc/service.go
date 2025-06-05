@@ -206,8 +206,9 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		if err != nil {
 			return err
 		}
+		eventsCh := appSvc.GetIndexerTxChannel(context.Background())
 		subscriptionTimeoutDuration := time.Minute // TODO let to be set via config
-		indexerHandler := handlers.NewIndexerService(indexerSvc, subscriptionTimeoutDuration)
+		indexerHandler := handlers.NewIndexerService(indexerSvc, eventsCh, subscriptionTimeoutDuration)
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
 		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
 		arkv1.RegisterIndexerServiceServer(grpcServer, indexerHandler)

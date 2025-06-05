@@ -18,14 +18,19 @@ import (
 
 type indexerService struct {
 	indexerSvc application.IndexerService
+	eventsCh   <-chan application.TransactionEvent
 
 	scriptSubsHandler           *broker[*arkv1.GetSubscriptionResponse]
 	subscriptionTimeoutDuration time.Duration
 }
 
-func NewIndexerService(indexerSvc application.IndexerService, subscriptionTimeoutDuration time.Duration) arkv1.IndexerServiceServer {
+func NewIndexerService(
+	indexerSvc application.IndexerService,
+	eventsCh <-chan application.TransactionEvent, subscriptionTimeoutDuration time.Duration,
+) arkv1.IndexerServiceServer {
 	svc := &indexerService{
 		indexerSvc:                  indexerSvc,
+		eventsCh:                    eventsCh,
 		scriptSubsHandler:           newBroker[*arkv1.GetSubscriptionResponse](),
 		subscriptionTimeoutDuration: subscriptionTimeoutDuration,
 	}
@@ -497,8 +502,7 @@ func (h *indexerService) SubscribeForScripts(ctx context.Context, req *arkv1.Sub
 }
 
 func (h *indexerService) listenToTxEvents() {
-	eventsCh := h.indexerSvc.GetTransactionEventsChannel(context.Background())
-	for event := range eventsCh {
+	for event := range h.eventsCh {
 		if len(h.scriptSubsHandler.listeners) <= 0 {
 			continue
 		}
