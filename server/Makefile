@@ -1,4 +1,4 @@
-.PHONY: build clean cov help integrationtest lint run run-mutinynet test vet migrate sqlc
+.PHONY: build clean cov help integrationtest lint run run-mutinynet test vet migrate sqlc pg pgtest droppg droppgtest psql pgmigrate pgsqlc
 
 define setup_env
     $(eval include $(1))
