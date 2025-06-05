@@ -58,7 +58,7 @@ func (v Vtxo) IsNote() bool {
 }
 
 func (v Vtxo) RequiresForfeit() bool {
-	return !(v.Swept || v.IsNote())
+	return !v.Swept && !v.IsNote()
 }
 
 func (v Vtxo) TapKey() (*btcec.PublicKey, error) {

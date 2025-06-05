@@ -99,7 +99,7 @@ func (m *txRequestsQueue) push(
 		if vtxo.IsNote() {
 			continue
 		}
-		m.vtxos[vtxo.VtxoKey.String()] = struct{}{}
+		m.vtxos[vtxo.String()] = struct{}{}
 	}
 	return nil
 }
@@ -130,7 +130,7 @@ func (m *txRequestsQueue) pop(num int64) []timedTxRequest {
 	for _, p := range requestsByTime[:num] {
 		result = append(result, p)
 		for _, vtxo := range m.requests[p.Id].Inputs {
-			m.vtxosToRemove = append(m.vtxosToRemove, vtxo.VtxoKey.String())
+			m.vtxosToRemove = append(m.vtxosToRemove, vtxo.String())
 		}
 		delete(m.requests, p.Id)
 	}
@@ -185,7 +185,7 @@ func (m *txRequestsQueue) delete(ids []string) error {
 			continue
 		}
 		for _, vtxo := range req.Inputs {
-			delete(m.vtxos, vtxo.VtxoKey.String())
+			delete(m.vtxos, vtxo.String())
 		}
 		delete(m.requests, id)
 	}
@@ -244,13 +244,6 @@ func (m *txRequestsQueue) view(id string) (*domain.TxRequest, bool) {
 		Inputs:    request.Inputs,
 		Receivers: request.Receivers,
 	}, true
-}
-
-func (m *txRequestsQueue) includes(outpoint domain.VtxoKey) bool {
-	m.lock.RLock()
-	defer m.lock.RUnlock()
-	_, exists := m.vtxos[outpoint.String()]
-	return exists
 }
 
 func (m *txRequestsQueue) includesAny(outpoints []domain.VtxoKey) (bool, string) {
