@@ -302,6 +302,7 @@ message GetSubscriptionRequest {
 
 message GetSubscriptionResponse {
   string txid = 1;
-  repeated IndexerVtxo new_vtxos = 2;
-  repeated IndexerVtxo spent_vtxos = 3;
+  repeated string scripts = 2;
+  repeated IndexerVtxo new_vtxos = 3;
+  repeated IndexerVtxo spent_vtxos = 4;
 }

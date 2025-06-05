@@ -520,18 +520,25 @@ func (h *indexerService) listenToTxEvents() {
 		for _, l := range h.scriptSubsHandler.listeners {
 			spendableVtxos := make([]*arkv1.IndexerVtxo, 0)
 			spentVtxos := make([]*arkv1.IndexerVtxo, 0)
+			involvedScripts := make([]string, 0)
 
 			for _, vtxoScript := range l.topics {
-				spendableVtxos = append(spendableVtxos, allSpendableVtxos[vtxoScript]...)
-				spentVtxos = append(spentVtxos, allSpentVtxos[vtxoScript]...)
+				spendableVtxosForScript := allSpendableVtxos[vtxoScript]
+				spentVtxosForScript := allSpentVtxos[vtxoScript]
+				spendableVtxos = append(spendableVtxos, spendableVtxosForScript...)
+				spentVtxos = append(spentVtxos, spentVtxosForScript...)
+				if len(spendableVtxosForScript) > 0 || len(spentVtxosForScript) > 0 {
+					involvedScripts = append(involvedScripts, vtxoScript)
+				}
 			}
 
 			if len(spendableVtxos) > 0 || len(spentVtxos) > 0 {
 				go func() {
 					l.ch <- &arkv1.GetSubscriptionResponse{
+						Txid:       event.GetTxId(),
+						Scripts:    involvedScripts,
 						NewVtxos:   spendableVtxos,
 						SpentVtxos: spentVtxos,
-						Txid:       event.GetTxId(),
 					}
 				}()
 			}

@@ -509,15 +509,15 @@ func newRestClient(
 	return svc.IndexerService, nil
 }
 
-func (a *restClient) GetSubscription(ctx context.Context, subscriptionId string) (<-chan *indexer.AddressEvent, func(), error) {
+func (a *restClient) GetSubscription(ctx context.Context, subscriptionId string) (<-chan *indexer.ScriptEvent, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
-	eventsCh := make(chan *indexer.AddressEvent)
+	eventsCh := make(chan *indexer.ScriptEvent)
 	chunkCh := make(chan chunk)
 	url := fmt.Sprintf("%s/v1/script/subscription/%s", a.serverURL, subscriptionId)
 
 	go listenToStream(url, chunkCh)
 
-	go func(eventsCh chan *indexer.AddressEvent, chunkCh chan chunk) {
+	go func(eventsCh chan *indexer.ScriptEvent, chunkCh chan chunk) {
 		defer close(eventsCh)
 
 		for {
@@ -530,13 +530,13 @@ func (a *restClient) GetSubscription(ctx context.Context, subscriptionId string)
 				}
 
 				if chunk.err != nil {
-					eventsCh <- &indexer.AddressEvent{Err: chunk.err}
+					eventsCh <- &indexer.ScriptEvent{Err: chunk.err}
 					return
 				}
 
 				resp := indexer_service.IndexerServiceGetSubscriptionOKBody{}
 				if err := json.Unmarshal(chunk.msg, &resp); err != nil {
-					eventsCh <- &indexer.AddressEvent{
+					eventsCh <- &indexer.ScriptEvent{
 						Err: fmt.Errorf("failed to parse message from address stream: %s", err),
 					}
 					return
@@ -548,7 +548,7 @@ func (a *restClient) GetSubscription(ctx context.Context, subscriptionId string)
 				}
 
 				if resp.Error != nil {
-					eventsCh <- &indexer.AddressEvent{
+					eventsCh <- &indexer.ScriptEvent{
 						Err: fmt.Errorf("received error from address stream: %s", resp.Error.Message),
 					}
 					return
@@ -556,7 +556,7 @@ func (a *restClient) GetSubscription(ctx context.Context, subscriptionId string)
 
 				newVtxos, err := newIndexerVtxos(resp.Result.NewVtxos)
 				if err != nil {
-					eventsCh <- &indexer.AddressEvent{
+					eventsCh <- &indexer.ScriptEvent{
 						Err: fmt.Errorf("failed to parse new vtxos: %s", err),
 					}
 					return
@@ -564,16 +564,17 @@ func (a *restClient) GetSubscription(ctx context.Context, subscriptionId string)
 
 				spentVtxos, err := newIndexerVtxos(resp.Result.SpentVtxos)
 				if err != nil {
-					eventsCh <- &indexer.AddressEvent{
+					eventsCh <- &indexer.ScriptEvent{
 						Err: fmt.Errorf("failed to parse spent vtxos: %s", err),
 					}
 					return
 				}
 
-				eventsCh <- &indexer.AddressEvent{
+				eventsCh <- &indexer.ScriptEvent{
+					Txid:       resp.Result.Txid,
+					Scripts:    resp.Result.Scripts,
 					NewVtxos:   newVtxos,
 					SpentVtxos: spentVtxos,
-					Txid:       resp.Result.Txid,
 				}
 			}
 		}

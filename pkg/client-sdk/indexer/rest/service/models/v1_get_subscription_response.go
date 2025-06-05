@@ -22,6 +22,9 @@ type V1GetSubscriptionResponse struct {
 	// new vtxos
 	NewVtxos []*V1IndexerVtxo `json:"newVtxos"`
 
+	// scripts
+	Scripts []string `json:"scripts"`
+
 	// spent vtxos
 	SpentVtxos []*V1IndexerVtxo `json:"spentVtxos"`
 

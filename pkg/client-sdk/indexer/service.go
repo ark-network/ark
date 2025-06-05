@@ -16,7 +16,7 @@ type Indexer interface {
 	GetSweptCommitmentTx(ctx context.Context, txid string) ([]string, error)
 	SubscribeForScripts(ctx context.Context, subscriptionId string, scripts []string) (string, error)
 	UnsubscribeForScripts(ctx context.Context, subscriptionId string, scripts []string) error
-	GetSubscription(ctx context.Context, subscriptionId string) (<-chan *AddressEvent, func(), error)
+	GetSubscription(ctx context.Context, subscriptionId string) (<-chan *ScriptEvent, func(), error)
 }
 
 type CommitmentTxLeavesResponse struct {
@@ -66,10 +66,11 @@ type VirtualTxsResponse struct {
 	Page *PageResponse
 }
 
-type AddressEvent struct {
+type ScriptEvent struct {
+	Txid       string
+	Scripts    []string
 	NewVtxos   []Vtxo
 	SpentVtxos []Vtxo
-	Txid       string
 	Err        error
 }
 

@@ -472,7 +472,7 @@ func (a *grpcClient) GetSweptCommitmentTx(ctx context.Context, txid string) ([]s
 	return resp.GetSweptBy(), nil
 }
 
-func (a *grpcClient) GetSubscription(ctx context.Context, subscriptionId string) (<-chan *indexer.AddressEvent, func(), error) {
+func (a *grpcClient) GetSubscription(ctx context.Context, subscriptionId string) (<-chan *indexer.ScriptEvent, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
 
 	stream, err := a.svc.GetSubscription(ctx, &arkv1.GetSubscriptionRequest{
@@ -483,7 +483,7 @@ func (a *grpcClient) GetSubscription(ctx context.Context, subscriptionId string)
 		return nil, nil, err
 	}
 
-	eventsCh := make(chan *indexer.AddressEvent)
+	eventsCh := make(chan *indexer.ScriptEvent)
 
 	go func() {
 		defer close(eventsCh)
@@ -492,19 +492,21 @@ func (a *grpcClient) GetSubscription(ctx context.Context, subscriptionId string)
 			resp, err := stream.Recv()
 			if err != nil {
 				if err == io.EOF {
-					eventsCh <- &indexer.AddressEvent{Err: fmt.Errorf("connection closed by server")}
+					eventsCh <- &indexer.ScriptEvent{Err: fmt.Errorf("connection closed by server")}
 					return
 				}
 				if st, ok := status.FromError(err); ok && st.Code() == codes.Canceled {
 					return
 				}
-				eventsCh <- &indexer.AddressEvent{Err: err}
+				eventsCh <- &indexer.ScriptEvent{Err: err}
 				return
 			}
 
-			eventsCh <- &indexer.AddressEvent{
-				NewVtxos:   newIndexerVtxos(resp.NewVtxos),
-				SpentVtxos: newIndexerVtxos(resp.SpentVtxos),
+			eventsCh <- &indexer.ScriptEvent{
+				Txid:       resp.GetTxid(),
+				Scripts:    resp.GetScripts(),
+				NewVtxos:   newIndexerVtxos(resp.GetNewVtxos()),
+				SpentVtxos: newIndexerVtxos(resp.GetSpentVtxos()),
 			}
 		}
 	}()

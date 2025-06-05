@@ -796,6 +796,12 @@
         "txid": {
           "type": "string"
         },
+        "scripts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "newVtxos": {
           "type": "array",
           "items": {
