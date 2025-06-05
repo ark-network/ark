@@ -135,8 +135,8 @@ func TestMain(m *testing.M) {
 
 func TestService(t *testing.T) {
 	dbDir := t.TempDir()
-	pgDns := "postgresql://root:secret@127.0.0.1:5432/ark-db-test?sslmode=disable"
-	pgEventDns := "postgresql://root:secret@127.0.0.1:5432/ark-event-db-test?sslmode=disable"
+	pgDns := "postgresql://root:secret@127.0.0.1:5432/projection?sslmode=disable"
+	pgEventDns := "postgresql://root:secret@127.0.0.1:5432/event?sslmode=disable"
 	tests := []struct {
 		name   string
 		config db.ServiceConfig

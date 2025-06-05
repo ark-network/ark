@@ -5,7 +5,6 @@ import (
 
 	"database/sql"
 
-	"github.com/ThreeDotsLabs/watermill"
 	watermillSQL "github.com/ThreeDotsLabs/watermill-sql/v3/pkg/sql"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	watermilldb "github.com/ark-network/ark/server/internal/infrastructure/db/watermill"
@@ -26,7 +25,7 @@ func NewEventRepository(config ...interface{}) (domain.EventRepository, error) {
 			SchemaAdapter:        watermillSQL.DefaultPostgreSQLSchema{},
 			AutoInitializeSchema: true,
 		},
-		watermill.NewStdLogger(false, false),
+		nil,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("cannot open event repository: %w", err)
