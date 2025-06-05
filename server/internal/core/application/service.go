@@ -198,12 +198,12 @@ func NewService(
 }
 
 func (s *covenantlessService) Start() error {
-	log.Debug("starting sweeper service")
+	log.Debug("starting sweeper service...")
 	if err := s.sweeper.start(); err != nil {
 		return err
 	}
 
-	log.Debug("starting app service")
+	log.Debug("starting app service...")
 	go s.start()
 	return nil
 }
