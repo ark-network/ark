@@ -462,10 +462,10 @@ type currentRoundStore struct {
 func NewCurrentRoundStore() ports.CurrentRoundStore {
 	return &currentRoundStore{}
 }
-func (s *currentRoundStore) Upsert(round *domain.Round) {
+func (s *currentRoundStore) Upsert(fn func(m *domain.Round) *domain.Round) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	s.round = round
+	s.round = fn(s.round)
 }
 func (s *currentRoundStore) Get() *domain.Round {
 	s.lock.RLock()

@@ -1281,14 +1281,22 @@ func (s *covenantlessService) SignRoundTx(ctx context.Context, signedRoundTx str
 		return nil
 	}
 
-	currentRound := s.liveStore.CurrentRound().Get()
-	combined, err := s.builder.VerifyAndCombinePartialTx(currentRound.CommitmentTx, signedRoundTx)
-	if err != nil {
-		return fmt.Errorf("failed to verify and combine partial tx: %s", err)
-	}
+	var combineErr error
+	s.liveStore.CurrentRound().Upsert(func(r *domain.Round) *domain.Round {
+		combined, err := s.builder.VerifyAndCombinePartialTx(r.CommitmentTx, signedRoundTx)
+		if err != nil {
+			combineErr = err
+			return r
+		}
 
-	currentRound.CommitmentTx = combined
-	s.liveStore.CurrentRound().Upsert(currentRound)
+		newRound := *r
+		newRound.CommitmentTx = combined
+		return &newRound
+	})
+
+	if combineErr != nil {
+		return fmt.Errorf("failed to verify and combine partial tx: %w", combineErr)
+	}
 
 	go func() {
 		s.checkForfeitsAndBoardingSigsSent(s.liveStore.CurrentRound().Get())
@@ -1735,7 +1743,9 @@ func (s *covenantlessService) startRound() {
 	round := domain.NewRound()
 	//nolint:all
 	round.StartRegistration()
-	s.liveStore.CurrentRound().Upsert(round)
+	s.liveStore.CurrentRound().Upsert(func(_ *domain.Round) *domain.Round {
+		return round
+	})
 	close(s.forfeitsBoardingSigsChan)
 	s.forfeitsBoardingSigsChan = make(chan struct{}, 1)
 
@@ -1913,10 +1923,10 @@ func (s *covenantlessService) startFinalization(roundEndTime time.Time) {
 
 		signingSession := s.liveStore.TreeSigingSessions().NewSession(round.Id, uniqueSignerPubkeys)
 		log.Debugf("signing session created for round %s with %d signers", round.Id, len(uniqueSignerPubkeys))
-
-		currentRound := s.liveStore.CurrentRound().Get()
-		currentRound.CommitmentTx = unsignedRoundTx
-		s.liveStore.CurrentRound().Upsert(currentRound)
+		s.liveStore.CurrentRound().Upsert(func(r *domain.Round) *domain.Round {
+			r.CommitmentTx = unsignedRoundTx
+			return r
+		})
 		// send back the unsigned tree & all cosigners pubkeys
 		listOfCosignersPubkeys := make([]string, 0, len(uniqueSignerPubkeys))
 		for pubkey := range uniqueSignerPubkeys {

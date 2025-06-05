@@ -48,7 +48,7 @@ type OutpointStore interface {
 }
 
 type CurrentRoundStore interface {
-	Upsert(round *domain.Round)
+	Upsert(fn func(m *domain.Round) *domain.Round)
 	Get() *domain.Round
 }
 

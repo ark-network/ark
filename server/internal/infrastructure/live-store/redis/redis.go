@@ -93,8 +93,8 @@ type currentRoundStore struct{}
 
 func NewCurrentRoundStore() ports.CurrentRoundStore { return &currentRoundStore{} }
 
-func (s *currentRoundStore) Upsert(round *domain.Round) { panic("not implemented") }
-func (s *currentRoundStore) Get() *domain.Round         { panic("not implemented") }
+func (s *currentRoundStore) Upsert(fn func(m *domain.Round) *domain.Round) { panic("not implemented") }
+func (s *currentRoundStore) Get() *domain.Round                            { panic("not implemented") }
 
 type treeSigningSessionsStore struct{}
 
