@@ -1,8 +1,8 @@
 -- name: UpsertTransaction :exec
 INSERT INTO tx (
     tx, round_id, type, position, txid, tree_level, parent_txid, is_leaf
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(txid) DO UPDATE SET
+) VALUES (@tx, @round_id, @type, @position, @txid, @tree_level, @parent_txid, @is_leaf)
+    ON CONFLICT(txid) DO UPDATE SET
     tx = EXCLUDED.tx,
     round_id = EXCLUDED.round_id,
     type = EXCLUDED.type,
@@ -19,50 +19,43 @@ INSERT INTO round (
     ending_timestamp,
     ended, failed,
     stage_code,
-    txid,
     connector_address,
     version,
     swept,
     vtxo_tree_expiration
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(id) DO UPDATE SET
+) VALUES (@id, @starting_timestamp, @ending_timestamp, @ended, @failed, @stage_code, @connector_address, @version, @swept, @vtxo_tree_expiration)
+    ON CONFLICT(id) DO UPDATE SET
     starting_timestamp = EXCLUDED.starting_timestamp,
     ending_timestamp = EXCLUDED.ending_timestamp,
     ended = EXCLUDED.ended,
     failed = EXCLUDED.failed,
     stage_code = EXCLUDED.stage_code,
-    txid = EXCLUDED.txid,
     connector_address = EXCLUDED.connector_address,
     version = EXCLUDED.version,
     swept = EXCLUDED.swept,
     vtxo_tree_expiration = EXCLUDED.vtxo_tree_expiration;
+
 
 -- name: GetTxsByTxid :many
 SELECT
     tx.txid,
     tx.tx AS data
 FROM tx
-WHERE tx.txid IN (sqlc.slice('ids1'))
-UNION
-SELECT
-    vtxo.txid,
-    vtxo.redeem_tx AS data
-FROM vtxo
-WHERE vtxo.txid IN (sqlc.slice('ids2')) AND vtxo.redeem_tx IS NOT '';
+WHERE tx.txid = ANY($1::varchar[]);
 
 -- name: UpsertTxRequest :exec
-INSERT INTO tx_request (id, round_id) VALUES (?, ?)
-ON CONFLICT(id) DO UPDATE SET round_id = EXCLUDED.round_id;
+INSERT INTO tx_request (id, round_id) VALUES (@id, @round_id)
+    ON CONFLICT(id) DO UPDATE SET round_id = EXCLUDED.round_id;
 
 -- name: UpsertReceiver :exec
-INSERT INTO receiver (request_id, pubkey, onchain_address, amount) VALUES (?, ?, ?, ?)
-ON CONFLICT(request_id, pubkey, onchain_address) DO UPDATE SET
+INSERT INTO receiver (request_id, pubkey, onchain_address, amount) VALUES (@request_id, @pubkey, @onchain_address, @amount)
+    ON CONFLICT(request_id, pubkey, onchain_address) DO UPDATE SET
     amount = EXCLUDED.amount,
     pubkey = EXCLUDED.pubkey,
     onchain_address = EXCLUDED.onchain_address;
 
 -- name: UpdateVtxoRequestId :exec
-UPDATE vtxo SET request_id = ? WHERE txid = ? AND vout = ?;
+UPDATE vtxo SET request_id = @request_id WHERE txid = @txid AND vout = @vout;
 
 -- name: SelectRoundWithRoundId :many
 SELECT sqlc.embed(round),
@@ -75,7 +68,7 @@ FROM round
          LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
          LEFT OUTER JOIN request_receiver_vw ON round_request_vw.id=request_receiver_vw.request_id
          LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
-WHERE round.id = ?;
+WHERE round.id = @id;
 
 -- name: SelectRoundWithRoundTxId :many
 SELECT sqlc.embed(round),
@@ -88,11 +81,13 @@ FROM round
          LEFT OUTER JOIN round_tx_vw ON round.id=round_tx_vw.round_id
          LEFT OUTER JOIN request_receiver_vw ON round_request_vw.id=request_receiver_vw.request_id
          LEFT OUTER JOIN request_vtxo_vw ON round_request_vw.id=request_vtxo_vw.request_id
-WHERE round.txid = ?;
+WHERE round.id = (
+    SELECT round_id FROM round_tx_vw tx WHERE tx.txid = @txid and tx.type = 'commitment'
+);
 
--- name: SelectUnsweptRoundsTxid :many
-SELECT round.txid FROM round
-WHERE round.swept = false AND round.ended = true AND round.failed = false;
+-- name: SelectExpiredRoundsTxid :many
+SELECT txid FROM round_commitment_tx_vw r
+WHERE r.swept = false AND r.ended = true AND r.failed = false;
 
 -- name: GetRoundStats :one
 SELECT
@@ -102,11 +97,11 @@ SELECT
     (
         SELECT COALESCE(SUM(amount), 0)
         FROM (
-            SELECT DISTINCT v2.*
-            FROM vtxo v2
-                    JOIN tx_request req2 ON req2.id = v2.request_id
-            WHERE req2.round_id = r.id
-        ) as tx_req_inputs_amount
+                 SELECT DISTINCT v2.*
+                 FROM vtxo v2
+                          JOIN tx_request req2 ON req2.id = v2.request_id
+                 WHERE req2.round_id = r.id
+             ) as tx_req_inputs_amount
     ) AS total_forfeit_amount,
     (
         SELECT COALESCE(COUNT(v3.txid), 0)
@@ -117,12 +112,12 @@ SELECT
     (
         SELECT COALESCE(SUM(amount), 0)
         FROM (
-            SELECT DISTINCT rr.*
-            FROM receiver rr
-                JOIN tx_request req4 ON req4.id = rr.request_id
-            WHERE req4.round_id = r.id
-            AND (rr.onchain_address = '' OR rr.onchain_address IS NULL)
-        ) AS tx_req_outputs_amount
+                 SELECT DISTINCT rr.*
+                 FROM receiver rr
+                          JOIN tx_request req4 ON req4.id = rr.request_id
+                 WHERE req4.round_id = r.id
+                   AND (rr.onchain_address = '' OR rr.onchain_address IS NULL)
+             ) AS tx_req_outputs_amount
     ) AS total_batch_amount,
     (
         SELECT COUNT(*)
@@ -134,83 +129,88 @@ SELECT
     (
         SELECT MAX(v.expire_at)
         FROM vtxo v
-        WHERE v.round_tx = r.txid
+        WHERE v.commitment_txid = r.txid
     ) AS expires_at
-FROM round r
-WHERE r.txid = ?;
+FROM round_commitment_tx_vw r
+WHERE r.txid = @txid;
+
+-- name: SelectUnsweptRoundsTxid :many
+SELECT txid FROM round_commitment_tx_vw r
+WHERE r.swept = false AND r.ended = true AND r.failed = false;
 
 -- name: GetRoundForfeitTxs :many
-SELECT tx.* FROM round
-LEFT OUTER JOIN tx ON round.id=tx.round_id
-WHERE round.txid = ? AND tx.type = 'forfeit';
+SELECT t.* FROM tx t
+WHERE t.round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = @txid)
+    AND t.type = 'forfeit';
+
 
 -- name: GetRoundConnectorTreeTxs :many
-SELECT tx.* FROM round
-LEFT OUTER JOIN tx ON round.id=tx.round_id
-WHERE round.txid = ? AND tx.type = 'connector';
+SELECT t.* FROM tx t
+WHERE t.round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = @txid)
+    AND t.type = 'connector';
+
 
 -- name: GetSpendableVtxosWithPubKey :many
-SELECT vtxo.* FROM vtxo
-WHERE vtxo.pubkey = ? AND vtxo.spent = false AND vtxo.swept = false;
+SELECT sqlc.embed(vtxo_virtual_tx_vw)FROM vtxo_virtual_tx_vw
+WHERE pubkey = @pubkey AND spent = false AND swept = false;
 
 -- name: SelectSweptRoundsConnectorAddress :many
 SELECT round.connector_address FROM round
 WHERE round.swept = true AND round.failed = false AND round.ended = true AND round.connector_address <> '';
 
 -- name: SelectRoundIdsInRange :many
-SELECT id FROM round WHERE starting_timestamp > ? AND starting_timestamp < ?;
+SELECT id FROM round WHERE starting_timestamp > @start_ts AND starting_timestamp < @end_ts;
 
 -- name: SelectRoundIds :many
 SELECT id FROM round;
 
 -- name: UpsertVtxo :exec
-INSERT INTO vtxo (txid, vout, pubkey, amount, round_tx, spent_by, spent, redeemed, swept, expire_at, created_at, redeem_tx)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(txid, vout) DO UPDATE SET
+INSERT INTO vtxo (txid, vout, pubkey, amount, commitment_txid, spent_by, spent, redeemed, swept, expire_at, created_at)
+VALUES (@txid, @vout, @pubkey, @amount, @commitment_txid, @spent_by, @spent, @redeemed, @swept, @expire_at, @created_at) ON CONFLICT(txid, vout) DO UPDATE SET
     pubkey = EXCLUDED.pubkey,
     amount = EXCLUDED.amount,
-    round_tx = EXCLUDED.round_tx,
+    commitment_txid = EXCLUDED.commitment_txid,
     spent_by = EXCLUDED.spent_by,
     spent = EXCLUDED.spent,
     redeemed = EXCLUDED.redeemed,
     swept = EXCLUDED.swept,
     expire_at = EXCLUDED.expire_at,
-    created_at = EXCLUDED.created_at,
-    redeem_tx = EXCLUDED.redeem_tx;
+    created_at = EXCLUDED.created_at;
 
 -- name: SelectSweepableVtxos :many
-SELECT sqlc.embed(vtxo) FROM vtxo
+SELECT sqlc.embed(vtxo_virtual_tx_vw) FROM vtxo_virtual_tx_vw
 WHERE redeemed = false AND swept = false;
 
 -- name: SelectNotRedeemedVtxos :many
-SELECT sqlc.embed(vtxo) FROM vtxo
+SELECT sqlc.embed(vtxo_virtual_tx_vw) FROM vtxo_virtual_tx_vw
 WHERE redeemed = false;
 
 -- name: SelectNotRedeemedVtxosWithPubkey :many
-SELECT sqlc.embed(vtxo) FROM vtxo
-WHERE redeemed = false AND pubkey = ?;
+SELECT sqlc.embed(vtxo_virtual_tx_vw) FROM vtxo_virtual_tx_vw
+WHERE redeemed = false AND pubkey = @pubkey;
 
 -- name: SelectVtxoByOutpoint :one
-SELECT sqlc.embed(vtxo) FROM vtxo
-WHERE txid = ? AND vout = ?;
+SELECT sqlc.embed(vtxo_virtual_tx_vw) FROM vtxo_virtual_tx_vw
+WHERE txid = @txid AND vout = @vout;
 
 -- name: SelectAllVtxos :many
-SELECT sqlc.embed(vtxo) FROM vtxo;
+SELECT sqlc.embed(vtxo_virtual_tx_vw) FROM vtxo_virtual_tx_vw;
 
 -- name: SelectVtxosByRoundTxid :many
-SELECT sqlc.embed(vtxo) FROM vtxo
-WHERE round_tx = ?;
+SELECT sqlc.embed(vtxo_virtual_tx_vw) FROM vtxo_virtual_tx_vw
+WHERE commitment_txid = @commitment_txid;
 
 -- name: MarkVtxoAsRedeemed :exec
-UPDATE vtxo SET redeemed = true WHERE txid = ? AND vout = ?;
+UPDATE vtxo SET redeemed = true WHERE txid = @txid AND vout = @vout;
 
 -- name: MarkVtxoAsSwept :exec
-UPDATE vtxo SET swept = true WHERE txid = ? AND vout = ?;
+UPDATE vtxo SET swept = true WHERE txid = @txid AND vout = @vout;
 
 -- name: MarkVtxoAsSpent :exec
-UPDATE vtxo SET spent = true, spent_by = ? WHERE txid = ? AND vout = ?;
+UPDATE vtxo SET spent = true, spent_by = @spent_by WHERE txid = @txid AND vout = @vout;
 
 -- name: UpdateVtxoExpireAt :exec
-UPDATE vtxo SET expire_at = ? WHERE txid = ? AND vout = ?;
+UPDATE vtxo SET expire_at = @expire_at WHERE txid = @txid AND vout = @vout;
 
 -- name: InsertMarketHour :one
 INSERT INTO market_hour (
@@ -219,36 +219,40 @@ INSERT INTO market_hour (
     period,
     round_interval,
     updated_at
-) VALUES (?, ?, ?, ?, ?)
-RETURNING *;
+) VALUES (@start_time, @end_time, @period, @round_interval, @updated_at)
+    RETURNING *;
 
--- name: UpdateMarketHour :one
-UPDATE market_hour
-SET start_time = ?,
-    end_time = ?,
-    period = ?,
-    round_interval = ?,
-    updated_at = ?
-WHERE id = ?
-RETURNING *;
+-- name: UpsertMarketHour :exec
+INSERT INTO market_hour (
+    id, start_time, end_time, period, round_interval, updated_at
+) VALUES (
+             @id, @start_time, @end_time, @period, @round_interval, @updated_at
+         )
+    ON CONFLICT (id) DO UPDATE SET
+    start_time = EXCLUDED.start_time,
+    end_time = EXCLUDED.end_time,
+    period = EXCLUDED.period,
+    round_interval = EXCLUDED.round_interval,
+    updated_at = EXCLUDED.updated_at;
+
 
 -- name: GetLatestMarketHour :one
 SELECT * FROM market_hour ORDER BY updated_at DESC LIMIT 1;
 
 -- name: SelectTreeTxsWithRoundTxid :many
-SELECT tx.* FROM round
-LEFT OUTER JOIN tx ON round.id=tx.round_id
-WHERE round.txid = ? AND tx.type = 'tree';
+SELECT * FROM tx
+WHERE round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = @txid) AND type = 'tree';
 
 -- name: SelectVtxosWithPubkey :many
-SELECT sqlc.embed(vtxo) FROM vtxo WHERE pubkey = ?;
+SELECT sqlc.embed(vtxo_virtual_tx_vw) FROM vtxo_virtual_tx_vw WHERE pubkey = @pubkey;
 
 -- name: GetExistingRounds :many
-SELECT txid FROM round WHERE txid IN (sqlc.slice('txids'));
+SELECT * FROM round_commitment_tx_vw r
+WHERE r.txid = ANY($1::varchar[]);
 
 -- name: SelectLeafVtxosByRoundTxid :many
-SELECT sqlc.embed(vtxo) FROM vtxo
-WHERE round_tx = ? AND (redeem_tx IS NULL or redeem_tx = '');
+SELECT sqlc.embed(vtxo_virtual_tx_vw) FROM vtxo_virtual_tx_vw
+WHERE commitment_txid = @commitment_txid AND (redeem_tx IS NULL or redeem_tx = '');
 
 -- name: UpsertVirtualTx :exec
 INSERT INTO virtual_tx (
@@ -264,12 +268,12 @@ INSERT INTO virtual_tx (
 
 -- name: UpsertCheckpointTx :exec
 INSERT INTO checkpoint_tx (
-    txid, tx, commitment_txid, is_root_commitment_tx, virtual_txid
-) VALUES (@txid, @tx, @commitment_txid, @is_root_commitment_tx, @virtual_txid)
+    txid, tx, commitment_txid, is_root_commitment_txid, virtual_txid
+) VALUES (@txid, @tx, @commitment_txid, @is_root_commitment_txid, @virtual_txid)
     ON CONFLICT(txid) DO UPDATE SET
     tx = EXCLUDED.tx,
     commitment_txid = EXCLUDED.commitment_txid,
-    is_root_commitment_tx = EXCLUDED.is_root_commitment_tx,
+    is_root_commitment_txid = EXCLUDED.is_root_commitment_txid,
     virtual_txid = EXCLUDED.virtual_txid;
 
 -- name: SelectVirtualTxWithTxId :many

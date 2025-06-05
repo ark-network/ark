@@ -304,7 +304,7 @@ func (i *indexerService) GetVtxoChain(ctx context.Context, vtxoKey Outpoint, pag
 	return &VtxoChainResp{
 		Chain:              chain,
 		Page:               pageResp,
-		RootCommitmentTxid: vtxo.RoundTxid,
+		RootCommitmentTxid: vtxo.CommitmentTxid,
 		Depth:              getMaxDepth(chainMap),
 	}, nil
 }
@@ -332,7 +332,7 @@ func (i *indexerService) buildChain(
 	if !vtxo.IsPending() {
 		txs := chain[key].Txs
 		txs = append(txs, ChainTx{
-			Txid: vtxo.RoundTxid,
+			Txid: vtxo.CommitmentTxid,
 			Type: "commitment",
 		})
 		chain[key] = ChainWithExpiry{
@@ -480,7 +480,7 @@ func (i *indexerService) vtxosToTxs(
 			continue // settlement or change, ignore
 		}
 
-		commitmentTxid := vtxo.RoundTxid
+		commitmentTxid := vtxo.CommitmentTxid
 		virtualTxid := ""
 		settled := !vtxo.IsPending()
 		settledBy := ""
@@ -539,7 +539,7 @@ func (i *indexerService) vtxosToTxs(
 			vtxo = vtxos[0]
 		}
 
-		commitmentTxid := vtxo.RoundTxid
+		commitmentTxid := vtxo.CommitmentTxid
 		virtualTxid := ""
 		if vtxo.IsPending() {
 			virtualTxid = vtxo.Txid
@@ -568,7 +568,7 @@ func findVtxosSpentInSettlement(vtxos []domain.Vtxo, vtxo domain.Vtxo) []domain.
 	if vtxo.IsPending() {
 		return nil
 	}
-	return findVtxosSpent(vtxos, vtxo.RoundTxid)
+	return findVtxosSpent(vtxos, vtxo.CommitmentTxid)
 }
 
 func findVtxosSpent(vtxos []domain.Vtxo, id string) []domain.Vtxo {
@@ -601,7 +601,7 @@ func findVtxosSpentInPayment(vtxos []domain.Vtxo, vtxo domain.Vtxo) []domain.Vtx
 func findVtxosResultedFromSpentBy(vtxos []domain.Vtxo, spentByTxid string) []domain.Vtxo {
 	var result []domain.Vtxo
 	for _, v := range vtxos {
-		if !v.IsPending() && v.RoundTxid == spentByTxid {
+		if !v.IsPending() && v.CommitmentTxid == spentByTxid {
 			result = append(result, v)
 			break
 		}

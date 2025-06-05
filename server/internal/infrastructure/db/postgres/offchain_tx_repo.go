@@ -1,4 +1,4 @@
-package sqlitedb
+package pgdb
 
 import (
 	"context"
@@ -6,7 +6,7 @@ import (
 	"fmt"
 
 	"github.com/ark-network/ark/server/internal/core/domain"
-	"github.com/ark-network/ark/server/internal/infrastructure/db/sqlite/sqlc/queries"
+	"github.com/ark-network/ark/server/internal/infrastructure/db/postgres/sqlc/queries"
 )
 
 type offchainTxRepository struct {
@@ -40,7 +40,7 @@ func (v *offchainTxRepository) AddOrUpdateOffchainTx(
 			EndingTimestamp:   offchainTx.EndingTimestamp,
 			ExpiryTimestamp:   offchainTx.ExpiryTimestamp,
 			FailReason:        sql.NullString{String: offchainTx.FailReason, Valid: offchainTx.FailReason != ""},
-			StageCode:         int64(offchainTx.Stage.Code),
+			StageCode:         int32(offchainTx.Stage.Code),
 		}); err != nil {
 			return err
 		}
@@ -52,11 +52,11 @@ func (v *offchainTxRepository) AddOrUpdateOffchainTx(
 			}
 			isRoot := commitmentTxid == offchainTx.RootCommitmentTxId
 			err := querierWithTx.UpsertCheckpointTx(ctx, queries.UpsertCheckpointTxParams{
-				Txid:               checkpointTxid,
-				Tx:                 checkpointTx,
-				CommitmentTxid:     commitmentTxid,
-				IsRootCommitmentTx: isRoot,
-				VirtualTxid:        offchainTx.VirtualTxid,
+				Txid:                 checkpointTxid,
+				Tx:                   checkpointTx,
+				CommitmentTxid:       commitmentTxid,
+				IsRootCommitmentTxid: isRoot,
+				VirtualTxid:          offchainTx.VirtualTxid,
 			})
 			if err != nil {
 				return err
@@ -81,11 +81,11 @@ func (v *offchainTxRepository) GetOffchainTx(ctx context.Context, txid string) (
 	rootCommitmentTxId := ""
 	for _, row := range rows {
 		vw := row.VirtualTxCheckpointTxVw
-		if vw.CheckpointTxid != "" && vw.CheckpointTx != "" {
-			checkpointTxs[vw.CheckpointTxid] = vw.CheckpointTx
-			commitmentTxids[vw.CheckpointTxid] = vw.CommitmentTxid
-			if vw.IsRootCommitmentTx {
-				rootCommitmentTxId = vw.CommitmentTxid
+		if vw.CheckpointTxid.Valid && vw.CheckpointTx.Valid {
+			checkpointTxs[vw.CheckpointTxid.String] = vw.CheckpointTx.String
+			commitmentTxids[vw.CheckpointTxid.String] = vw.CommitmentTxid.String
+			if vw.IsRootCommitmentTxid.Valid && vw.IsRootCommitmentTxid.Bool {
+				rootCommitmentTxId = vw.CommitmentTxid.String
 			}
 		}
 	}

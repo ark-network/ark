@@ -8,6 +8,14 @@ import (
 	"database/sql"
 )
 
+type CheckpointTx struct {
+	Txid               string
+	Tx                 string
+	CommitmentTxid     string
+	IsRootCommitmentTx bool
+	VirtualTxid        string
+}
+
 type MarketHour struct {
 	ID            int64
 	StartTime     int64
@@ -15,23 +23,6 @@ type MarketHour struct {
 	Period        int64
 	RoundInterval int64
 	UpdatedAt     int64
-}
-
-type OffchainTx struct {
-	Txid              string
-	StartingTimestamp int64
-	EndingTimestamp   int64
-	ExpiryTimestamp   int64
-	FailReason        sql.NullString
-	StageCode         int64
-}
-
-type OffchainTxVirtualTxVw struct {
-	Txid         sql.NullString
-	Tx           sql.NullString
-	OffchainTxid sql.NullString
-	Type         sql.NullString
-	Position     sql.NullInt64
 }
 
 type Receiver struct {
@@ -111,11 +102,28 @@ type TxRequest struct {
 }
 
 type VirtualTx struct {
-	Txid         string
-	Tx           string
-	OffchainTxid string
-	Type         string
-	Position     int64
+	Txid              string
+	Tx                string
+	StartingTimestamp int64
+	EndingTimestamp   int64
+	ExpiryTimestamp   int64
+	FailReason        sql.NullString
+	StageCode         int64
+}
+
+type VirtualTxCheckpointTxVw struct {
+	Txid               string
+	Tx                 string
+	StartingTimestamp  int64
+	EndingTimestamp    int64
+	ExpiryTimestamp    int64
+	FailReason         sql.NullString
+	StageCode          int64
+	CheckpointTxid     string
+	CheckpointTx       string
+	CommitmentTxid     string
+	IsRootCommitmentTx bool
+	VirtualTxid        string
 }
 
 type Vtxo struct {

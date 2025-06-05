@@ -311,11 +311,11 @@ func TestCollaborativeExit(t *testing.T) {
 
 func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	ctx := context.Background()
-	client, grpcClient := setupArkSDK(t)
-	defer client.Stop()
+	sdkClient, grpcClient := setupArkSDK(t)
+	defer sdkClient.Stop()
 	defer grpcClient.Close()
 
-	_, arkAddr, boardingAddress, err := client.Receive(ctx)
+	_, arkAddr, boardingAddress, err := sdkClient.Receive(ctx)
 	require.NoError(t, err)
 
 	_, err = utils.RunCommand("nigiri", "faucet", boardingAddress)
@@ -327,11 +327,11 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		vtxos, err := client.NotifyIncomingFunds(ctx, arkAddr)
+		vtxos, err := sdkClient.NotifyIncomingFunds(ctx, arkAddr)
 		require.NoError(t, err)
 		require.NotNil(t, vtxos)
 	}()
-	_, err = client.Settle(ctx)
+	roundId, err := sdkClient.Settle(ctx)
 	require.NoError(t, err)
 
 	wg.Wait()
@@ -339,20 +339,26 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		vtxos, err := client.NotifyIncomingFunds(ctx, arkAddr)
+		vtxos, err := sdkClient.NotifyIncomingFunds(ctx, arkAddr)
 		require.NoError(t, err)
 		require.NotNil(t, vtxos)
 	}()
-	_, err = client.Settle(ctx)
+	_, err = sdkClient.Settle(ctx)
 	require.NoError(t, err)
 
 	wg.Wait()
 
-	_, spentVtxos, err := client.ListVtxos(ctx)
+	_, spentVtxos, err := sdkClient.ListVtxos(ctx)
 	require.NoError(t, err)
 	require.NotEmpty(t, spentVtxos)
 
-	vtxo := spentVtxos[0]
+	var vtxo client.Vtxo
+	for _, v := range spentVtxos {
+		if v.RoundTxid == roundId && !v.IsPending {
+			vtxo = v
+			break
+		}
+	}
 
 	round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
 	require.NoError(t, err)
@@ -384,7 +390,7 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	err = utils.GenerateBlocks(30)
 	require.NoError(t, err)
 
-	balance, err := client.Balance(ctx, false)
+	balance, err := sdkClient.Balance(ctx, false)
 	require.NoError(t, err)
 
 	require.Empty(t, balance.OnchainBalance.LockedAmount)
@@ -452,9 +458,8 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		require.NotEmpty(t, spentVtxos)
 
 		var vtxo client.Vtxo
-
 		for _, v := range spentVtxos {
-			if v.RoundTxid == roundId {
+			if v.RoundTxid == roundId && !v.IsPending {
 				vtxo = v
 				break
 			}
