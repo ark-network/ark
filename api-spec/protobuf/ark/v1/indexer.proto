@@ -65,6 +65,23 @@ service IndexerService {
       get: "/v1/commitmentTx/{txid}/swept"
     };
   }
+  rpc SubscribeForScripts(SubscribeForScriptsRequest) returns (SubscribeForScriptsResponse) {
+    option (google.api.http) = {
+      post: "/v1/script/subscribe"
+      body: "*"
+    };
+  };
+  rpc UnsubscribeForScripts(UnsubscribeForScriptsRequest) returns (UnsubscribeForScriptsResponse) {
+    option (google.api.http) = {
+      post: "/v1/script/unsubscribe"
+      body: "*"
+    };
+  };
+  rpc GetSubscription(GetSubscriptionRequest) returns (stream GetSubscriptionResponse) {
+    option (google.api.http) = {
+      get: "/v1/script/subscription/{subscription_id}"
+    };
+  };
 }
 
 message GetCommitmentTxRequest {
@@ -183,15 +200,6 @@ message GetSweptCommitmentTxResponse {
   repeated string swept_by = 1;
 }
 
-message SubscribeForAddressesRequest {
-  repeated string addresses = 1;
-}
-message SubscribeForAddressesResponse {
-  string address = 1;
-  repeated IndexerVtxo new_vtxos = 2;
-  repeated IndexerVtxo spent_vtxos = 3;
-}
-
 message IndexerBatch {
   uint64 total_output_amount = 1;
   int32 total_output_vtxos = 2;
@@ -268,4 +276,33 @@ message IndexerPageResponse {
   int32 current = 1;
   int32 next = 2;
   int32 total = 3;
+}
+
+message SubscribeForScriptsRequest {
+  repeated string scripts = 1;
+  // if set, update an existing subscription
+  string subscription_id = 2;
+}
+
+message SubscribeForScriptsResponse {
+  string subscription_id = 1;
+}
+
+message UnsubscribeForScriptsRequest {
+  string subscription_id = 1;
+  // if empty, unsubscribe all scripts
+  repeated string scripts = 2; 
+}
+
+message UnsubscribeForScriptsResponse {}
+
+message GetSubscriptionRequest {
+  string subscription_id = 1;
+}
+
+message GetSubscriptionResponse {
+  string txid = 1;
+  repeated string scripts = 2;
+  repeated IndexerVtxo new_vtxos = 3;
+  repeated IndexerVtxo spent_vtxos = 4;
 }

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"path/filepath"
 	"strings"
+	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/server/internal/config"
@@ -47,8 +48,6 @@ type service struct {
 	grpcServer   *grpc.Server
 	macaroonSvc  *macaroons.Service
 	otelShutdown func(context.Context) error
-
-	stopCh chan (struct{})
 }
 
 func NewService(
@@ -95,9 +94,7 @@ func NewService(
 		log.Debugf("generated TLS key pair at path: %s", svcConfig.tlsDatadir())
 	}
 
-	stopCh := make(chan struct{}, 1)
-
-	return &service{version, svcConfig, appConfig, nil, nil, macaroonSvc, nil, stopCh}, nil
+	return &service{version, svcConfig, appConfig, nil, nil, macaroonSvc, nil}, nil
 }
 
 func (s *service) Start() error {
@@ -105,6 +102,8 @@ func (s *service) Start() error {
 	if err := s.start(withoutAppSvc); err != nil {
 		return err
 	}
+	log.Infof("started listening at %s", s.config.address())
+
 	if s.appConfig.UnlockerService() != nil {
 		return s.autoUnlock()
 	}
@@ -119,6 +118,7 @@ func (s *service) Stop() {
 			log.Errorf("failed to shutdown otel: %s", err)
 		}
 	}
+	log.Info("shutdown service")
 }
 
 func (s *service) start(withAppSvc bool) error {
@@ -146,23 +146,21 @@ func (s *service) start(withAppSvc bool) error {
 		// nolint:all
 		go s.server.ListenAndServeTLS("", "")
 	}
-	log.Infof("started listening at %s", s.config.address())
 
 	return nil
 }
 
 func (s *service) stop(withAppSvc bool) {
 	if withAppSvc {
-		s.stopCh <- struct{}{}
 		appSvc, _ := s.appConfig.AppService()
 		if appSvc != nil {
 			appSvc.Stop()
 			log.Info("stopped app service")
 		}
+		s.grpcServer.Stop()
 	}
-	//nolint:all
+	// nolint
 	s.server.Shutdown(context.Background())
-	log.Info("stopped grpc server")
 }
 
 func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
@@ -200,12 +198,14 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 			return err
 		}
 		appSvc = svc
-		appHandler := handlers.NewHandler(s.version, appSvc, s.stopCh)
+		appHandler := handlers.NewHandler(s.version, appSvc)
 		indexerSvc, err := s.appConfig.IndexerService()
 		if err != nil {
 			return err
 		}
-		indexerHandler := handlers.NewIndexerService(indexerSvc)
+		eventsCh := appSvc.GetIndexerTxChannel(context.Background())
+		subscriptionTimeoutDuration := time.Minute // TODO let to be set via config
+		indexerHandler := handlers.NewIndexerService(indexerSvc, eventsCh, subscriptionTimeoutDuration)
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
 		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
 		arkv1.RegisterIndexerServiceServer(grpcServer, indexerHandler)
@@ -306,6 +306,7 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		httpServerHandler = h2c.NewHandler(httpServerHandler, &http2.Server{})
 	}
 
+	s.grpcServer = grpcServer
 	s.server = &http.Server{
 		Addr:      s.config.address(),
 		Handler:   httpServerHandler,

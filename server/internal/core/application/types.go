@@ -48,6 +48,9 @@ type Service interface {
 	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
 	GetTxRequestQueue(ctx context.Context, requestIds ...string) ([]TxRequestInfo, error)
 	DeleteTxRequests(ctx context.Context, requestIds ...string) error
+
+	// TODO remove this in v7
+	GetIndexerTxChannel(ctx context.Context) <-chan TransactionEvent
 }
 
 type ServiceInfo struct {
@@ -101,6 +104,9 @@ type TransactionEventType string
 
 type TransactionEvent interface {
 	Type() TransactionEventType
+	GetSpentVtxos() []domain.Vtxo
+	GetSpendableVtxos() []domain.Vtxo
+	GetTxId() string
 }
 
 type RoundTransactionEvent struct {
@@ -115,6 +121,18 @@ func (r RoundTransactionEvent) Type() TransactionEventType {
 	return RoundTransaction
 }
 
+func (r RoundTransactionEvent) GetTxId() string {
+	return r.RoundTxid
+}
+
+func (r RoundTransactionEvent) GetSpentVtxos() []domain.Vtxo {
+	return r.SpentVtxos
+}
+
+func (r RoundTransactionEvent) GetSpendableVtxos() []domain.Vtxo {
+	return r.SpendableVtxos
+}
+
 type RedeemTransactionEvent struct {
 	RedeemTxid     string
 	SpentVtxos     []domain.Vtxo
@@ -124,6 +142,18 @@ type RedeemTransactionEvent struct {
 
 func (a RedeemTransactionEvent) Type() TransactionEventType {
 	return RedeemTransaction
+}
+
+func (r RedeemTransactionEvent) GetTxId() string {
+	return r.RedeemTxid
+}
+
+func (r RedeemTransactionEvent) GetSpentVtxos() []domain.Vtxo {
+	return r.SpentVtxos
+}
+
+func (r RedeemTransactionEvent) GetSpendableVtxos() []domain.Vtxo {
+	return r.SpendableVtxos
 }
 
 type TxRequestInfo struct {

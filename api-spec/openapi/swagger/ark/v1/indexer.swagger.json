@@ -478,6 +478,109 @@
         ]
       }
     },
+    "/v1/script/subscribe": {
+      "post": {
+        "operationId": "IndexerService_SubscribeForScripts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1SubscribeForScriptsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1SubscribeForScriptsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/script/subscription/{subscriptionId}": {
+      "get": {
+        "operationId": "IndexerService_GetSubscription",
+        "responses": {
+          "200": {
+            "description": "A successful response.(streaming responses)",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "result": {
+                  "$ref": "#/definitions/v1GetSubscriptionResponse"
+                },
+                "error": {
+                  "$ref": "#/definitions/rpcStatus"
+                }
+              },
+              "title": "Stream result of v1GetSubscriptionResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "subscriptionId",
+            "in": "path",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/script/unsubscribe": {
+      "post": {
+        "operationId": "IndexerService_UnsubscribeForScripts",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1UnsubscribeForScriptsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1UnsubscribeForScriptsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
     "/v1/virtualTx/{txids}": {
       "get": {
         "operationId": "IndexerService_GetVirtualTxs",
@@ -684,6 +787,34 @@
         },
         "page": {
           "$ref": "#/definitions/v1IndexerPageResponse"
+        }
+      }
+    },
+    "v1GetSubscriptionResponse": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "scripts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "newVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerVtxo"
+          }
+        },
+        "spentVtxos": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IndexerVtxo"
+          }
         }
       }
     },
@@ -1003,6 +1134,47 @@
           "type": "string"
         }
       }
+    },
+    "v1SubscribeForScriptsRequest": {
+      "type": "object",
+      "properties": {
+        "scripts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "subscriptionId": {
+          "type": "string",
+          "title": "if set, update an existing subscription"
+        }
+      }
+    },
+    "v1SubscribeForScriptsResponse": {
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "type": "string"
+        }
+      }
+    },
+    "v1UnsubscribeForScriptsRequest": {
+      "type": "object",
+      "properties": {
+        "subscriptionId": {
+          "type": "string"
+        },
+        "scripts": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "if empty, unsubscribe all scripts"
+        }
+      }
+    },
+    "v1UnsubscribeForScriptsResponse": {
+      "type": "object"
     }
   }
 }
