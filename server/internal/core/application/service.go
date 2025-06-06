@@ -1767,8 +1767,10 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 			}
 			notConfirmedRequests = append(notConfirmedRequests, req)
 		}
+		log.Info("[SELE]timeout")
 	case <-confirmationSessions.ConfirmedC:
 		confirmedRequests = requests
+		log.Info("[SELE]chan")
 	}
 
 	close(confirmationSessions.ConfirmedC)
@@ -2260,6 +2262,7 @@ func (s *covenantlessService) propagateBatchStartedEvent(requests []ports.TimedT
 	intentIdsHashes := make([][32]byte, 0, len(requests))
 	for _, req := range requests {
 		intentIdsHashes = append(intentIdsHashes, req.HashID())
+		log.Info(fmt.Sprintf("intent id: %x", req.HashID()))
 	}
 
 	s.liveStore.ConfirmationSessions().Init(intentIdsHashes)
