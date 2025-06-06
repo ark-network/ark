@@ -7,6 +7,7 @@ import (
 	"os"
 	"reflect"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
@@ -134,7 +135,8 @@ func TestMain(m *testing.M) {
 
 func TestService(t *testing.T) {
 	dbDir := t.TempDir()
-	pgDns := "postgresql://root:secret@127.0.0.1:5432/ark-db-test?sslmode=disable"
+	pgDns := "postgresql://root:secret@127.0.0.1:5432/projection?sslmode=disable"
+	pgEventDns := "postgresql://root:secret@127.0.0.1:5432/event?sslmode=disable"
 	tests := []struct {
 		name   string
 		config db.ServiceConfig
@@ -160,9 +162,9 @@ func TestService(t *testing.T) {
 		{
 			name: "repo_manager_with_postgres_stores",
 			config: db.ServiceConfig{
-				EventStoreType:   "badger",
+				EventStoreType:   "postgres",
 				DataStoreType:    "postgres",
-				EventStoreConfig: []interface{}{"", nil},
+				EventStoreConfig: []interface{}{pgEventDns},
 				DataStoreConfig:  []interface{}{pgDns},
 			},
 		},
@@ -186,10 +188,10 @@ func TestService(t *testing.T) {
 func testEventRepository(t *testing.T, svc ports.RepoManager) {
 	t.Run("test_event_repository", func(t *testing.T) {
 		fixtures := []struct {
-			topic   string
-			id      string
-			events  []domain.Event
-			handler func(events []domain.Event)
+			topic    string
+			id       string
+			events   []domain.Event
+			handlers []func(events []domain.Event)
 		}{
 			{
 				topic: domain.RoundTopic,
@@ -203,14 +205,19 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 						Timestamp: 1701190270,
 					},
 				},
-				handler: func(events []domain.Event) {
-					round := domain.NewRoundFromEvents(events)
+				handlers: []func(events []domain.Event){
+					func(events []domain.Event) {
+						round := domain.NewRoundFromEvents(events)
 
-					require.NotNil(t, round)
-					require.Len(t, round.Events(), 1)
-					require.True(t, round.IsStarted())
-					require.False(t, round.IsFailed())
-					require.False(t, round.IsEnded())
+						require.NotNil(t, round)
+						require.Len(t, round.Events(), 1)
+						require.True(t, round.IsStarted())
+						require.False(t, round.IsFailed())
+						require.False(t, round.IsEnded())
+					},
+					func(events []domain.Event) {
+						require.Len(t, events, 1)
+					},
 				},
 			},
 			{
@@ -235,13 +242,15 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 						RoundTx:    emptyTx,
 					},
 				},
-				handler: func(events []domain.Event) {
-					round := domain.NewRoundFromEvents(events)
-					require.NotNil(t, round)
-					require.Len(t, round.Events(), 2)
-					require.Len(t, round.VtxoTree, 3)
-					require.Equal(t, round.VtxoTree.NumberOfNodes(), 7)
-					require.Len(t, round.Connectors, 2)
+				handlers: []func(events []domain.Event){
+					func(events []domain.Event) {
+						round := domain.NewRoundFromEvents(events)
+						require.NotNil(t, round)
+						require.Len(t, round.Events(), 2)
+						require.Len(t, round.VtxoTree, 3)
+						require.Equal(t, round.VtxoTree.NumberOfNodes(), 7)
+						require.Len(t, round.Connectors, 2)
+					},
 				},
 			},
 			{
@@ -274,15 +283,17 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 						Timestamp:  1701190300,
 					},
 				},
-				handler: func(events []domain.Event) {
-					round := domain.NewRoundFromEvents(events)
+				handlers: []func(events []domain.Event){
+					func(events []domain.Event) {
+						round := domain.NewRoundFromEvents(events)
 
-					require.NotNil(t, round)
-					require.Len(t, round.Events(), 3)
-					require.False(t, round.IsStarted())
-					require.False(t, round.IsFailed())
-					require.True(t, round.IsEnded())
-					require.NotEmpty(t, round.Txid)
+						require.NotNil(t, round)
+						require.Len(t, round.Events(), 3)
+						require.False(t, round.IsStarted())
+						require.False(t, round.IsFailed())
+						require.True(t, round.IsEnded())
+						require.NotEmpty(t, round.Txid)
+					},
 				},
 			},
 			{
@@ -306,10 +317,12 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 						},
 					},
 				},
-				handler: func(events []domain.Event) {
-					offchainTx := domain.NewOffchainTxFromEvents(events)
-					require.NotNil(t, offchainTx)
-					require.Len(t, offchainTx.Events(), 1)
+				handlers: []func(events []domain.Event){
+					func(events []domain.Event) {
+						offchainTx := domain.NewOffchainTxFromEvents(events)
+						require.NotNil(t, offchainTx)
+						require.Len(t, offchainTx.Events(), 1)
+					},
 				},
 			},
 			{
@@ -343,10 +356,12 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 						},
 					},
 				},
-				handler: func(events []domain.Event) {
-					offchainTx := domain.NewOffchainTxFromEvents(events)
-					require.NotNil(t, offchainTx)
-					require.Len(t, offchainTx.Events(), 2)
+				handlers: []func(events []domain.Event){
+					func(events []domain.Event) {
+						offchainTx := domain.NewOffchainTxFromEvents(events)
+						require.NotNil(t, offchainTx)
+						require.Len(t, offchainTx.Events(), 2)
+					},
 				},
 			},
 		}
@@ -354,12 +369,21 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 
 		for _, f := range fixtures {
 			svc.Events().ClearRegisteredHandlers()
-			svc.Events().RegisterEventsHandler(f.topic, f.handler)
+
+			wg := sync.WaitGroup{}
+			wg.Add(len(f.handlers))
+
+			for _, handler := range f.handlers {
+				svc.Events().RegisterEventsHandler(f.topic, func(events []domain.Event) {
+					handler(events)
+					wg.Done()
+				})
+			}
 
 			err := svc.Events().Save(ctx, f.topic, f.id, f.events)
 			require.NoError(t, err)
 
-			time.Sleep(100 * time.Millisecond)
+			wg.Wait()
 		}
 	})
 }

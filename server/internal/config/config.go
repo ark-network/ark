@@ -28,7 +28,8 @@ const minAllowedSequence = 512
 
 var (
 	supportedEventDbs = supportedType{
-		"badger": {},
+		"badger":   {},
+		"postgres": {},
 	}
 	supportedDbs = supportedType{
 		"badger":   {},
@@ -62,6 +63,7 @@ type Config struct {
 	EventDbType         string
 	DbDir               string
 	DbUrl               string
+	EventDbUrl          string
 	EventDbDir          string
 	RoundInterval       int64
 	SchedulerType       string
@@ -118,6 +120,7 @@ var (
 	EventDbType               = "EVENT_DB_TYPE"
 	DbType                    = "DB_TYPE"
 	DbUrl                     = "DB_URL"
+	EventDbUrl                = "EVENT_DB_URL"
 	SchedulerType             = "SCHEDULER_TYPE"
 	TxBuilderType             = "TX_BUILDER_TYPE"
 	LogLevel                  = "LOG_LEVEL"
@@ -149,7 +152,7 @@ var (
 	defaultRoundInterval       = 30
 	DefaultPort                = 7070
 	defaultDbType              = "postgres"
-	defaultEventDbType         = "badger"
+	defaultEventDbType         = "postgres"
 	defaultSchedulerType       = "gocron"
 	defaultTxBuilderType       = "covenantless"
 	defaultEsploraURL          = "https://blockstream.info/api"
@@ -207,6 +210,14 @@ func LoadConfig() (*Config, error) {
 
 	dbPath := filepath.Join(viper.GetString(Datadir), "db")
 
+	var eventDbUrl string
+	if viper.GetString(EventDbType) == "postgres" {
+		eventDbUrl = viper.GetString(EventDbUrl)
+		if eventDbUrl == "" {
+			return nil, fmt.Errorf("EVENT_DB_URL not provided")
+		}
+	}
+
 	var dbUrl string
 	if viper.GetString(DbType) == "postgres" {
 		dbUrl = viper.GetString(DbUrl)
@@ -228,6 +239,7 @@ func LoadConfig() (*Config, error) {
 		DbDir:                     dbPath,
 		DbUrl:                     dbUrl,
 		EventDbDir:                dbPath,
+		EventDbUrl:                eventDbUrl,
 		LogLevel:                  viper.GetInt(LogLevel),
 		VtxoTreeExpiry:            determineLocktimeType(viper.GetInt64(VtxoTreeExpiry)),
 		UnilateralExitDelay:       determineLocktimeType(viper.GetInt64(UnilateralExitDelay)),
@@ -412,6 +424,8 @@ func (c *Config) repoManager() error {
 	switch c.EventDbType {
 	case "badger":
 		eventStoreConfig = []interface{}{c.EventDbDir, logger}
+	case "postgres":
+		eventStoreConfig = []interface{}{c.EventDbUrl}
 	default:
 		return fmt.Errorf("unknown event db type")
 	}
