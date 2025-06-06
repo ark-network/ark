@@ -3,6 +3,7 @@ package indexer
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -292,21 +293,7 @@ func (a *grpcClient) GetVtxos(
 		}
 		vtxos := make([]indexer.Vtxo, 0, len(resp.GetVtxos()))
 		for _, vtxo := range resp.GetVtxos() {
-			vtxos = append(vtxos, indexer.Vtxo{
-				Outpoint: indexer.Outpoint{
-					Txid: vtxo.GetOutpoint().GetTxid(),
-					VOut: vtxo.GetOutpoint().GetVout(),
-				},
-				CreatedAt:      vtxo.GetCreatedAt(),
-				ExpiresAt:      vtxo.GetExpiresAt(),
-				Amount:         vtxo.GetAmount(),
-				Script:         vtxo.GetScript(),
-				IsLeaf:         vtxo.GetIsLeaf(),
-				IsSwept:        vtxo.GetIsSwept(),
-				IsSpent:        vtxo.GetIsSpent(),
-				SpentBy:        vtxo.GetSpentBy(),
-				CommitmentTxid: vtxo.GetCommitmentTxid(),
-			})
+			vtxos = append(vtxos, newIndexerVtxo(vtxo))
 		}
 
 		return &indexer.VtxosResponse{
@@ -329,21 +316,7 @@ func (a *grpcClient) GetVtxos(
 
 	vtxos := make([]indexer.Vtxo, 0, len(resp.GetVtxos()))
 	for _, vtxo := range resp.GetVtxos() {
-		vtxos = append(vtxos, indexer.Vtxo{
-			Outpoint: indexer.Outpoint{
-				Txid: vtxo.GetOutpoint().GetTxid(),
-				VOut: vtxo.GetOutpoint().GetVout(),
-			},
-			CreatedAt:      vtxo.GetCreatedAt(),
-			ExpiresAt:      vtxo.GetExpiresAt(),
-			Amount:         vtxo.GetAmount(),
-			Script:         vtxo.GetScript(),
-			IsLeaf:         vtxo.GetIsLeaf(),
-			IsSwept:        vtxo.GetIsSwept(),
-			IsSpent:        vtxo.GetIsSpent(),
-			SpentBy:        vtxo.GetSpentBy(),
-			CommitmentTxid: vtxo.GetCommitmentTxid(),
-		})
+		vtxos = append(vtxos, newIndexerVtxo(vtxo))
 	}
 
 	return &indexer.VtxosResponse{
@@ -499,6 +472,80 @@ func (a *grpcClient) GetSweptCommitmentTx(ctx context.Context, txid string) ([]s
 	return resp.GetSweptBy(), nil
 }
 
+func (a *grpcClient) GetSubscription(ctx context.Context, subscriptionId string) (<-chan *indexer.ScriptEvent, func(), error) {
+	ctx, cancel := context.WithCancel(ctx)
+
+	stream, err := a.svc.GetSubscription(ctx, &arkv1.GetSubscriptionRequest{
+		SubscriptionId: subscriptionId,
+	})
+	if err != nil {
+		cancel()
+		return nil, nil, err
+	}
+
+	eventsCh := make(chan *indexer.ScriptEvent)
+
+	go func() {
+		defer close(eventsCh)
+
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF {
+					eventsCh <- &indexer.ScriptEvent{Err: fmt.Errorf("connection closed by server")}
+					return
+				}
+				if st, ok := status.FromError(err); ok && st.Code() == codes.Canceled {
+					return
+				}
+				eventsCh <- &indexer.ScriptEvent{Err: err}
+				return
+			}
+
+			eventsCh <- &indexer.ScriptEvent{
+				Txid:       resp.GetTxid(),
+				Scripts:    resp.GetScripts(),
+				NewVtxos:   newIndexerVtxos(resp.GetNewVtxos()),
+				SpentVtxos: newIndexerVtxos(resp.GetSpentVtxos()),
+			}
+		}
+	}()
+
+	closeFn := func() {
+		//nolint:errcheck
+		stream.CloseSend()
+		cancel()
+	}
+
+	return eventsCh, closeFn, nil
+}
+
+func (a *grpcClient) SubscribeForScripts(ctx context.Context, subscriptionId string, scripts []string) (string, error) {
+	req := &arkv1.SubscribeForScriptsRequest{
+		Scripts: scripts,
+	}
+	if len(subscriptionId) > 0 {
+		req.SubscriptionId = subscriptionId
+	}
+
+	resp, err := a.svc.SubscribeForScripts(ctx, req)
+	if err != nil {
+		return "", err
+	}
+	return resp.GetSubscriptionId(), nil
+}
+
+func (a *grpcClient) UnsubscribeForScripts(ctx context.Context, subscriptionId string, scripts []string) error {
+	req := &arkv1.UnsubscribeForScriptsRequest{
+		Scripts: scripts,
+	}
+	if len(subscriptionId) > 0 {
+		req.SubscriptionId = subscriptionId
+	}
+	_, err := a.svc.UnsubscribeForScripts(ctx, req)
+	return err
+}
+
 func parsePage(page *arkv1.IndexerPageResponse) *indexer.PageResponse {
 	if page == nil {
 		return nil
@@ -523,4 +570,30 @@ func (c txChain) parse() []indexer.ChainTx {
 		})
 	}
 	return txs
+}
+
+func newIndexerVtxos(vtxos []*arkv1.IndexerVtxo) []indexer.Vtxo {
+	res := make([]indexer.Vtxo, 0, len(vtxos))
+	for _, vtxo := range vtxos {
+		res = append(res, newIndexerVtxo(vtxo))
+	}
+	return res
+}
+
+func newIndexerVtxo(vtxo *arkv1.IndexerVtxo) indexer.Vtxo {
+	return indexer.Vtxo{
+		Outpoint: indexer.Outpoint{
+			Txid: vtxo.GetOutpoint().GetTxid(),
+			VOut: vtxo.GetOutpoint().GetVout(),
+		},
+		CreatedAt:      vtxo.GetCreatedAt(),
+		ExpiresAt:      vtxo.GetExpiresAt(),
+		Amount:         vtxo.GetAmount(),
+		Script:         vtxo.GetScript(),
+		IsLeaf:         vtxo.GetIsLeaf(),
+		IsSwept:        vtxo.GetIsSwept(),
+		IsSpent:        vtxo.GetIsSpent(),
+		SpentBy:        vtxo.GetSpentBy(),
+		CommitmentTxid: vtxo.GetCommitmentTxid(),
+	}
 }

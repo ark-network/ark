@@ -30,6 +30,9 @@ type IndexerServiceClient interface {
 	GetVtxoChain(ctx context.Context, in *GetVtxoChainRequest, opts ...grpc.CallOption) (*GetVtxoChainResponse, error)
 	GetVirtualTxs(ctx context.Context, in *GetVirtualTxsRequest, opts ...grpc.CallOption) (*GetVirtualTxsResponse, error)
 	GetSweptCommitmentTx(ctx context.Context, in *GetSweptCommitmentTxRequest, opts ...grpc.CallOption) (*GetSweptCommitmentTxResponse, error)
+	SubscribeForScripts(ctx context.Context, in *SubscribeForScriptsRequest, opts ...grpc.CallOption) (*SubscribeForScriptsResponse, error)
+	UnsubscribeForScripts(ctx context.Context, in *UnsubscribeForScriptsRequest, opts ...grpc.CallOption) (*UnsubscribeForScriptsResponse, error)
+	GetSubscription(ctx context.Context, in *GetSubscriptionRequest, opts ...grpc.CallOption) (IndexerService_GetSubscriptionClient, error)
 }
 
 type indexerServiceClient struct {
@@ -148,6 +151,56 @@ func (c *indexerServiceClient) GetSweptCommitmentTx(ctx context.Context, in *Get
 	return out, nil
 }
 
+func (c *indexerServiceClient) SubscribeForScripts(ctx context.Context, in *SubscribeForScriptsRequest, opts ...grpc.CallOption) (*SubscribeForScriptsResponse, error) {
+	out := new(SubscribeForScriptsResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/SubscribeForScripts", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *indexerServiceClient) UnsubscribeForScripts(ctx context.Context, in *UnsubscribeForScriptsRequest, opts ...grpc.CallOption) (*UnsubscribeForScriptsResponse, error) {
+	out := new(UnsubscribeForScriptsResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/UnsubscribeForScripts", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *indexerServiceClient) GetSubscription(ctx context.Context, in *GetSubscriptionRequest, opts ...grpc.CallOption) (IndexerService_GetSubscriptionClient, error) {
+	stream, err := c.cc.NewStream(ctx, &IndexerService_ServiceDesc.Streams[0], "/ark.v1.IndexerService/GetSubscription", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &indexerServiceGetSubscriptionClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type IndexerService_GetSubscriptionClient interface {
+	Recv() (*GetSubscriptionResponse, error)
+	grpc.ClientStream
+}
+
+type indexerServiceGetSubscriptionClient struct {
+	grpc.ClientStream
+}
+
+func (x *indexerServiceGetSubscriptionClient) Recv() (*GetSubscriptionResponse, error) {
+	m := new(GetSubscriptionResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // IndexerServiceServer is the server API for IndexerService service.
 // All implementations should embed UnimplementedIndexerServiceServer
 // for forward compatibility
@@ -164,6 +217,9 @@ type IndexerServiceServer interface {
 	GetVtxoChain(context.Context, *GetVtxoChainRequest) (*GetVtxoChainResponse, error)
 	GetVirtualTxs(context.Context, *GetVirtualTxsRequest) (*GetVirtualTxsResponse, error)
 	GetSweptCommitmentTx(context.Context, *GetSweptCommitmentTxRequest) (*GetSweptCommitmentTxResponse, error)
+	SubscribeForScripts(context.Context, *SubscribeForScriptsRequest) (*SubscribeForScriptsResponse, error)
+	UnsubscribeForScripts(context.Context, *UnsubscribeForScriptsRequest) (*UnsubscribeForScriptsResponse, error)
+	GetSubscription(*GetSubscriptionRequest, IndexerService_GetSubscriptionServer) error
 }
 
 // UnimplementedIndexerServiceServer should be embedded to have forward compatible implementations.
@@ -205,6 +261,15 @@ func (UnimplementedIndexerServiceServer) GetVirtualTxs(context.Context, *GetVirt
 }
 func (UnimplementedIndexerServiceServer) GetSweptCommitmentTx(context.Context, *GetSweptCommitmentTxRequest) (*GetSweptCommitmentTxResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSweptCommitmentTx not implemented")
+}
+func (UnimplementedIndexerServiceServer) SubscribeForScripts(context.Context, *SubscribeForScriptsRequest) (*SubscribeForScriptsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubscribeForScripts not implemented")
+}
+func (UnimplementedIndexerServiceServer) UnsubscribeForScripts(context.Context, *UnsubscribeForScriptsRequest) (*UnsubscribeForScriptsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UnsubscribeForScripts not implemented")
+}
+func (UnimplementedIndexerServiceServer) GetSubscription(*GetSubscriptionRequest, IndexerService_GetSubscriptionServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetSubscription not implemented")
 }
 
 // UnsafeIndexerServiceServer may be embedded to opt out of forward compatibility for this service.
@@ -434,6 +499,63 @@ func _IndexerService_GetSweptCommitmentTx_Handler(srv interface{}, ctx context.C
 	return interceptor(ctx, in, info, handler)
 }
 
+func _IndexerService_SubscribeForScripts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubscribeForScriptsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IndexerServiceServer).SubscribeForScripts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.IndexerService/SubscribeForScripts",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IndexerServiceServer).SubscribeForScripts(ctx, req.(*SubscribeForScriptsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IndexerService_UnsubscribeForScripts_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UnsubscribeForScriptsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(IndexerServiceServer).UnsubscribeForScripts(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/ark.v1.IndexerService/UnsubscribeForScripts",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(IndexerServiceServer).UnsubscribeForScripts(ctx, req.(*UnsubscribeForScriptsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _IndexerService_GetSubscription_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(GetSubscriptionRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(IndexerServiceServer).GetSubscription(m, &indexerServiceGetSubscriptionServer{stream})
+}
+
+type IndexerService_GetSubscriptionServer interface {
+	Send(*GetSubscriptionResponse) error
+	grpc.ServerStream
+}
+
+type indexerServiceGetSubscriptionServer struct {
+	grpc.ServerStream
+}
+
+func (x *indexerServiceGetSubscriptionServer) Send(m *GetSubscriptionResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // IndexerService_ServiceDesc is the grpc.ServiceDesc for IndexerService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -489,7 +611,21 @@ var IndexerService_ServiceDesc = grpc.ServiceDesc{
 			MethodName: "GetSweptCommitmentTx",
 			Handler:    _IndexerService_GetSweptCommitmentTx_Handler,
 		},
+		{
+			MethodName: "SubscribeForScripts",
+			Handler:    _IndexerService_SubscribeForScripts_Handler,
+		},
+		{
+			MethodName: "UnsubscribeForScripts",
+			Handler:    _IndexerService_UnsubscribeForScripts_Handler,
+		},
 	},
-	Streams:  []grpc.StreamDesc{},
+	Streams: []grpc.StreamDesc{
+		{
+			StreamName:    "GetSubscription",
+			Handler:       _IndexerService_GetSubscription_Handler,
+			ServerStreams: true,
+		},
+	},
 	Metadata: "ark/v1/indexer.proto",
 }

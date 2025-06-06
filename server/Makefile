@@ -38,13 +38,7 @@ lint:
 ## run: run arkd in regtest
 run: clean
 	@echo "Running arkd in regtest"
-	$(call setup_env, envs/regtest.env)
-	go run ./cmd/arkd
-
-## run-neutrino: run arkd in mutinynet
-run-mutinynet: clean
-	@echo "Running arkd in mutinynet"
-	$(call setup_env, envs/regtest.env)
+	$(call setup_env, envs/dev.env)
 	go run ./cmd/arkd
 
 ## test: runs unit and component tests
