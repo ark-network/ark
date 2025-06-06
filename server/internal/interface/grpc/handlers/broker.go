@@ -2,14 +2,13 @@ package handlers
 
 import (
 	"fmt"
-	"slices"
 	"sync"
 	"time"
 )
 
 type listener[T any] struct {
 	id            string
-	topics        []string
+	topics        map[string]struct{}
 	ch            chan T
 	stopTimeoutCh chan struct{}
 }
@@ -19,13 +18,13 @@ type listener[T any] struct {
 // it is thread safe and can be used to send events to multiple listeners.
 type broker[T any] struct {
 	lock      *sync.Mutex
-	listeners []*listener[T]
+	listeners map[string]*listener[T]
 }
 
 func newBroker[T any]() *broker[T] {
 	return &broker[T]{
 		lock:      &sync.Mutex{},
-		listeners: make([]*listener[T], 0),
+		listeners: make(map[string]*listener[T], 0),
 	}
 }
 
@@ -33,121 +32,119 @@ func (h *broker[T]) pushListener(l *listener[T]) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	h.listeners = append(h.listeners, l)
+	h.listeners[l.id] = l
 }
 
 func (h *broker[T]) removeListener(id string) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	for i, listener := range h.listeners {
-		if listener.id == id {
-			if listener.stopTimeoutCh != nil {
-				listener.stopTimeoutCh <- struct{}{}
-				close(listener.stopTimeoutCh)
-				listener.stopTimeoutCh = nil
-			}
-			h.listeners = append(h.listeners[:i], h.listeners[i+1:]...)
-			return
-		}
+	listener, ok := h.listeners[id]
+	if !ok {
+		return
 	}
+	if listener.stopTimeoutCh != nil {
+		close(listener.stopTimeoutCh)
+	}
+	delete(h.listeners, id)
 }
 
 func (h *broker[T]) getListenerChannel(id string) (chan T, error) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	for _, listener := range h.listeners {
-		if listener.id == id {
-			return listener.ch, nil
-		}
+	listener, ok := h.listeners[id]
+	if !ok {
+		return nil, fmt.Errorf("subscription %s not found", id)
+	}
+	return listener.ch, nil
+}
+
+func (h *broker[T]) getTopics(id string) []string {
+	h.lock.Lock()
+	defer h.lock.Unlock()
+
+	listener, ok := h.listeners[id]
+	if !ok {
+		return nil
 	}
 
-	return nil, fmt.Errorf("subscription %s not found", id)
+	topics := make([]string, 0, len(listener.topics))
+	for topic := range listener.topics {
+		topics = append(topics, topic)
+	}
+	return topics
 }
 
 func (h *broker[T]) addTopics(id string, topics []string) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	for _, listener := range h.listeners {
-		if listener.id == id {
-			// add topics to listener.topics if not already present
-			for _, topic := range topics {
-				if !slices.Contains(listener.topics, topic) {
-					listener.topics = append(listener.topics, topic)
-				}
-			}
-			return nil
-		}
+	if _, ok := h.listeners[id]; !ok {
+		return fmt.Errorf("subscription %s not found", id)
 	}
 
-	return fmt.Errorf("subscription %s not found", id)
+	for _, topic := range topics {
+		h.listeners[id].topics[topic] = struct{}{}
+	}
+	return nil
 }
 
-func (h *broker[T]) removeTopics(id string, toRemove []string) (bool, error) {
+func (h *broker[T]) removeTopics(id string, topics []string) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	for _, listener := range h.listeners {
-		if listener.id == id {
-			listener.topics = slices.DeleteFunc(listener.topics, func(t string) bool {
-				return slices.Contains(toRemove, t)
-			})
-			return len(listener.topics) == 0, nil
-		}
+	if _, ok := h.listeners[id]; !ok {
+		return fmt.Errorf("subscription %s not found", id)
 	}
 
-	return false, fmt.Errorf("subscription %s not found", id)
+	for _, topic := range topics {
+		delete(h.listeners[id].topics, topic)
+	}
+	return nil
 }
 
 func (h *broker[T]) removeAllTopics(id string) error {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	for _, listener := range h.listeners {
-		if listener.id == id {
-			listener.topics = make([]string, 0)
-			return nil
-		}
+	if _, ok := h.listeners[id]; !ok {
+		return fmt.Errorf("subscription %s not found", id)
 	}
 
-	return fmt.Errorf("subscription %s not found", id)
+	h.listeners[id].topics = make(map[string]struct{})
+	return nil
 }
 
 func (h *broker[T]) startTimeout(id string, timeout time.Duration) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	for _, listener := range h.listeners {
-		if listener.id == id {
-
-			listener.stopTimeoutCh = make(chan struct{})
-
-			go func() {
-				select {
-				case <-listener.stopTimeoutCh:
-					return
-				case <-time.After(timeout):
-					h.removeListener(id)
-				}
-			}()
-
-			return
-		}
+	if _, ok := h.listeners[id]; !ok {
+		return
 	}
+
+	h.listeners[id].stopTimeoutCh = make(chan struct{})
+
+	go func() {
+		select {
+		case <-h.listeners[id].stopTimeoutCh:
+			return
+		case <-time.After(timeout):
+			h.removeListener(id)
+		}
+	}()
 }
 
 func (h *broker[T]) stopTimeout(id string) {
 	h.lock.Lock()
 	defer h.lock.Unlock()
 
-	for _, listener := range h.listeners {
-		if listener.id == id {
-			listener.stopTimeoutCh <- struct{}{}
-			close(listener.stopTimeoutCh)
-			listener.stopTimeoutCh = nil
-			return
-		}
+	if _, ok := h.listeners[id]; !ok {
+		return
 	}
+
+	h.listeners[id].stopTimeoutCh <- struct{}{}
+	close(h.listeners[id].stopTimeoutCh)
+	h.listeners[id].stopTimeoutCh = nil
 }

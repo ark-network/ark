@@ -11,6 +11,7 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -423,7 +424,13 @@ func (h *indexerService) GetSubscription(req *arkv1.GetSubscriptionRequest, stre
 	}
 
 	h.scriptSubsHandler.stopTimeout(subscriptionId)
-	defer h.scriptSubsHandler.startTimeout(subscriptionId, h.subscriptionTimeoutDuration)
+	defer func() {
+		if len(h.scriptSubsHandler.getTopics(subscriptionId)) > 0 {
+			h.scriptSubsHandler.startTimeout(subscriptionId, h.subscriptionTimeoutDuration)
+			return
+		}
+		h.scriptSubsHandler.removeListener(subscriptionId)
+	}()
 
 	ch, err := h.scriptSubsHandler.getListenerChannel(subscriptionId)
 	if err != nil {
@@ -458,34 +465,33 @@ func (h *indexerService) UnsubscribeForScripts(ctx context.Context, req *arkv1.U
 		return &arkv1.UnsubscribeForScriptsResponse{}, nil
 	}
 
-	isEmpty, err := h.scriptSubsHandler.removeTopics(subscriptionId, scripts)
-	if err != nil {
+	if err := h.scriptSubsHandler.removeTopics(subscriptionId, scripts); err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	if isEmpty {
-		h.scriptSubsHandler.removeListener(subscriptionId)
 	}
 
 	return &arkv1.UnsubscribeForScriptsResponse{}, nil
 }
 
 func (h *indexerService) SubscribeForScripts(ctx context.Context, req *arkv1.SubscribeForScriptsRequest) (*arkv1.SubscribeForScriptsResponse, error) {
-	scripts := req.GetScripts()
-	if len(scripts) == 0 {
-		return nil, status.Error(codes.InvalidArgument, "missing scripts")
-	}
-
 	subscriptionId := req.GetSubscriptionId()
+	scripts, err := parseScripts(req.GetScripts())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
 
 	if len(subscriptionId) == 0 {
 		// create new listener
 		subscriptionId = uuid.NewString()
+		indexedScripts := make(map[string]struct{})
+		for _, script := range scripts {
+			indexedScripts[script] = struct{}{}
+		}
 
 		listener := &listener[*arkv1.GetSubscriptionResponse]{
-			id:     subscriptionId,
-			ch:     make(chan *arkv1.GetSubscriptionResponse),
-			topics: scripts,
+			id:            subscriptionId,
+			ch:            make(chan *arkv1.GetSubscriptionResponse),
+			topics:        indexedScripts,
+			stopTimeoutCh: make(chan struct{}),
 		}
 
 		h.scriptSubsHandler.pushListener(listener)
@@ -522,7 +528,7 @@ func (h *indexerService) listenToTxEvents() {
 			spentVtxos := make([]*arkv1.IndexerVtxo, 0)
 			involvedScripts := make([]string, 0)
 
-			for _, vtxoScript := range l.topics {
+			for vtxoScript := range l.topics {
 				spendableVtxosForScript := allSpendableVtxos[vtxoScript]
 				spentVtxosForScript := allSpentVtxos[vtxoScript]
 				spendableVtxos = append(spendableVtxos, spendableVtxosForScript...)
@@ -660,6 +666,36 @@ func parseArkAddresses(addresses []string) ([]string, error) {
 		pubkeys = append(pubkeys, pubkey)
 	}
 	return pubkeys, nil
+}
+
+func parseScripts(scripts []string) ([]string, error) {
+	if len(scripts) <= 0 {
+		return nil, fmt.Errorf("missing scripts")
+	}
+
+	for _, script := range scripts {
+		if _, err := parsePubkey(script); err != nil {
+			return nil, err
+		}
+	}
+	return scripts, nil
+}
+
+func parsePubkey(pubkey string) (string, error) {
+	if len(pubkey) <= 0 {
+		return "", fmt.Errorf("missing pubkey")
+	}
+	buf, err := hex.DecodeString(pubkey)
+	if err != nil {
+		return "", fmt.Errorf("invalid pubkey format: %s", err)
+	}
+	if len(buf) != 32 {
+		return "", fmt.Errorf("invalid pubkey length: got %d, expeted 32", len(buf))
+	}
+	if _, err := schnorr.ParsePubKey(buf); err != nil {
+		return "", fmt.Errorf("invalid schnorr pubkey: %s", err)
+	}
+	return pubkey, nil
 }
 
 func newIndexerVtxo(vtxo domain.Vtxo) *arkv1.IndexerVtxo {
