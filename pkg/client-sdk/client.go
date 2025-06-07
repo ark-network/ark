@@ -1058,14 +1058,14 @@ func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context)
 		}
 	}
 
-	err = a.explorer.ListenAddresses(func(boaringUtxos, mempoolUtxos []explorer.BlockUtxo) error {
+	err = a.explorer.ListenAddresses(func(boaringUtxos, mempoolUtxos []explorer.WSUtxo) error {
 		if len(mempoolUtxos) > 0 {
 			newPendingBoardingTxs := make([]types.Transaction, 0)
 			createdAt := time.Now()
 
 			for _, u := range mempoolUtxos {
 
-				isRbf, replacementTxIds, err := a.explorer.FetchMempoolRBFTx(u.Txid)
+				isRbf, replacementTxIds, err := a.explorer.FetchMempoolRBFTxIds(u.Txid)
 				if err != nil {
 					return err
 				}
@@ -1218,35 +1218,12 @@ func (a *covenantlessArkClient) getBoardingTransactions(
 				return nil, nil, nil, err
 			}
 			if isRbf {
-				txHex, err := a.explorer.GetTxHex(replacedBy)
+				txHex, amount, err := a.getTransaction(ctx, replacedBy)
 				if err != nil {
+					log.WithError(err).Errorf("failed to get rbf transaction %s", replacedBy)
 					return nil, nil, nil, err
 				}
-				rawTx := &wire.MsgTx{}
-				if err := rawTx.Deserialize(strings.NewReader(txHex)); err != nil {
-					return nil, nil, nil, err
-				}
-				amount := uint64(0)
-				netParams := utils.ToBitcoinNetwork(a.Network)
-				for _, addr := range boardingAddrs {
-					decoded, err := btcutil.DecodeAddress(addr.Address, &netParams)
-					if err != nil {
-						return nil, nil, nil, err
-					}
-					pkScript, err := txscript.PayToAddrScript(decoded)
-					if err != nil {
-						return nil, nil, nil, err
-					}
-					for _, out := range rawTx.TxOut {
-						if bytes.Equal(out.PkScript, pkScript) {
-							amount = uint64(out.Value)
-							break
-						}
-					}
-					if amount > 0 {
-						break
-					}
-				}
+
 				rbfTxs[tx.BoardingTxid] = types.Transaction{
 					TransactionKey: types.TransactionKey{
 						BoardingTxid: replacedBy,

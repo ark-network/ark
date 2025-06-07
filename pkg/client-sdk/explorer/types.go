@@ -73,7 +73,7 @@ type VoutEntry struct {
 	Value            uint64 `json:"value"`
 }
 
-type BlockUtxo struct {
+type WSUtxo struct {
 	Txid             string
 	VoutIndex        int
 	ScriptPubAddress string

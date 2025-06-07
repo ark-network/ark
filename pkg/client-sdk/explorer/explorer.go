@@ -43,8 +43,8 @@ type Explorer interface {
 	BaseUrl() string
 	GetFeeRate() (float64, error)
 	TrackAddress(addr string) error
-	ListenAddresses(messageHandler func([]BlockUtxo, []BlockUtxo) error) error
-	FetchMempoolRBFTx(txid string) (bool, []string, error)
+	ListenAddresses(messageHandler func([]WSUtxo, []WSUtxo) error) error
+	FetchMempoolRBFTxIds(txid string) (bool, []string, error)
 }
 
 type AddrTracker struct {
@@ -188,28 +188,6 @@ func (e *explorerSvc) GetTxs(addr string) ([]tx, error) {
 	return payload, nil
 }
 
-func (e *explorerSvc) GetTxByTxid(addr string) ([]tx, error) {
-	resp, err := http.Get(fmt.Sprintf("%s/address/%s/txs", e.baseUrl, addr))
-	if err != nil {
-		return nil, err
-	}
-	// nolint:all
-	defer resp.Body.Close()
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to get txs: %s", string(body))
-	}
-	payload := []tx{}
-	if err := json.Unmarshal(body, &payload); err != nil {
-		return nil, err
-	}
-
-	return payload, nil
-}
-
 func (e explorerSvc) IsRBFTx(txid, txHex string) (bool, string, int64, error) {
 	resp, err := http.Get(fmt.Sprintf("%s/v1/fullrbf/replacements", e.baseUrl))
 	if err != nil {
@@ -244,7 +222,7 @@ func (e explorerSvc) IsRBFTx(txid, txHex string) (bool, string, int64, error) {
 	return isRbf, replacedBy, timestamp, err
 }
 
-func (e *explorerSvc) FetchMempoolRBFTx(txid string) (bool, []string, error) {
+func (e *explorerSvc) FetchMempoolRBFTxIds(txid string) (bool, []string, error) {
 	isRbf, _, _, replacements, err := e.mempoolIsRBFTx(
 		fmt.Sprintf("%s/v1/fullrbf/replacements", e.baseUrl), txid, true,
 	)
@@ -350,7 +328,7 @@ func (e *explorerSvc) GetRedeemedVtxosBalance(
 	return
 }
 
-func (e *explorerSvc) ListenAddresses(messageHandler func([]BlockUtxo, []BlockUtxo) error) error {
+func (e *explorerSvc) ListenAddresses(messageHandler func([]WSUtxo, []WSUtxo) error) error {
 	if e.addrTracker == nil {
 		return fmt.Errorf("address tracker not initialized")
 	}
@@ -460,11 +438,11 @@ func (e *explorerSvc) mempoolIsRBFTx(url, txid string, isReplacing bool) (bool, 
 	if isReplacing {
 		for _, r := range replacements {
 			if r.Tx.Txid == txid {
-				replacementTxIds := make([]string, 0, len(r.Replaces))
+				replacedTxIds := make([]string, 0, len(r.Replaces))
 				for _, rr := range r.Replaces {
-					replacementTxIds = append(replacementTxIds, rr.Tx.Txid)
+					replacedTxIds = append(replacedTxIds, rr.Tx.Txid)
 				}
-				return true, r.Tx.Txid, r.Timestamp, replacementTxIds, nil
+				return true, r.Tx.Txid, r.Timestamp, replacedTxIds, nil
 			}
 		}
 		return false, "", 0, nil, nil
@@ -610,7 +588,7 @@ func (t *AddrTracker) TrackAddress(addr string) error {
 	return nil
 }
 
-func (t *AddrTracker) ListenAddresses(messageHandler func([]BlockUtxo, []BlockUtxo) error) error {
+func (t *AddrTracker) ListenAddresses(messageHandler func([]WSUtxo, []WSUtxo) error) error {
 	// Send ping every 25s to keep alive
 	go func() {
 		ticker := time.NewTicker(25 * time.Second)
@@ -642,13 +620,13 @@ func (t *AddrTracker) ListenAddresses(messageHandler func([]BlockUtxo, []BlockUt
 
 }
 
-func (t *AddrTracker) deriveUtxos(trasactions []RawTx) []BlockUtxo {
-	utxos := make([]BlockUtxo, 0, len(t.subscribedMap))
+func (t *AddrTracker) deriveUtxos(trasactions []RawTx) []WSUtxo {
+	utxos := make([]WSUtxo, 0, len(t.subscribedMap))
 	for _, rawTransaction := range trasactions {
 
 		for index, out := range rawTransaction.Vout {
 			if _, ok := t.subscribedMap[out.ScriptPubKeyAddr]; ok {
-				utxos = append(utxos, BlockUtxo{
+				utxos = append(utxos, WSUtxo{
 					Txid:             rawTransaction.Txid,
 					VoutIndex:        index,
 					ScriptPubAddress: out.ScriptPubKeyAddr,
