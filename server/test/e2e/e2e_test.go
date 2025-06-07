@@ -367,7 +367,8 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
 	require.NoError(t, err)
 
-	expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+	expl, err := explorer.NewExplorer("http://localhost:3000", "", common.BitcoinRegTest)
+	require.NoError(t, err)
 
 	branch, err := redemption.NewRedeemBranch(expl, round.Tree, vtxo)
 	require.NoError(t, err)
@@ -463,7 +464,8 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
 		require.NoError(t, err)
 
-		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+		expl, err := explorer.NewExplorer("http://localhost:3000", "", common.BitcoinRegTest)
+		require.NoError(t, err)
 
 		branch, err := redemption.NewRedeemBranch(expl, round.Tree, vtxo)
 		require.NoError(t, err)
@@ -500,8 +502,12 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		walletStore, err := inmemorystore.NewWalletStore()
 		require.NoError(t, err)
 
+		expl, err := explorer.NewExplorer("http://localhost:3000", "", common.BitcoinRegTest)
+		require.NoError(t, err)
+
 		bobWallet, err := singlekeywallet.NewBitcoinWallet(
 			configStore,
+			expl,
 			walletStore,
 		)
 		require.NoError(t, err)
@@ -669,9 +675,12 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		)
 		require.NoError(t, err)
 
+		expl, err = explorer.NewExplorer("http://localhost:3000", "", common.BitcoinRegTest)
+		require.NoError(t, err)
+
 		signedTx, err := bobWallet.SignTransaction(
 			ctx,
-			explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest),
+			expl,
 			ptx,
 		)
 		require.NoError(t, err)
@@ -711,7 +720,8 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		round, err := grpcTransportClient.GetRound(ctx, initialTreeVtxo.RoundTxid)
 		require.NoError(t, err)
 
-		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
+		expl, err = explorer.NewExplorer("http://localhost:3000", "", common.BitcoinRegTest)
+		require.NoError(t, err)
 
 		branch, err := redemption.NewRedeemBranch(expl, round.Tree, initialTreeVtxo)
 		require.NoError(t, err)
@@ -1005,7 +1015,10 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	walletStore, err := inmemorystore.NewWalletStore()
 	require.NoError(t, err)
 
-	bobWallet, err := singlekeywallet.NewBitcoinWallet(configStore, walletStore)
+	expl, err := explorer.NewExplorer("http://localhost:3000", "", common.BitcoinRegTest)
+	require.NoError(t, err)
+
+	bobWallet, err := singlekeywallet.NewBitcoinWallet(configStore, expl, walletStore)
 	require.NoError(t, err)
 
 	_, err = bobWallet.Create(ctx, utils.Password, hex.EncodeToString(bobPrivKey.Serialize()))
@@ -1159,9 +1172,12 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	)
 	require.NoError(t, err)
 
+	expl, err = explorer.NewExplorer("http://localhost:3000", "", common.BitcoinRegTest)
+	require.NoError(t, err)
+
 	signedTx, err := bobWallet.SignTransaction(
 		ctx,
-		explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest),
+		expl,
 		ptx,
 	)
 	require.NoError(t, err)
@@ -1195,8 +1211,12 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	walletStore, err := inmemorystore.NewWalletStore()
 	require.NoError(t, err)
 
+	expl, err := explorer.NewExplorer("http://localhost:3000", "", common.BitcoinRegTest)
+	require.NoError(t, err)
+
 	bobWallet, err := singlekeywallet.NewBitcoinWallet(
 		configStore,
+		expl,
 		walletStore,
 	)
 	require.NoError(t, err)
@@ -1373,9 +1393,12 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	ptx, err = partialTx.B64Encode()
 	require.NoError(t, err)
 
+	expl, err = explorer.NewExplorer("http://localhost:3000", "", common.BitcoinRegTest)
+	require.NoError(t, err)
+
 	signedTx, err := bobWallet.SignTransaction(
 		ctx,
-		explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest),
+		expl,
 		ptx,
 	)
 	require.NoError(t, err)
