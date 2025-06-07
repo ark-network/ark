@@ -1007,6 +1007,46 @@ func (a *covenantlessArkClient) refreshVtxoDb(spendableVtxos, spentVtxos []clien
 	return nil
 }
 
+func (a *covenantlessArkClient) getTransaction(ctx context.Context, txId string) (string, uint64, error) {
+	_, boardingAddresses, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return "", 0, err
+	}
+
+	txHex, err := a.explorer.GetTxHex(txId)
+	if err != nil {
+		return "", 0, err
+	}
+	rawTx := &wire.MsgTx{}
+	if err := rawTx.Deserialize(strings.NewReader(txHex)); err != nil {
+		return "", 0, err
+	}
+
+	netParams := utils.ToBitcoinNetwork(a.Network)
+	amount := uint64(0)
+	for _, addr := range boardingAddresses {
+		decoded, err := btcutil.DecodeAddress(addr.Address, &netParams)
+		if err != nil {
+			return "", 0, err
+		}
+		pkScript, err := txscript.PayToAddrScript(decoded)
+		if err != nil {
+			return "", 0, err
+		}
+		for _, out := range rawTx.TxOut {
+			if bytes.Equal(out.PkScript, pkScript) {
+				amount = uint64(out.Value)
+				break
+			}
+		}
+		if amount > 0 {
+			break
+		}
+	}
+
+	return txHex, amount, nil
+}
+
 func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context) {
 	// try to add existing boarding utxos if present
 	_, boardingAddresses, _, err := a.wallet.GetAddresses(ctx)
@@ -1018,47 +1058,85 @@ func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context)
 		}
 	}
 
-	err = a.explorer.ListenAddresses(func(utxos []explorer.BlockUtxo) error {
-		_, boardingAddresses, _, err := a.wallet.GetAddresses(ctx)
-		if err != nil {
-			return err
-		}
+	err = a.explorer.ListenAddresses(func(boaringUtxos, mempoolUtxos []explorer.BlockUtxo) error {
+		if len(mempoolUtxos) > 0 {
+			newPendingBoardingTxs := make([]types.Transaction, 0)
+			createdAt := time.Now()
 
-		_, blockTime, err := a.explorer.GetTxBlockTime(utxos[0].Txid)
-		if err != nil {
-			return err
-		}
+			for _, u := range mempoolUtxos {
 
-		newPendingBoardingTxs := make([]types.Transaction, 0)
-
-		for _, u := range utxos {
-			found := false
-			for _, addr := range boardingAddresses {
-				if addr.Address == u.ScriptPubAddress {
-					found = true
-					break
+				isRbf, replacementTxIds, err := a.explorer.FetchMempoolRBFTx(u.Txid)
+				if err != nil {
+					return err
 				}
-			}
-			if found {
+
+				if isRbf {
+					txHex, amount, err := a.getTransaction(ctx, u.Txid)
+					if err != nil {
+						log.WithError(err).Errorf("failed to get rbf transaction %s", u.Txid)
+						return err
+					}
+
+					rbfTransactions := make(map[string]types.Transaction, 0)
+					for _, rbfTxId := range replacementTxIds {
+						rbfTransactions[rbfTxId] = types.Transaction{
+							TransactionKey: types.TransactionKey{
+								BoardingTxid: u.Txid,
+							},
+							Hex:       txHex,
+							Amount:    amount,
+							Type:      types.TxReceived,
+							CreatedAt: time.Now(),
+						}
+					}
+
+					count, err := a.store.TransactionStore().RbfTransactions(ctx, rbfTransactions)
+					if err != nil {
+						log.WithError(err).Error("failed to update rbf boarding transactions")
+						return err
+					}
+					log.Debugf("replaced %d transaction(s)", count)
+
+					continue
+				}
+
 				newPendingBoardingTxs = append(newPendingBoardingTxs, types.Transaction{
 					TransactionKey: types.TransactionKey{
 						BoardingTxid: u.Txid,
 					},
 					Amount:    u.Value,
 					Type:      types.TxReceived,
-					CreatedAt: time.Unix(blockTime, 0),
+					CreatedAt: createdAt,
 				})
 			}
+
+			count, err := a.store.TransactionStore().
+				AddTransactions(ctx, newPendingBoardingTxs)
+
+			if err != nil {
+				log.WithError(err).Error("failed to add new boarding transactions")
+				return err
+			}
+			log.Debugf("added %d boarding transaction(s)", count)
 		}
 
-		count, err := a.store.TransactionStore().
-			AddTransactions(ctx, newPendingBoardingTxs)
+		if len(boaringUtxos) > 0 {
+			ids := make([]string, 0, len(boaringUtxos))
+			for _, u := range boaringUtxos {
+				ids = append(ids, u.Txid)
+			}
+			count, err := a.store.TransactionStore().ConfirmTransactions(
+				ctx, ids, time.Now(),
+			)
+			if err != nil {
+				log.WithError(err).Error("failed to update boarding transactions")
+			}
+			log.Debugf("confirmed %d boarding transaction(s)", count)
+		}
+
 		if err != nil {
 			return err
-
 		}
-		log.Debugf("added %d boarding transaction(s)", count)
-
 		return nil
 	})
 

@@ -51,38 +51,18 @@ func (e utxo) ToUtxo(delay common.RelativeLocktime, tapscripts []string) types.U
 	return newUtxo(e, delay, tapscripts)
 }
 
-type WSBlockTransactions struct {
-	BlockTransactions []RawTx `json:"block-transactions"`
+type WSFetchTransactions struct {
+	BlockTransactions   []RawTx `json:"block-transactions,omitempty"`
+	MempoolTransactions []RawTx `json:"address-transactions,omitempty"`
+}
+
+type RbfTxId struct {
+	TxId string `json:"txid"`
 }
 
 type RawTx struct {
-	Txid     string      `json:"txid"`
-	Version  int         `json:"version"`
-	Locktime uint32      `json:"locktime"`
-	Vin      []VinEntry  `json:"vin"`
-	Vout     []VoutEntry `json:"vout"`
-	Size     int         `json:"size"`
-	Weight   int         `json:"weight"`
-	Fee      uint64      `json:"fee"`
-}
-
-type VinEntry struct {
-	Txid           string  `json:"txid"`
-	VoutIndex      uint32  `json:"vout"`
-	Prevout        Prevout `json:"prevout"`
-	Scriptsig      string  `json:"scriptsig"`
-	ScriptsigAsm   string  `json:"scriptsig_asm"`
-	IsCoinbase     bool    `json:"is_coinbase"`
-	Sequence       uint32  `json:"sequence"`
-	InnerRedeemAsm string  `json:"inner_redeemscript_asm,omitempty"`
-}
-
-type Prevout struct {
-	ScriptPubKey     string `json:"scriptpubkey"`
-	ScriptPubKeyAsm  string `json:"scriptpubkey_asm"`
-	ScriptPubKeyType string `json:"scriptpubkey_type"`
-	ScriptPubKeyAddr string `json:"scriptpubkey_address"`
-	Value            uint64 `json:"value"`
+	Txid string      `json:"txid"`
+	Vout []VoutEntry `json:"vout"`
 }
 
 type VoutEntry struct {
@@ -98,4 +78,9 @@ type BlockUtxo struct {
 	VoutIndex        int
 	ScriptPubAddress string
 	Value            uint64
+}
+
+type RBFTxn struct {
+	TxId       string
+	ReplacedBy string
 }

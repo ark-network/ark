@@ -43,7 +43,8 @@ type Explorer interface {
 	BaseUrl() string
 	GetFeeRate() (float64, error)
 	TrackAddress(addr string) error
-	ListenAddresses(messageHandler func([]BlockUtxo) error) error
+	ListenAddresses(messageHandler func([]BlockUtxo, []BlockUtxo) error) error
+	FetchMempoolRBFTx(txid string) (bool, []string, error)
 }
 
 type AddrTracker struct {
@@ -187,6 +188,28 @@ func (e *explorerSvc) GetTxs(addr string) ([]tx, error) {
 	return payload, nil
 }
 
+func (e *explorerSvc) GetTxByTxid(addr string) ([]tx, error) {
+	resp, err := http.Get(fmt.Sprintf("%s/address/%s/txs", e.baseUrl, addr))
+	if err != nil {
+		return nil, err
+	}
+	// nolint:all
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to get txs: %s", string(body))
+	}
+	payload := []tx{}
+	if err := json.Unmarshal(body, &payload); err != nil {
+		return nil, err
+	}
+
+	return payload, nil
+}
+
 func (e explorerSvc) IsRBFTx(txid, txHex string) (bool, string, int64, error) {
 	resp, err := http.Get(fmt.Sprintf("%s/v1/fullrbf/replacements", e.baseUrl))
 	if err != nil {
@@ -206,8 +229,8 @@ func (e explorerSvc) IsRBFTx(txid, txHex string) (bool, string, int64, error) {
 		return false, "", -1, fmt.Errorf("%s", string(body))
 	}
 
-	isRbf, replacedBy, timestamp, err := e.mempoolIsRBFTx(
-		fmt.Sprintf("%s/v1/fullrbf/replacements", e.baseUrl), txid,
+	isRbf, replacedBy, timestamp, _, err := e.mempoolIsRBFTx(
+		fmt.Sprintf("%s/v1/fullrbf/replacements", e.baseUrl), txid, false,
 	)
 	if err != nil {
 		return false, "", -1, err
@@ -216,7 +239,24 @@ func (e explorerSvc) IsRBFTx(txid, txHex string) (bool, string, int64, error) {
 		return isRbf, replacedBy, timestamp, nil
 	}
 
-	return e.mempoolIsRBFTx(fmt.Sprintf("%s/v1/replacements", e.baseUrl), txid)
+	isRbf, replacedBy, timestamp, _, err = e.mempoolIsRBFTx(fmt.Sprintf("%s/v1/replacements", e.baseUrl), txid, false)
+
+	return isRbf, replacedBy, timestamp, err
+}
+
+func (e *explorerSvc) FetchMempoolRBFTx(txid string) (bool, []string, error) {
+	isRbf, _, _, replacements, err := e.mempoolIsRBFTx(
+		fmt.Sprintf("%s/v1/fullrbf/replacements", e.baseUrl), txid, true,
+	)
+	if err != nil {
+		return false, nil, err
+	}
+	if isRbf {
+		return true, replacements, nil
+	}
+
+	isRbf, _, _, replacements, err = e.mempoolIsRBFTx(fmt.Sprintf("%s/v1/replacements", e.baseUrl), txid, false)
+	return isRbf, replacements, err
 }
 
 func (e *explorerSvc) GetTxOutspends(txid string) ([]spentStatus, error) {
@@ -310,7 +350,7 @@ func (e *explorerSvc) GetRedeemedVtxosBalance(
 	return
 }
 
-func (e *explorerSvc) ListenAddresses(messageHandler func([]BlockUtxo) error) error {
+func (e *explorerSvc) ListenAddresses(messageHandler func([]BlockUtxo, []BlockUtxo) error) error {
 	if e.addrTracker == nil {
 		return fmt.Errorf("address tracker not initialized")
 	}
@@ -395,36 +435,49 @@ func (e *explorerSvc) broadcast(txHex string) (string, error) {
 	return string(bodyResponse), nil
 }
 
-func (e *explorerSvc) mempoolIsRBFTx(url, txid string) (bool, string, int64, error) {
+func (e *explorerSvc) mempoolIsRBFTx(url, txid string, isReplacing bool) (bool, string, int64, []string, error) {
 	resp, err := http.Get(url)
 	if err != nil {
-		return false, "", -1, err
+		return false, "", -1, nil, err
 	}
 
 	// nolint:all
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return false, "", -1, err
+		return false, "", -1, nil, err
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return false, "", -1, fmt.Errorf("%s", string(body))
+		return false, "", -1, nil, fmt.Errorf("%s", string(body))
 	}
 
 	replacements := make([]replacement, 0)
 	if err := json.Unmarshal(body, &replacements); err != nil {
-		return false, "", -1, err
+		return false, "", -1, nil, err
+	}
+
+	if isReplacing {
+		for _, r := range replacements {
+			if r.Tx.Txid == txid {
+				replacementTxIds := make([]string, 0, len(r.Replaces))
+				for _, rr := range r.Replaces {
+					replacementTxIds = append(replacementTxIds, rr.Tx.Txid)
+				}
+				return true, r.Tx.Txid, r.Timestamp, replacementTxIds, nil
+			}
+		}
+		return false, "", 0, nil, nil
 	}
 
 	for _, r := range replacements {
 		for _, rr := range r.Replaces {
 			if rr.Tx.Txid == txid {
-				return true, r.Tx.Txid, r.Timestamp, nil
+				return true, r.Tx.Txid, r.Timestamp, nil, nil
 			}
 		}
 	}
-	return false, "", 0, nil
+	return false, "", 0, nil, nil
 }
 
 func (e *explorerSvc) esploraIsRBFTx(txid, txHex string) (bool, string, int64, error) {
@@ -557,7 +610,7 @@ func (t *AddrTracker) TrackAddress(addr string) error {
 	return nil
 }
 
-func (t *AddrTracker) ListenAddresses(messageHandler func([]BlockUtxo) error) error {
+func (t *AddrTracker) ListenAddresses(messageHandler func([]BlockUtxo, []BlockUtxo) error) error {
 	// Send ping every 25s to keep alive
 	go func() {
 		ticker := time.NewTicker(25 * time.Second)
@@ -571,18 +624,17 @@ func (t *AddrTracker) ListenAddresses(messageHandler func([]BlockUtxo) error) er
 	}()
 
 	for {
-		var payload WSBlockTransactions
+		var payload WSFetchTransactions
 		err := t.conn.ReadJSON(&payload)
 		if err != nil {
 			return fmt.Errorf("read message failed: %w", err)
 		}
 
-		if len(payload.BlockTransactions) == 0 {
-			continue
-		}
+		mempoolutxos := t.deriveUtxos(payload.MempoolTransactions)
+		blockutxos := t.deriveUtxos(payload.BlockTransactions)
 
-		utxos := t.deriveUtxos(payload)
-		err = messageHandler(utxos)
+		err = messageHandler(blockutxos, mempoolutxos)
+
 		if err != nil {
 			return err
 		}
@@ -590,9 +642,9 @@ func (t *AddrTracker) ListenAddresses(messageHandler func([]BlockUtxo) error) er
 
 }
 
-func (t *AddrTracker) deriveUtxos(block WSBlockTransactions) []BlockUtxo {
+func (t *AddrTracker) deriveUtxos(trasactions []RawTx) []BlockUtxo {
 	utxos := make([]BlockUtxo, 0, len(t.subscribedMap))
-	for _, rawTransaction := range block.BlockTransactions {
+	for _, rawTransaction := range trasactions {
 
 		for index, out := range rawTransaction.Vout {
 			if _, ok := t.subscribedMap[out.ScriptPubKeyAddr]; ok {
@@ -605,5 +657,6 @@ func (t *AddrTracker) deriveUtxos(block WSBlockTransactions) []BlockUtxo {
 			}
 		}
 	}
+
 	return utxos
 }
