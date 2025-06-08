@@ -33,7 +33,7 @@ it is compiled, transferred and parsed using descriptor string.
 // TODO gather common and tree package to prevent circular dependency and move C generic
 */
 type VtxoScript[T TaprootTree, C interface{}] interface {
-	Validate(server *secp256k1.PublicKey, minLocktime RelativeLocktime) error
+	Validate(server *secp256k1.PublicKey, minLocktime RelativeLocktime, arkScript []byte) error
 	TapTree() (taprootKey *secp256k1.PublicKey, taprootScriptTree T, err error)
 	Encode() ([]string, error)
 	Decode(scripts []string) error

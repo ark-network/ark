@@ -116,6 +116,43 @@ func (b *txBuilder) verifyTapscriptPartialSigs(ptx *psbt.Packet) (bool, string, 
 			}
 		}
 
+		// execute ark script if present in psbt input
+		arkScript := tree.GetArkScript(input)
+		if len(arkScript) > 0 {
+			witness, err := tree.GetArkScriptWitness(input)
+			if err != nil {
+				return false, txid, err
+			}
+
+			prevouts := make(map[wire.OutPoint]*wire.TxOut)
+			for i, input := range ptx.Inputs {
+				if input.WitnessUtxo == nil {
+					return false, txid, fmt.Errorf("missing prevout for input %d, cannot validate ark script", i)
+				}
+
+				outpoint := ptx.UnsignedTx.TxIn[i].PreviousOutPoint
+				prevouts[outpoint] = input.WitnessUtxo
+			}
+
+			prevoutFetcher := txscript.NewMultiPrevOutFetcher(prevouts)
+
+			if err := tree.ExecuteArkScript(
+				arkScript,
+				ptx.UnsignedTx,
+				prevoutFetcher,
+				int(index),
+				witness,
+			); err != nil {
+				return false, txid, err
+			}
+
+			arkScriptHash := tree.ArkScriptHash(arkScript)
+			arkScriptKey := tree.ComputeArkScriptKey(serverPubkey, arkScriptHash)
+
+			// we don't need to check if server tweaked key signed
+			keys[hex.EncodeToString(schnorr.SerializePubKey(arkScriptKey))] = true
+		}
+
 		// we don't need to check if server signed
 		keys[hex.EncodeToString(schnorr.SerializePubKey(serverPubkey))] = true
 
@@ -193,18 +230,22 @@ func (b *txBuilder) FinalizeAndExtract(tx string) (string, error) {
 				return "", err
 			}
 
-			conditionWitness, err := tree.GetConditionWitness(in)
-			if err != nil {
-				return "", err
-			}
+			args := make(map[string]any)
 
-			args := make(map[string][]byte)
-			if len(conditionWitness) > 0 {
-				var conditionWitnessBytes bytes.Buffer
-				if err := psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness); err != nil {
+			switch closure.(type) {
+			case *tree.ConditionMultisigClosure:
+				conditionWitness, err := tree.GetConditionWitness(in)
+				if err != nil {
 					return "", err
 				}
-				args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
+
+				if len(conditionWitness) > 0 {
+					var conditionWitnessBytes bytes.Buffer
+					if err := psbt.WriteTxWitness(&conditionWitnessBytes, conditionWitness); err != nil {
+						return "", err
+					}
+					args[tree.ConditionWitnessKey] = conditionWitnessBytes.Bytes()
+				}
 			}
 
 			for _, sig := range in.TaprootScriptSpendSig {

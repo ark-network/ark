@@ -27,6 +27,7 @@ func BuildRedeemTx(
 	witnessUtxos := make(map[int]*wire.TxOut)
 	signingTapLeaves := make(map[int]*psbt.TaprootTapLeafScript)
 	tapscripts := make(map[int][]string)
+	arkscripts := make(map[int][]byte)
 
 	txLocktime := common.AbsoluteLocktime(0)
 
@@ -92,6 +93,10 @@ func BuildRedeemTx(
 		} else {
 			sequences = append(sequences, wire.MaxTxInSequenceNum)
 		}
+
+		if len(vtxo.ArkScript) > 0 {
+			arkscripts[index] = vtxo.ArkScript
+		}
 	}
 
 	redeemPtx, err := psbt.New(
@@ -106,6 +111,9 @@ func BuildRedeemTx(
 		redeemPtx.Inputs[i].TaprootLeafScript = []*psbt.TaprootTapLeafScript{signingTapLeaves[i]}
 		if err := AddTaprootTree(i, redeemPtx, tapscripts[i]); err != nil {
 			return "", err
+		}
+		if arkscript, ok := arkscripts[i]; ok {
+			AddArkScript(i, redeemPtx, arkscript)
 		}
 	}
 

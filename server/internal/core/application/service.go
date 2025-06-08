@@ -327,8 +327,10 @@ func (s *covenantlessService) SubmitRedeemTx(
 			return "", "", fmt.Errorf("failed to parse vtxo script: %s", err)
 		}
 
+		arkScript := tree.GetArkScript(input)
+
 		// validate the vtxo script
-		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay, arkScript); err != nil {
 			return "", "", fmt.Errorf("invalid vtxo script: %s", err)
 		}
 
@@ -741,7 +743,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 				if err := vtxoScript.Validate(s.pubkey, common.RelativeLocktime{
 					Type:  s.boardingExitDelay.Type,
 					Value: s.boardingExitDelay.Value,
-				}); err != nil {
+				}, nil); err != nil {
 					return "", fmt.Errorf("invalid vtxo script: %s", err)
 				}
 
@@ -826,7 +828,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 		}
 
 		// validate the vtxo script
-		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay, nil); err != nil {
 			return "", fmt.Errorf("invalid vtxo script: %s", err)
 		}
 
@@ -996,10 +998,14 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 
 				// validate the vtxo script
 				// TODO: fix in PR #501
-				if err := vtxoScript.Validate(s.pubkey, common.RelativeLocktime{
-					Type:  s.unilateralExitDelay.Type,
-					Value: s.unilateralExitDelay.Value * 2,
-				}); err != nil {
+				if err := vtxoScript.Validate(
+					s.pubkey,
+					common.RelativeLocktime{
+						Type:  s.unilateralExitDelay.Type,
+						Value: s.unilateralExitDelay.Value * 2,
+					},
+					nil, // no ark script possible for boarding
+				); err != nil {
 					return "", fmt.Errorf("invalid vtxo script: %s", err)
 				}
 
@@ -1056,7 +1062,8 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		}
 
 		// validate the vtxo script
-		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+		// TODO: allow to specify ark script?
+		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay, nil); err != nil {
 			return "", fmt.Errorf("invalid vtxo script: %s", err)
 		}
 
@@ -1116,10 +1123,6 @@ func (s *covenantlessService) newBoardingInput(tx wire.MsgTx, input ports.Input)
 
 	if !bytes.Equal(output.PkScript, expectedScriptPubkey) {
 		return nil, fmt.Errorf("descriptor does not match script in transaction output")
-	}
-
-	if err := boardingScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
-		return nil, err
 	}
 
 	return &ports.BoardingInput{
