@@ -1090,8 +1090,6 @@ func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context)
 						}
 					}
 
-					log.WithField("rbFTransactions", rbfTransactions).Debugf("replacing %d boarding transaction(s) with rbf transactions", len(rbfTransactions))
-
 					count, err := a.store.TransactionStore().RbfTransactions(ctx, rbfTransactions)
 					if err != nil {
 						log.WithError(err).Error("failed to update rbf boarding transactions")
@@ -1101,8 +1099,6 @@ func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context)
 
 					continue
 				}
-
-				log.WithField("mempool_txid", u.Txid).Infof("new boarding transaction %s", u.Txid)
 
 				newPendingBoardingTxs = append(newPendingBoardingTxs, types.Transaction{
 					TransactionKey: types.TransactionKey{
