@@ -1,6 +1,8 @@
 package redis
 
 import (
+	"context"
+
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -101,6 +103,7 @@ func (c *confirmationSessionsStore) Initialized() bool {
 	//TODO implement me
 	panic("implement me")
 }
+func (c *confirmationSessionsStore) SessionCompleted() <-chan struct{} { panic("not implemented") }
 
 type currentRoundStore struct{}
 
@@ -120,6 +123,18 @@ func (s *treeSigningSessionsStore) Get(roundId string) (*ports.MusigSigningSessi
 	panic("not implemented")
 }
 func (s *treeSigningSessionsStore) Delete(roundId string) { panic("not implemented") }
+func (s *treeSigningSessionsStore) AddNonces(ctx context.Context, roundId string, pubkey string, nonces tree.TreeNonces) error {
+	panic("not implemented")
+}
+func (s *treeSigningSessionsStore) AddSignatures(ctx context.Context, roundId string, pubkey string, nonces tree.TreePartialSigs) error {
+	panic("not implemented")
+}
+func (s *treeSigningSessionsStore) NoncesCollected(roundId string) <-chan struct{} {
+	panic("not implemented")
+}
+func (s *treeSigningSessionsStore) SignaturesCollected(roundId string) <-chan struct{} {
+	panic("not implemented")
+}
 
 func NewBoardingInputsStore() ports.BoardingInputsStore { return &boardingInputsStore{} }
 

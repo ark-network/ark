@@ -275,7 +275,7 @@ func (h *handler) SubmitTreeNonces(
 ) (*arkv1.SubmitTreeNoncesResponse, error) {
 	pubkey := req.GetPubkey()
 	encodedNonces := req.GetTreeNonces()
-	roundID := req.GetRoundId()
+	roundId := req.GetRoundId()
 
 	if len(pubkey) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing cosigner public key")
@@ -285,23 +285,26 @@ func (h *handler) SubmitTreeNonces(
 		return nil, status.Error(codes.InvalidArgument, "missing tree nonces")
 	}
 
-	if len(roundID) <= 0 {
+	if len(roundId) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing round id")
 	}
 
 	pubkeyBytes, err := hex.DecodeString(pubkey)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key format, expected hex")
 	}
-
-	cosignerPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	if len(pubkeyBytes) != 33 {
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key length, expected 33 bytes")
+	}
+	if _, err := secp256k1.ParsePubKey(pubkeyBytes); err != nil {
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid cosigner public key %s", err))
+	}
+	nonces, err := tree.DecodeNonces(hex.NewDecoder(strings.NewReader(encodedNonces)))
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid tree nonces %s", err))
 	}
 
-	if err := h.svc.RegisterCosignerNonces(
-		ctx, roundID, cosignerPubkey, encodedNonces,
-	); err != nil {
+	if err := h.svc.RegisterCosignerNonces(ctx, roundId, pubkey, nonces); err != nil {
 		return nil, err
 	}
 
@@ -311,7 +314,7 @@ func (h *handler) SubmitTreeNonces(
 func (h *handler) SubmitTreeSignatures(
 	ctx context.Context, req *arkv1.SubmitTreeSignaturesRequest,
 ) (*arkv1.SubmitTreeSignaturesResponse, error) {
-	roundID := req.GetRoundId()
+	roundId := req.GetRoundId()
 	pubkey := req.GetPubkey()
 	encodedSignatures := req.GetTreeSignatures()
 
@@ -323,23 +326,27 @@ func (h *handler) SubmitTreeSignatures(
 		return nil, status.Error(codes.InvalidArgument, "missing tree signatures")
 	}
 
-	if len(roundID) <= 0 {
+	if len(roundId) <= 0 {
 		return nil, status.Error(codes.InvalidArgument, "missing round id")
 	}
 
 	pubkeyBytes, err := hex.DecodeString(pubkey)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key format, expected hex")
+	}
+	if len(pubkeyBytes) != 33 {
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key length, expected 33 bytes")
+	}
+	if _, err := secp256k1.ParsePubKey(pubkeyBytes); err != nil {
+		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key length, expected 33 bytes")
 	}
 
-	cosignerPubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
+	signatures, err := tree.DecodeSignatures(hex.NewDecoder(strings.NewReader(encodedSignatures)))
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key")
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid tree signatures %s", err))
 	}
 
-	if err := h.svc.RegisterCosignerSignatures(
-		ctx, roundID, cosignerPubkey, encodedSignatures,
-	); err != nil {
+	if err := h.svc.RegisterCosignerSignatures(ctx, roundId, pubkey, signatures); err != nil {
 		return nil, err
 	}
 

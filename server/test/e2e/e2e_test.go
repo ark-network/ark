@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -40,28 +41,28 @@ const (
 	redeemAddress = "bcrt1q2wrgf2hrkfegt0t97cnv4g5yvfjua9k6vua54d"
 )
 
-//func TestMain(m *testing.M) {
-//	if err := utils.GenerateBlock(); err != nil {
-//		fmt.Printf("error generating block: %s", err)
-//		os.Exit(1)
-//	}
-//
-//	if err := setupServerWallet(); err != nil {
-//		fmt.Println(err)
-//		os.Exit(1)
-//	}
-//
-//	time.Sleep(3 * time.Second)
-//
-//	_, err := runArkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
-//	if err != nil {
-//		fmt.Printf("error initializing ark config: %s", err)
-//		os.Exit(1)
-//	}
-//
-//	code := m.Run()
-//	os.Exit(code)
-//}
+func TestMain(m *testing.M) {
+	if err := utils.GenerateBlock(); err != nil {
+		fmt.Printf("error generating block: %s", err)
+		os.Exit(1)
+	}
+
+	if err := setupServerWallet(); err != nil {
+		fmt.Println(err)
+		os.Exit(1)
+	}
+
+	time.Sleep(3 * time.Second)
+
+	_, err := runArkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
+	if err != nil {
+		fmt.Printf("error initializing ark config: %s", err)
+		os.Exit(1)
+	}
+
+	code := m.Run()
+	os.Exit(code)
+}
 
 func TestSettleInSameRound(t *testing.T) {
 	ctx := context.Background()

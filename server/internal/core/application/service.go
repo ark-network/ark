@@ -17,6 +17,7 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcec/v2"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -1553,81 +1554,15 @@ func (s *covenantlessService) DeleteTxRequestsByProof(
 }
 
 func (s *covenantlessService) RegisterCosignerNonces(
-	ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, encodedNonces string,
+	ctx context.Context, roundId string, pubkey string, nonces tree.TreeNonces,
 ) error {
-	//TODO move all to live store ?
-	session, ok := s.liveStore.TreeSigingSessions().Get(roundID)
-	if !ok {
-		return fmt.Errorf(`signing session not found for round "%s"`, roundID)
-	}
-
-	userPubkey := hex.EncodeToString(pubkey.SerializeCompressed())
-	if _, ok := session.Cosigners[userPubkey]; !ok {
-		return fmt.Errorf(`cosigner %s not found for round "%s"`, userPubkey, roundID)
-	}
-
-	nonces, err := tree.DecodeNonces(hex.NewDecoder(strings.NewReader(encodedNonces)))
-	if err != nil {
-		return fmt.Errorf("failed to decode nonces: %s", err)
-	}
-
-	go func(session *ports.MusigSigningSession) {
-		session.Lock.Lock()
-		defer session.Lock.Unlock()
-
-		if _, ok := session.Nonces[*pubkey]; ok {
-			return // skip if we already have nonces for this pubkey
-		}
-
-		session.Nonces[*pubkey] = nonces
-
-		if len(session.Nonces) == session.NbCosigners-1 { // exclude the server
-			go func() {
-				session.NonceDoneC <- struct{}{}
-			}()
-		}
-	}(session)
-
-	return nil
+	return s.liveStore.TreeSigingSessions().AddNonces(context.Background(), roundId, pubkey, nonces)
 }
 
 func (s *covenantlessService) RegisterCosignerSignatures(
-	ctx context.Context, roundID string, pubkey *secp256k1.PublicKey, encodedSignatures string,
+	ctx context.Context, roundId string, pubkey string, sigs tree.TreePartialSigs,
 ) error {
-	// TODO move all to live store ?
-	session, ok := s.liveStore.TreeSigingSessions().Get(roundID)
-	if !ok {
-		return fmt.Errorf(`signing session not found for round "%s"`, roundID)
-	}
-
-	userPubkey := hex.EncodeToString(pubkey.SerializeCompressed())
-	if _, ok := session.Cosigners[userPubkey]; !ok {
-		return fmt.Errorf(`cosigner %s not found for round "%s"`, userPubkey, roundID)
-	}
-
-	signatures, err := tree.DecodeSignatures(hex.NewDecoder(strings.NewReader(encodedSignatures)))
-	if err != nil {
-		return fmt.Errorf("failed to decode signatures: %s", err)
-	}
-
-	go func(session *ports.MusigSigningSession) {
-		session.Lock.Lock()
-		defer session.Lock.Unlock()
-
-		if _, ok := session.Signatures[*pubkey]; ok {
-			return // skip if we already have signatures for this pubkey
-		}
-
-		session.Signatures[*pubkey] = signatures
-
-		if len(session.Signatures) == session.NbCosigners-1 { // exclude the server
-			go func() {
-				session.SigDoneC <- struct{}{}
-			}()
-		}
-	}(session)
-
-	return nil
+	return s.liveStore.TreeSigingSessions().AddSignatures(context.Background(), roundId, pubkey, sigs)
 }
 
 func (s *covenantlessService) GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error) {
@@ -1756,24 +1691,21 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 	confirmedRequests := make([]ports.TimedTxRequest, 0)
 	notConfirmedRequests := make([]ports.TimedTxRequest, 0)
 
-	// TODO think about moving to live store
-	confirmationSessions := s.liveStore.ConfirmationSessions().Get()
 	select {
 	case <-time.After(roundTiming.confirmationDuration()):
+		session := s.liveStore.ConfirmationSessions().Get()
 		for _, req := range requests {
-			if confirmationSessions.IntentsHashes[req.HashID()] {
+			if session.IntentsHashes[req.HashID()] {
 				confirmedRequests = append(confirmedRequests, req)
 				continue
 			}
 			notConfirmedRequests = append(notConfirmedRequests, req)
 		}
 		log.Info("[SELE]timeout")
-	case <-confirmationSessions.ConfirmedC:
+	case <-s.liveStore.ConfirmationSessions().SessionCompleted():
 		confirmedRequests = requests
 		log.Info("[SELE]chan")
 	}
-
-	close(confirmationSessions.ConfirmedC)
 
 	repushToQueue := notConfirmedRequests
 	if int64(len(confirmedRequests)) < s.roundMinParticipantsCount {
@@ -1963,9 +1895,11 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 			s.liveStore.CurrentRound().Get().Fail(err)
 			log.Warn(err)
 			return
-		case <-signingSession.NonceDoneC:
+		case <-s.liveStore.TreeSigingSessions().NoncesCollected(s.liveStore.CurrentRound().Get().Id):
 			for pubkey, nonce := range signingSession.Nonces {
-				coordinator.AddNonce(&pubkey, nonce)
+				buf, _ := hex.DecodeString(pubkey)
+				pk, _ := btcec.ParsePubKey(buf)
+				coordinator.AddNonce(pk, nonce)
 			}
 		}
 
@@ -2007,9 +1941,11 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 			s.liveStore.CurrentRound().Get().Fail(err)
 			log.Warn(err)
 			return
-		case <-signingSession.SigDoneC:
+		case <-s.liveStore.TreeSigingSessions().SignaturesCollected(s.liveStore.CurrentRound().Get().Id):
 			for pubkey, sig := range signingSession.Signatures {
-				coordinator.AddSignatures(&pubkey, sig)
+				buf, _ := hex.DecodeString(pubkey)
+				pk, _ := btcec.ParsePubKey(buf)
+				coordinator.AddSignatures(pk, sig)
 			}
 		}
 

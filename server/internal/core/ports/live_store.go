@@ -1,12 +1,12 @@
 package ports
 
 import (
+	"context"
 	"crypto/sha256"
+	"time"
+
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
-	"sync"
-	"time"
 )
 
 type LiveStore interface {
@@ -60,12 +60,17 @@ type ConfirmationSessionsStore interface {
 	Get() *ConfirmationSessions
 	Reset()
 	Initialized() bool
+	SessionCompleted() <-chan struct{}
 }
 
 type TreeSigningSessionsStore interface {
 	New(roundId string, uniqueSignersPubKeys map[string]struct{}) *MusigSigningSession
 	Get(roundId string) (*MusigSigningSession, bool)
 	Delete(roundId string)
+	AddNonces(ctx context.Context, roundId string, pubkey string, nonces tree.TreeNonces) error
+	AddSignatures(ctx context.Context, roundId string, pubkey string, nonces tree.TreePartialSigs) error
+	NoncesCollected(roundId string) <-chan struct{}
+	SignaturesCollected(roundId string) <-chan struct{}
 }
 
 type BoardingInputsStore interface {
@@ -86,21 +91,15 @@ func (t TimedTxRequest) HashID() [32]byte {
 
 // MusigSigningSession holds the state of ephemeral nonces and signatures in order to coordinate the signing of the tree
 type MusigSigningSession struct {
-	Lock        sync.Mutex
 	NbCosigners int
 	Cosigners   map[string]struct{}
-	Nonces      map[secp256k1.PublicKey]tree.TreeNonces
-	NonceDoneC  chan struct{}
+	Nonces      map[string]tree.TreeNonces
 
-	Signatures map[secp256k1.PublicKey]tree.TreePartialSigs
-	SigDoneC   chan struct{}
+	Signatures map[string]tree.TreePartialSigs
 }
 
 type ConfirmationSessions struct {
-	Lock sync.Mutex
-
 	IntentsHashes       map[[32]byte]bool // hash --> confirmed
 	NumIntents          int
 	NumConfirmedIntents int
-	ConfirmedC          chan struct{}
 }

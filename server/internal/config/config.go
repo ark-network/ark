@@ -4,12 +4,13 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/ark-network/ark/server/internal/infrastructure/live-store/inmemory"
-	"github.com/ark-network/ark/server/internal/infrastructure/live-store/redis"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	inmemorylivestore "github.com/ark-network/ark/server/internal/infrastructure/live-store/inmemory"
+	"github.com/ark-network/ark/server/internal/infrastructure/live-store/redis"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/server/internal/core/application"
@@ -47,6 +48,10 @@ var (
 	supportedUnlockers = supportedType{
 		"env":  {},
 		"file": {},
+	}
+	supportedLiveStores = supportedType{
+		"inmemory": {},
+		"redis":    {},
 	}
 )
 
@@ -298,6 +303,9 @@ func (c *Config) Validate() error {
 	if len(c.UnlockerType) > 0 && !supportedUnlockers.supports(c.UnlockerType) {
 		return fmt.Errorf("unlocker type not supported, please select one of: %s", supportedUnlockers)
 	}
+	if len(c.LiveStoreType) > 0 && !supportedLiveStores.supports(c.LiveStoreType) {
+		return fmt.Errorf("live store type not supported, please select one of: %s", supportedLiveStores)
+	}
 	if c.RoundInterval < 2 {
 		return fmt.Errorf("invalid round interval, must be at least 2 seconds")
 	}
@@ -503,7 +511,7 @@ func (c *Config) liveStoreService() error {
 	var err error
 	switch c.LiveStoreType {
 	case "inmemory":
-		liveStoreSvc = inmemory.NewLiveStore(c.txBuilder)
+		liveStoreSvc = inmemorylivestore.NewLiveStore(c.txBuilder)
 	case "redis":
 		liveStoreSvc = redis.NewLiveStore()
 	default:
