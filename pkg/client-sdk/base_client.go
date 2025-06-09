@@ -370,6 +370,7 @@ func (a *arkClient) init(
 		BoardingExitDelay:          common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
 		BoardingDescriptorTemplate: info.BoardingDescriptorTemplate,
 		ExplorerURL:                explorerSvc.BaseUrl(),
+		ExplorerWSURL:              args.ExplorerWSURL,
 		ForfeitAddress:             info.ForfeitAddress,
 		WithTransactionFeed:        args.WithTransactionFeed,
 		MarketHourStartTime:        info.MarketHourStartTime,

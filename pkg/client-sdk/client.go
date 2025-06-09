@@ -1048,7 +1048,7 @@ func (a *covenantlessArkClient) getTransaction(ctx context.Context, txId string)
 }
 
 func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context) {
-	// try to add existing boarding utxos if present
+	// try to add existing boarding utxos if present during initialization
 	_, boardingAddresses, _, err := a.wallet.GetAddresses(ctx)
 	if err == nil {
 		for _, boardingAddress := range boardingAddresses {
@@ -1060,7 +1060,7 @@ func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context)
 
 	err = a.explorer.ListenAddresses(func(boaringUtxos, mempoolUtxos []explorer.WSUtxo) error {
 		if len(mempoolUtxos) > 0 {
-			newPendingBoardingTxs := make([]types.Transaction, 0)
+			newPendingBoardingTxs := make([]types.Transaction, len(mempoolUtxos))
 			createdAt := time.Now()
 
 			for _, u := range mempoolUtxos {
@@ -1090,6 +1090,8 @@ func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context)
 						}
 					}
 
+					log.WithField("rbFTransactions", rbfTransactions).Debugf("replacing %d boarding transaction(s) with rbf transactions", len(rbfTransactions))
+
 					count, err := a.store.TransactionStore().RbfTransactions(ctx, rbfTransactions)
 					if err != nil {
 						log.WithError(err).Error("failed to update rbf boarding transactions")
@@ -1099,6 +1101,8 @@ func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context)
 
 					continue
 				}
+
+				log.WithField("mempool_txid", u.Txid).Infof("new boarding transaction %s", u.Txid)
 
 				newPendingBoardingTxs = append(newPendingBoardingTxs, types.Transaction{
 					TransactionKey: types.TransactionKey{
@@ -1130,6 +1134,30 @@ func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context)
 			)
 			if err != nil {
 				log.WithError(err).Error("failed to update boarding transactions")
+				return err
+			}
+			// ensure that we add transactions that were not in memepool
+			// but were confirmed in the blockchain
+			if count != len(boaringUtxos) {
+				newPendingBoardingTxs := make([]types.Transaction, len(boaringUtxos))
+				for _, u := range boaringUtxos {
+					newPendingBoardingTxs = append(newPendingBoardingTxs, types.Transaction{
+						TransactionKey: types.TransactionKey{
+							BoardingTxid: u.Txid,
+						},
+						Amount:    u.Value,
+						Type:      types.TxReceived,
+						CreatedAt: time.Now(),
+					})
+				}
+				count, err = a.store.TransactionStore().AddTransactions(
+					ctx, newPendingBoardingTxs,
+				)
+				if err != nil {
+					log.WithError(err).Error("failed to add new boarding transactions")
+					return err
+				}
+
 			}
 			log.Debugf("confirmed %d boarding transaction(s)", count)
 		}
