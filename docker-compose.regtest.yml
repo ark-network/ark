@@ -1,4 +1,11 @@
 services:
+  redis:
+    image: redis:7
+    container_name: ark-live-store
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
   ark-db-pg:
     container_name: ark-db-pg
     image: postgres
@@ -50,7 +57,8 @@ services:
       - ARK_ESPLORA_URL=http://chopsticks:3000
       - ARK_DB_URL=postgresql://root:secret@ark-db-pg:5432/ark-db?sslmode=disable
       - ARK_VTXO_MIN_AMOUNT=1
-      - ARK_LIVE_STORE_TYPE=inmemory
+      - ARK_LIVE_STORE_TYPE=redis
+      - ARK_REDIS_URL=redis://ark-live-store:6379/0
     volumes:
       - type: tmpfs
         target: /app/data

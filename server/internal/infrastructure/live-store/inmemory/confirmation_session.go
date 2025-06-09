@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/ark-network/ark/server/internal/core/ports"
-	log "github.com/sirupsen/logrus"
 )
 
 type confirmationSessionsStore struct {
@@ -37,7 +36,6 @@ func (c *confirmationSessionsStore) Init(intentIDsHashes [][32]byte) {
 	c.intentsHashes = hashes
 	c.numIntents = len(intentIDsHashes)
 	c.initialized = true
-	log.Info("[SELE]initialized")
 }
 
 func (c *confirmationSessionsStore) Confirm(intentId string) error {
@@ -85,7 +83,6 @@ func (c *confirmationSessionsStore) Reset() {
 	c.numIntents = 0
 	c.numConfirmedIntents = 0
 	c.initialized = false
-	log.Info("[SELE]reset")
 }
 
 func (c *confirmationSessionsStore) Initialized() bool {

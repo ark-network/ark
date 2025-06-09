@@ -1701,10 +1701,8 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 			}
 			notConfirmedRequests = append(notConfirmedRequests, req)
 		}
-		log.Info("[SELE]timeout")
 	case <-s.liveStore.ConfirmationSessions().SessionCompleted():
 		confirmedRequests = requests
-		log.Info("[SELE]chan")
 	}
 
 	repushToQueue := notConfirmedRequests
@@ -1867,7 +1865,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		}
 
 		coordinator.AddNonce(s.serverSigningPubKey, nonces)
-		signingSession := s.liveStore.TreeSigingSessions().New(s.liveStore.CurrentRound().Get().Id, uniqueSignerPubkeys)
+		s.liveStore.TreeSigingSessions().New(s.liveStore.CurrentRound().Get().Id, uniqueSignerPubkeys)
 
 		log.Debugf("signing session created for round %s with %d signers", s.liveStore.CurrentRound().Get().Id, len(uniqueSignerPubkeys))
 
@@ -1888,6 +1886,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 
 		select {
 		case <-time.After(thirdOfRemainingDuration):
+			signingSession, _ := s.liveStore.TreeSigingSessions().Get(s.liveStore.CurrentRound().Get().Id)
 			err := fmt.Errorf(
 				"musig2 signing session timed out (nonce collection), collected %d/%d nonces",
 				len(signingSession.Nonces), len(uniqueSignerPubkeys),
@@ -1896,6 +1895,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 			log.Warn(err)
 			return
 		case <-s.liveStore.TreeSigingSessions().NoncesCollected(s.liveStore.CurrentRound().Get().Id):
+			signingSession, _ := s.liveStore.TreeSigingSessions().Get(s.liveStore.CurrentRound().Get().Id)
 			for pubkey, nonce := range signingSession.Nonces {
 				buf, _ := hex.DecodeString(pubkey)
 				pk, _ := btcec.ParsePubKey(buf)
@@ -1934,6 +1934,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 
 		select {
 		case <-time.After(thirdOfRemainingDuration):
+			signingSession, _ := s.liveStore.TreeSigingSessions().Get(s.liveStore.CurrentRound().Get().Id)
 			err := fmt.Errorf(
 				"musig2 signing session timed out (signatures collection), collected %d/%d signatures",
 				len(signingSession.Signatures), len(uniqueSignerPubkeys),
@@ -1942,6 +1943,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 			log.Warn(err)
 			return
 		case <-s.liveStore.TreeSigingSessions().SignaturesCollected(s.liveStore.CurrentRound().Get().Id):
+			signingSession, _ := s.liveStore.TreeSigingSessions().Get(s.liveStore.CurrentRound().Get().Id)
 			for pubkey, sig := range signingSession.Signatures {
 				buf, _ := hex.DecodeString(pubkey)
 				pk, _ := btcec.ParsePubKey(buf)

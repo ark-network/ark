@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"github.com/redis/go-redis/v9"
 	"os"
 	"path/filepath"
 	"strings"
@@ -74,6 +75,8 @@ type Config struct {
 	SchedulerType       string
 	TxBuilderType       string
 	LiveStoreType       string
+	RedisUrl            string
+	RedisTxNumOfRetries int
 	WalletAddr          string
 	VtxoTreeExpiry      common.RelativeLocktime
 	UnilateralExitDelay common.RelativeLocktime
@@ -130,6 +133,8 @@ var (
 	SchedulerType             = "SCHEDULER_TYPE"
 	TxBuilderType             = "TX_BUILDER_TYPE"
 	LiveStoreType             = "LIVE_STORE_TYPE"
+	RedisUrl                  = "REDIS_URL"
+	RedisTxNumOfRetries       = "REDIS_NUM_OF_RETRIES"
 	LogLevel                  = "LOG_LEVEL"
 	VtxoTreeExpiry            = "VTXO_TREE_EXPIRY"
 	UnilateralExitDelay       = "UNILATERAL_EXIT_DELAY"
@@ -163,6 +168,7 @@ var (
 	defaultSchedulerType       = "gocron"
 	defaultTxBuilderType       = "covenantless"
 	defaultLiveStoreType       = "redis"
+	defaultRedisTxNumOfRetries = 10
 	defaultEsploraURL          = "https://blockstream.info/api"
 	defaultLogLevel            = 4
 	defaultVtxoTreeExpiry      = 604672  // 7 days
@@ -212,6 +218,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(VtxoMaxAmount, defaultVtxoMaxAmount)
 	viper.SetDefault(VtxoMinAmount, defaultVtxoMinAmount)
 	viper.SetDefault(LiveStoreType, defaultLiveStoreType)
+	viper.SetDefault(RedisTxNumOfRetries, defaultRedisTxNumOfRetries)
 
 	if err := initDatadir(); err != nil {
 		return nil, fmt.Errorf("error while creating datadir: %s", err)
@@ -227,6 +234,14 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
+	var redisUrl string
+	if viper.GetString(LiveStoreType) == "redis" {
+		redisUrl = viper.GetString(RedisUrl)
+		if redisUrl == "" {
+			return nil, fmt.Errorf("REDIS_URL not provided")
+		}
+	}
+
 	return &Config{
 		Datadir:                   viper.GetString(Datadir),
 		WalletAddr:                viper.GetString(WalletAddr),
@@ -237,6 +252,8 @@ func LoadConfig() (*Config, error) {
 		SchedulerType:             viper.GetString(SchedulerType),
 		TxBuilderType:             viper.GetString(TxBuilderType),
 		LiveStoreType:             viper.GetString(LiveStoreType),
+		RedisUrl:                  redisUrl,
+		RedisTxNumOfRetries:       viper.GetInt(RedisTxNumOfRetries),
 		NoTLS:                     viper.GetBool(NoTLS),
 		DbDir:                     dbPath,
 		DbUrl:                     dbUrl,
@@ -513,7 +530,12 @@ func (c *Config) liveStoreService() error {
 	case "inmemory":
 		liveStoreSvc = inmemorylivestore.NewLiveStore(c.txBuilder)
 	case "redis":
-		liveStoreSvc = redis.NewLiveStore()
+		redisOpts, err := redis.ParseURL(c.RedisUrl)
+		if err != nil {
+			return fmt.Errorf("invalid REDIS_URL: %w", err)
+		}
+		rdb := redis.NewClient(redisOpts)
+		liveStoreSvc = redislivestore.NewLiveStore(rdb, c.txBuilder, c.RedisTxNumOfRetries)
 	default:
 		err = fmt.Errorf("unknown liveStore type")
 	}
