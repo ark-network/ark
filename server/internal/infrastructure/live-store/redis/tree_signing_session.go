@@ -5,10 +5,13 @@
 package redislivestore
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	log "github.com/sirupsen/logrus"
+	"strings"
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
@@ -80,7 +83,10 @@ func (s *treeSigningSessionsStore) Get(roundId string) (*ports.MusigSigningSessi
 	nonces := make(map[string]tree.TreeNonces)
 	for pub, val := range noncesMap {
 		var n tree.TreeNonces
-		json.Unmarshal([]byte(val), &n)
+		if err := json.Unmarshal([]byte(val), &n); err != nil {
+			log.Warnf("get:failed to unmarshal nonces for %s: %v", pub, err)
+			return nil, false
+		}
 		nonces[pub] = n
 	}
 
@@ -88,9 +94,12 @@ func (s *treeSigningSessionsStore) Get(roundId string) (*ports.MusigSigningSessi
 	sigsMap, _ := s.rdb.HGetAll(ctx, sigsKey).Result()
 	sigs := make(map[string]tree.TreePartialSigs)
 	for pub, val := range sigsMap {
-		var sgs tree.TreePartialSigs
-		json.Unmarshal([]byte(val), &sgs)
-		sigs[pub] = sgs
+		signatures, err := tree.DecodeSignatures(hex.NewDecoder(strings.NewReader(val)))
+		if err != nil {
+			log.Warnf("get:failed to decode sigs for %s: %v", pub, err)
+			return nil, false
+		}
+		sigs[pub] = signatures
 	}
 
 	sess := &ports.MusigSigningSession{
@@ -129,7 +138,11 @@ func (s *treeSigningSessionsStore) AddNonces(ctx context.Context, roundId string
 
 func (s *treeSigningSessionsStore) AddSignatures(ctx context.Context, roundId string, pubkey string, sigs tree.TreePartialSigs) error {
 	sigsKey := fmt.Sprintf(treeSessSigsKeyFmt, roundId)
-	val, _ := json.Marshal(sigs)
+	var sigsBuffer bytes.Buffer
+	if err := sigs.Encode(&sigsBuffer); err != nil {
+		return err
+	}
+	val := hex.EncodeToString(sigsBuffer.Bytes())
 	if err := s.rdb.HSet(ctx, sigsKey, pubkey, val).Err(); err != nil {
 		return err
 	}
@@ -159,8 +172,7 @@ func (s *treeSigningSessionsStore) watchNoncesCollected(roundId string) {
 		log.Debugf("nonces collected: %d/%d", len(noncesMap), nbCosigners-1)
 		if len(noncesMap) == nbCosigners-1 {
 			if s.nonceCh != nil {
-				close(s.nonceCh)
-				s.nonceCh = nil
+				s.nonceCh <- struct{}{}
 			}
 			return
 		}
@@ -182,8 +194,7 @@ func (s *treeSigningSessionsStore) watchSigsCollected(roundId string) {
 		log.Debugf("sigs collected: %d/%d", len(sigsMap), nbCosigners-1)
 		if len(sigsMap) == nbCosigners-1 {
 			if s.sigsCh != nil {
-				close(s.sigsCh)
-				s.sigsCh = nil
+				s.sigsCh <- struct{}{}
 			}
 			return
 		}

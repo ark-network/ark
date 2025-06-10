@@ -50,8 +50,9 @@ type OffChainTxStore interface {
 }
 
 type CurrentRoundStore interface {
-	Upsert(fn func(m *domain.Round) *domain.Round)
+	Upsert(fn func(m *domain.Round) *domain.Round) error
 	Get() *domain.Round
+	Fail(err error) []domain.Event
 }
 
 type ConfirmationSessionsStore interface {
