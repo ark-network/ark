@@ -882,7 +882,7 @@ func TestSubDustVtxoTransaction(t *testing.T) {
 	_, err = runArkCommand("send", "--amount", "1000", "--to", bobAddr, "--password", utils.Password)
 	require.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	// now that bob has enough funds (greater than dust), he should be able to settle
 	_, err = bob.Settle(ctx, arksdk.WithSubDustVtxos)
