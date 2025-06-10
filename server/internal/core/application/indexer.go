@@ -41,8 +41,7 @@ type IndexerService interface {
 }
 
 type indexerService struct {
-	pubkey *secp256k1.PublicKey
-
+	pubkey      *secp256k1.PublicKey
 	repoManager ports.RepoManager
 }
 
@@ -50,10 +49,12 @@ func NewIndexerService(
 	pubkey *secp256k1.PublicKey,
 	repoManager ports.RepoManager,
 ) IndexerService {
-	return &indexerService{
+	svc := &indexerService{
 		pubkey:      pubkey,
 		repoManager: repoManager,
 	}
+
+	return svc
 }
 
 func (i *indexerService) GetCommitmentTxInfo(

@@ -62,6 +62,8 @@ type ClientService interface {
 
 	IndexerServiceGetForfeitTxs(params *IndexerServiceGetForfeitTxsParams, opts ...ClientOption) (*IndexerServiceGetForfeitTxsOK, error)
 
+	IndexerServiceGetSubscription(params *IndexerServiceGetSubscriptionParams, opts ...ClientOption) (*IndexerServiceGetSubscriptionOK, error)
+
 	IndexerServiceGetSweptCommitmentTx(params *IndexerServiceGetSweptCommitmentTxParams, opts ...ClientOption) (*IndexerServiceGetSweptCommitmentTxOK, error)
 
 	IndexerServiceGetTransactionHistory(params *IndexerServiceGetTransactionHistoryParams, opts ...ClientOption) (*IndexerServiceGetTransactionHistoryOK, error)
@@ -77,6 +79,10 @@ type ClientService interface {
 	IndexerServiceGetVtxos(params *IndexerServiceGetVtxosParams, opts ...ClientOption) (*IndexerServiceGetVtxosOK, error)
 
 	IndexerServiceGetVtxosByOutpoint(params *IndexerServiceGetVtxosByOutpointParams, opts ...ClientOption) (*IndexerServiceGetVtxosByOutpointOK, error)
+
+	IndexerServiceSubscribeForScripts(params *IndexerServiceSubscribeForScriptsParams, opts ...ClientOption) (*IndexerServiceSubscribeForScriptsOK, error)
+
+	IndexerServiceUnsubscribeForScripts(params *IndexerServiceUnsubscribeForScriptsParams, opts ...ClientOption) (*IndexerServiceUnsubscribeForScriptsOK, error)
 
 	SetTransport(transport runtime.ClientTransport)
 }
@@ -226,6 +232,43 @@ func (a *Client) IndexerServiceGetForfeitTxs(params *IndexerServiceGetForfeitTxs
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*IndexerServiceGetForfeitTxsDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+IndexerServiceGetSubscription indexer service get subscription API
+*/
+func (a *Client) IndexerServiceGetSubscription(params *IndexerServiceGetSubscriptionParams, opts ...ClientOption) (*IndexerServiceGetSubscriptionOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewIndexerServiceGetSubscriptionParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "IndexerService_GetSubscription",
+		Method:             "GET",
+		PathPattern:        "/v1/script/subscription/{subscriptionId}",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &IndexerServiceGetSubscriptionReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*IndexerServiceGetSubscriptionOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*IndexerServiceGetSubscriptionDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
@@ -522,6 +565,80 @@ func (a *Client) IndexerServiceGetVtxosByOutpoint(params *IndexerServiceGetVtxos
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*IndexerServiceGetVtxosByOutpointDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+IndexerServiceSubscribeForScripts indexer service subscribe for scripts API
+*/
+func (a *Client) IndexerServiceSubscribeForScripts(params *IndexerServiceSubscribeForScriptsParams, opts ...ClientOption) (*IndexerServiceSubscribeForScriptsOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewIndexerServiceSubscribeForScriptsParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "IndexerService_SubscribeForScripts",
+		Method:             "POST",
+		PathPattern:        "/v1/script/subscribe",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &IndexerServiceSubscribeForScriptsReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*IndexerServiceSubscribeForScriptsOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*IndexerServiceSubscribeForScriptsDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+IndexerServiceUnsubscribeForScripts indexer service unsubscribe for scripts API
+*/
+func (a *Client) IndexerServiceUnsubscribeForScripts(params *IndexerServiceUnsubscribeForScriptsParams, opts ...ClientOption) (*IndexerServiceUnsubscribeForScriptsOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewIndexerServiceUnsubscribeForScriptsParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "IndexerService_UnsubscribeForScripts",
+		Method:             "POST",
+		PathPattern:        "/v1/script/unsubscribe",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &IndexerServiceUnsubscribeForScriptsReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*IndexerServiceUnsubscribeForScriptsOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*IndexerServiceUnsubscribeForScriptsDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

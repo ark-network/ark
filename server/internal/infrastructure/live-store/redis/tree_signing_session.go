@@ -169,7 +169,6 @@ func (s *treeSigningSessionsStore) watchNoncesCollected(roundId string) {
 		nbCosigners := 0
 		fmt.Sscanf(meta["NbCosigners"], "%d", &nbCosigners)
 		noncesMap, _ := s.rdb.HGetAll(ctx, noncesKey).Result()
-		log.Debugf("nonces collected: %d/%d", len(noncesMap), nbCosigners-1)
 		if len(noncesMap) == nbCosigners-1 {
 			if s.nonceCh != nil {
 				s.nonceCh <- struct{}{}
@@ -191,7 +190,6 @@ func (s *treeSigningSessionsStore) watchSigsCollected(roundId string) {
 		nbCosigners := 0
 		fmt.Sscanf(meta["NbCosigners"], "%d", &nbCosigners)
 		sigsMap, _ := s.rdb.HGetAll(ctx, sigsKey).Result()
-		log.Debugf("sigs collected: %d/%d", len(sigsMap), nbCosigners-1)
 		if len(sigsMap) == nbCosigners-1 {
 			if s.sigsCh != nil {
 				s.sigsCh <- struct{}{}

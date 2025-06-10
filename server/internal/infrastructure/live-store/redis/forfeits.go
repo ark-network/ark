@@ -116,12 +116,13 @@ func (s *forfeitTxsStore) Sign(txs []string) error {
 	if err != nil {
 		return err
 	}
-	// Update Redis hash atomically
+
 	pipe := s.rdb.TxPipeline()
 	for vtxoKey, tx := range validTxs {
 		pipe.HSet(ctx, forfeitTxsStoreTxsKey, vtxoKey.String(), tx)
 	}
 	_, err = pipe.Exec(ctx)
+
 	return err
 }
 

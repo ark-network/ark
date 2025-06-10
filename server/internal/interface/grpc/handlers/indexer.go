@@ -6,24 +6,42 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/server/internal/core/application"
+	"github.com/ark-network/ark/server/internal/core/domain"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
 type indexerService struct {
 	indexerSvc application.IndexerService
+	eventsCh   <-chan application.TransactionEvent
+
+	scriptSubsHandler           *broker[*arkv1.GetSubscriptionResponse]
+	subscriptionTimeoutDuration time.Duration
 }
 
-func NewIndexerService(indexerSvc application.IndexerService) arkv1.IndexerServiceServer {
-	return indexerService{
-		indexerSvc: indexerSvc,
+func NewIndexerService(
+	indexerSvc application.IndexerService,
+	eventsCh <-chan application.TransactionEvent, subscriptionTimeoutDuration time.Duration,
+) arkv1.IndexerServiceServer {
+	svc := &indexerService{
+		indexerSvc:                  indexerSvc,
+		eventsCh:                    eventsCh,
+		scriptSubsHandler:           newBroker[*arkv1.GetSubscriptionResponse](),
+		subscriptionTimeoutDuration: subscriptionTimeoutDuration,
 	}
+
+	go svc.listenToTxEvents()
+
+	return svc
 }
 
-func (e indexerService) GetCommitmentTx(
+func (e *indexerService) GetCommitmentTx(
 	ctx context.Context, request *arkv1.GetCommitmentTxRequest,
 ) (*arkv1.GetCommitmentTxResponse, error) {
 	txid, err := parseTxid(request.GetTxid())
@@ -57,7 +75,7 @@ func (e indexerService) GetCommitmentTx(
 	}, nil
 }
 
-func (e indexerService) GetCommitmentTxLeaves(
+func (e *indexerService) GetCommitmentTxLeaves(
 	ctx context.Context, request *arkv1.GetCommitmentTxLeavesRequest,
 ) (*arkv1.GetCommitmentTxLeavesResponse, error) {
 	txid, err := parseTxid(request.GetTxid())
@@ -88,7 +106,7 @@ func (e indexerService) GetCommitmentTxLeaves(
 	}, nil
 }
 
-func (e indexerService) GetVtxoTree(ctx context.Context, request *arkv1.GetVtxoTreeRequest) (*arkv1.GetVtxoTreeResponse, error) {
+func (e *indexerService) GetVtxoTree(ctx context.Context, request *arkv1.GetVtxoTreeRequest) (*arkv1.GetVtxoTreeResponse, error) {
 	batchOutpoint, err := parseOutpoint(request.GetBatchOutpoint())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -119,7 +137,7 @@ func (e indexerService) GetVtxoTree(ctx context.Context, request *arkv1.GetVtxoT
 	}, nil
 }
 
-func (e indexerService) GetVtxoTreeLeaves(
+func (e *indexerService) GetVtxoTreeLeaves(
 	ctx context.Context, request *arkv1.GetVtxoTreeLeavesRequest,
 ) (*arkv1.GetVtxoTreeLeavesResponse, error) {
 	outpoint, err := parseOutpoint(request.GetBatchOutpoint())
@@ -150,7 +168,7 @@ func (e indexerService) GetVtxoTreeLeaves(
 	}, nil
 }
 
-func (e indexerService) GetForfeitTxs(ctx context.Context, request *arkv1.GetForfeitTxsRequest) (*arkv1.GetForfeitTxsResponse, error) {
+func (e *indexerService) GetForfeitTxs(ctx context.Context, request *arkv1.GetForfeitTxsRequest) (*arkv1.GetForfeitTxsResponse, error) {
 	txid, err := parseTxid(request.GetTxid())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -171,7 +189,7 @@ func (e indexerService) GetForfeitTxs(ctx context.Context, request *arkv1.GetFor
 	}, nil
 }
 
-func (e indexerService) GetConnectors(ctx context.Context, request *arkv1.GetConnectorsRequest) (*arkv1.GetConnectorsResponse, error) {
+func (e *indexerService) GetConnectors(ctx context.Context, request *arkv1.GetConnectorsRequest) (*arkv1.GetConnectorsResponse, error) {
 	txid, err := parseTxid(request.GetTxid())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -202,7 +220,7 @@ func (e indexerService) GetConnectors(ctx context.Context, request *arkv1.GetCon
 	}, nil
 }
 
-func (e indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosRequest) (*arkv1.GetVtxosResponse, error) {
+func (e *indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosRequest) (*arkv1.GetVtxosResponse, error) {
 	pubkeys, err := parseArkAddresses(request.GetAddresses())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -224,21 +242,7 @@ func (e indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosReq
 
 	vtxos := make([]*arkv1.IndexerVtxo, len(resp.Vtxos))
 	for i, vtxo := range resp.Vtxos {
-		vtxos[i] = &arkv1.IndexerVtxo{
-			Outpoint: &arkv1.IndexerOutpoint{
-				Txid: vtxo.Txid,
-				Vout: vtxo.VOut,
-			},
-			CreatedAt:      vtxo.CreatedAt,
-			ExpiresAt:      vtxo.ExpireAt,
-			Amount:         vtxo.Amount,
-			Script:         vtxo.PubKey,
-			IsLeaf:         vtxo.RedeemTx == "",
-			IsSwept:        vtxo.Swept,
-			IsSpent:        vtxo.Spent,
-			SpentBy:        vtxo.SpentBy,
-			CommitmentTxid: vtxo.CommitmentTxid,
-		}
+		vtxos[i] = newIndexerVtxo(vtxo)
 	}
 
 	return &arkv1.GetVtxosResponse{
@@ -247,7 +251,7 @@ func (e indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosReq
 	}, nil
 }
 
-func (e indexerService) GetVtxosByOutpoint(
+func (e *indexerService) GetVtxosByOutpoint(
 	ctx context.Context, request *arkv1.GetVtxosByOutpointRequest,
 ) (*arkv1.GetVtxosByOutpointResponse, error) {
 	outpoints, err := parseOutpoints(request.GetOutpoints())
@@ -266,21 +270,7 @@ func (e indexerService) GetVtxosByOutpoint(
 
 	vtxos := make([]*arkv1.IndexerVtxo, len(resp.Vtxos))
 	for i, vtxo := range resp.Vtxos {
-		vtxos[i] = &arkv1.IndexerVtxo{
-			Outpoint: &arkv1.IndexerOutpoint{
-				Txid: vtxo.Txid,
-				Vout: vtxo.VOut,
-			},
-			CreatedAt:      vtxo.CreatedAt,
-			ExpiresAt:      vtxo.ExpireAt,
-			Amount:         vtxo.Amount,
-			Script:         vtxo.PubKey,
-			IsLeaf:         vtxo.RedeemTx == "",
-			IsSwept:        vtxo.Swept,
-			IsSpent:        vtxo.Spent,
-			SpentBy:        vtxo.SpentBy,
-			CommitmentTxid: vtxo.CommitmentTxid,
-		}
+		vtxos[i] = newIndexerVtxo(vtxo)
 	}
 
 	return &arkv1.GetVtxosByOutpointResponse{
@@ -289,7 +279,7 @@ func (e indexerService) GetVtxosByOutpoint(
 	}, nil
 }
 
-func (e indexerService) GetTransactionHistory(
+func (e *indexerService) GetTransactionHistory(
 	ctx context.Context, request *arkv1.GetTransactionHistoryRequest,
 ) (*arkv1.GetTransactionHistoryResponse, error) {
 	pubkey, err := parseArkAddress(request.GetAddress())
@@ -342,7 +332,7 @@ func (e indexerService) GetTransactionHistory(
 	}, nil
 }
 
-func (e indexerService) GetVtxoChain(ctx context.Context, request *arkv1.GetVtxoChainRequest) (*arkv1.GetVtxoChainResponse, error) {
+func (e *indexerService) GetVtxoChain(ctx context.Context, request *arkv1.GetVtxoChainRequest) (*arkv1.GetVtxoChainResponse, error) {
 	outpoint, err := parseOutpoint(request.GetOutpoint())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -390,7 +380,7 @@ func (e indexerService) GetVtxoChain(ctx context.Context, request *arkv1.GetVtxo
 	}, nil
 }
 
-func (e indexerService) GetVirtualTxs(ctx context.Context, request *arkv1.GetVirtualTxsRequest) (*arkv1.GetVirtualTxsResponse, error) {
+func (e *indexerService) GetVirtualTxs(ctx context.Context, request *arkv1.GetVirtualTxsRequest) (*arkv1.GetVirtualTxsResponse, error) {
 	txids, err := parseTxids(request.GetTxids())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -411,7 +401,7 @@ func (e indexerService) GetVirtualTxs(ctx context.Context, request *arkv1.GetVir
 	}, nil
 }
 
-func (e indexerService) GetSweptCommitmentTx(ctx context.Context, request *arkv1.GetSweptCommitmentTxRequest) (*arkv1.GetSweptCommitmentTxResponse, error) {
+func (e *indexerService) GetSweptCommitmentTx(ctx context.Context, request *arkv1.GetSweptCommitmentTxRequest) (*arkv1.GetSweptCommitmentTxResponse, error) {
 	txid, err := parseTxid(request.GetTxid())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -425,6 +415,141 @@ func (e indexerService) GetSweptCommitmentTx(ctx context.Context, request *arkv1
 	return &arkv1.GetSweptCommitmentTxResponse{
 		SweptBy: resp.SweptBy,
 	}, nil
+}
+
+func (h *indexerService) GetSubscription(req *arkv1.GetSubscriptionRequest, stream arkv1.IndexerService_GetSubscriptionServer) error {
+	subscriptionId := req.GetSubscriptionId()
+	if len(subscriptionId) == 0 {
+		return status.Error(codes.InvalidArgument, "missing subscription id")
+	}
+
+	h.scriptSubsHandler.stopTimeout(subscriptionId)
+	defer func() {
+		if len(h.scriptSubsHandler.getTopics(subscriptionId)) > 0 {
+			h.scriptSubsHandler.startTimeout(subscriptionId, h.subscriptionTimeoutDuration)
+			return
+		}
+		h.scriptSubsHandler.removeListener(subscriptionId)
+	}()
+
+	ch, err := h.scriptSubsHandler.getListenerChannel(subscriptionId)
+	if err != nil {
+		return status.Error(codes.InvalidArgument, "subscription not found")
+	}
+
+	for {
+		select {
+		case <-stream.Context().Done():
+			return nil
+		case ev := <-ch:
+			if err := stream.Send(ev); err != nil {
+				return err
+			}
+		}
+	}
+}
+
+func (h *indexerService) UnsubscribeForScripts(ctx context.Context, req *arkv1.UnsubscribeForScriptsRequest) (*arkv1.UnsubscribeForScriptsResponse, error) {
+	subscriptionId := req.GetSubscriptionId()
+	if len(subscriptionId) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing subscription id")
+	}
+
+	scripts := req.GetScripts()
+	if len(scripts) == 0 {
+		// remove all topics
+		if err := h.scriptSubsHandler.removeAllTopics(subscriptionId); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+		h.scriptSubsHandler.removeListener(subscriptionId)
+		return &arkv1.UnsubscribeForScriptsResponse{}, nil
+	}
+
+	if err := h.scriptSubsHandler.removeTopics(subscriptionId, scripts); err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	return &arkv1.UnsubscribeForScriptsResponse{}, nil
+}
+
+func (h *indexerService) SubscribeForScripts(ctx context.Context, req *arkv1.SubscribeForScriptsRequest) (*arkv1.SubscribeForScriptsResponse, error) {
+	subscriptionId := req.GetSubscriptionId()
+	scripts, err := parseScripts(req.GetScripts())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+
+	if len(subscriptionId) == 0 {
+		// create new listener
+		subscriptionId = uuid.NewString()
+		indexedScripts := make(map[string]struct{})
+		for _, script := range scripts {
+			indexedScripts[script] = struct{}{}
+		}
+
+		listener := &listener[*arkv1.GetSubscriptionResponse]{
+			id:            subscriptionId,
+			ch:            make(chan *arkv1.GetSubscriptionResponse),
+			topics:        indexedScripts,
+			stopTimeoutCh: make(chan struct{}),
+		}
+
+		h.scriptSubsHandler.pushListener(listener)
+		h.scriptSubsHandler.startTimeout(subscriptionId, h.subscriptionTimeoutDuration)
+	} else {
+		// update listener topic
+		if err := h.scriptSubsHandler.addTopics(subscriptionId, scripts); err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+	}
+	return &arkv1.SubscribeForScriptsResponse{
+		SubscriptionId: subscriptionId,
+	}, nil
+}
+
+func (h *indexerService) listenToTxEvents() {
+	for event := range h.eventsCh {
+		if len(h.scriptSubsHandler.listeners) <= 0 {
+			continue
+		}
+
+		allSpendableVtxos := make(map[string][]*arkv1.IndexerVtxo)
+		allSpentVtxos := make(map[string][]*arkv1.IndexerVtxo)
+
+		for _, vtxo := range event.GetSpendableVtxos() {
+			allSpendableVtxos[vtxo.PubKey] = append(allSpendableVtxos[vtxo.PubKey], newIndexerVtxo(vtxo))
+		}
+		for _, vtxo := range event.GetSpentVtxos() {
+			allSpentVtxos[vtxo.PubKey] = append(allSpentVtxos[vtxo.PubKey], newIndexerVtxo(vtxo))
+		}
+
+		for _, l := range h.scriptSubsHandler.listeners {
+			spendableVtxos := make([]*arkv1.IndexerVtxo, 0)
+			spentVtxos := make([]*arkv1.IndexerVtxo, 0)
+			involvedScripts := make([]string, 0)
+
+			for vtxoScript := range l.topics {
+				spendableVtxosForScript := allSpendableVtxos[vtxoScript]
+				spentVtxosForScript := allSpentVtxos[vtxoScript]
+				spendableVtxos = append(spendableVtxos, spendableVtxosForScript...)
+				spentVtxos = append(spentVtxos, spentVtxosForScript...)
+				if len(spendableVtxosForScript) > 0 || len(spentVtxosForScript) > 0 {
+					involvedScripts = append(involvedScripts, vtxoScript)
+				}
+			}
+
+			if len(spendableVtxos) > 0 || len(spentVtxos) > 0 {
+				go func() {
+					l.ch <- &arkv1.GetSubscriptionResponse{
+						Txid:       event.GetTxId(),
+						Scripts:    involvedScripts,
+						NewVtxos:   spendableVtxos,
+						SpentVtxos: spentVtxos,
+					}
+				}()
+			}
+		}
+	}
 }
 
 func parseTxid(txid string) (string, error) {
@@ -541,4 +666,52 @@ func parseArkAddresses(addresses []string) ([]string, error) {
 		pubkeys = append(pubkeys, pubkey)
 	}
 	return pubkeys, nil
+}
+
+func parseScripts(scripts []string) ([]string, error) {
+	if len(scripts) <= 0 {
+		return nil, fmt.Errorf("missing scripts")
+	}
+
+	for _, script := range scripts {
+		if _, err := parsePubkey(script); err != nil {
+			return nil, err
+		}
+	}
+	return scripts, nil
+}
+
+func parsePubkey(pubkey string) (string, error) {
+	if len(pubkey) <= 0 {
+		return "", fmt.Errorf("missing pubkey")
+	}
+	buf, err := hex.DecodeString(pubkey)
+	if err != nil {
+		return "", fmt.Errorf("invalid pubkey format: %s", err)
+	}
+	if len(buf) != 32 {
+		return "", fmt.Errorf("invalid pubkey length: got %d, expeted 32", len(buf))
+	}
+	if _, err := schnorr.ParsePubKey(buf); err != nil {
+		return "", fmt.Errorf("invalid schnorr pubkey: %s", err)
+	}
+	return pubkey, nil
+}
+
+func newIndexerVtxo(vtxo domain.Vtxo) *arkv1.IndexerVtxo {
+	return &arkv1.IndexerVtxo{
+		Outpoint: &arkv1.IndexerOutpoint{
+			Txid: vtxo.Txid,
+			Vout: vtxo.VOut,
+		},
+		CreatedAt:      vtxo.CreatedAt,
+		ExpiresAt:      vtxo.ExpireAt,
+		Amount:         vtxo.Amount,
+		Script:         vtxo.PubKey,
+		IsLeaf:         vtxo.RedeemTx == "",
+		IsSwept:        vtxo.Swept,
+		IsSpent:        vtxo.Spent,
+		SpentBy:        vtxo.SpentBy,
+		CommitmentTxid: vtxo.CommitmentTxid,
+	}
 }

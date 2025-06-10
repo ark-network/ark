@@ -64,6 +64,8 @@ type covenantlessService struct {
 	eventsCh                 chan []domain.Event
 	transactionEventsCh      chan TransactionEvent
 	forfeitsBoardingSigsChan chan struct{}
+	// TODO remove this in v7
+	indexerTxEventsCh chan TransactionEvent
 }
 
 func NewService(
@@ -146,6 +148,7 @@ func NewService(
 		vtxoMaxAmount:             vtxoMaxAmount,
 		vtxoMinSettlementAmount:   vtxoMinSettlementAmount,
 		vtxoMinOffchainTxAmount:   vtxoMinOffchainTxAmount,
+		indexerTxEventsCh:         make(chan TransactionEvent),
 	}
 
 	repoManager.Events().RegisterEventsHandler(
@@ -257,12 +260,12 @@ func NewService(
 }
 
 func (s *covenantlessService) Start() error {
-	log.Debug("starting sweeper service")
+	log.Debug("starting sweeper service...")
 	if err := s.sweeper.start(); err != nil {
 		return err
 	}
 
-	log.Debug("starting app service")
+	log.Debug("starting app service...")
 	go s.start()
 	return nil
 }
@@ -1294,6 +1297,11 @@ func (s *covenantlessService) GetEventsChannel(ctx context.Context) <-chan []dom
 
 func (s *covenantlessService) GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent {
 	return s.transactionEventsCh
+}
+
+// TODO remove this in v7
+func (s *covenantlessService) GetIndexerTxChannel(ctx context.Context) <-chan TransactionEvent {
+	return s.indexerTxEventsCh
 }
 
 func (s *covenantlessService) GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error) {

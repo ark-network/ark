@@ -78,7 +78,7 @@ func (s *confirmationSessionsStore) Confirm(intentId string) error {
 	ctx := context.Background()
 	hash := sha256.Sum256([]byte(intentId))
 	hashKey := string(hash[:])
-	for attempt := 0; attempt < 5; attempt++ {
+	for attempt := 0; attempt < s.numOfRetries; attempt++ {
 		err := s.rdb.Watch(ctx, func(tx *redis.Tx) error {
 			confirmed, err := tx.HGet(ctx, confirmationIntentsKey, hashKey).Int()
 			if errors.Is(err, redis.Nil) {

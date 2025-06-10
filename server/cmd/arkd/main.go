@@ -72,7 +72,7 @@ func mainAction(_ *cli.Context) error {
 
 	log.Infof("Ark Server config: %s", cfg)
 
-	log.Info("starting service...")
+	log.Debug("starting service...")
 	if err := svc.Start(); err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func mainAction(_ *cli.Context) error {
 	signal.Notify(sigChan, syscall.SIGTERM, syscall.SIGINT, syscall.SIGQUIT, os.Interrupt)
 	<-sigChan
 
-	log.Info("shutting down service...")
+	log.Debug("shutting down service...")
 	log.Exit(0)
 
 	return nil
