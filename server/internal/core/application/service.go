@@ -2309,7 +2309,6 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 
 func (s *covenantlessService) checkForfeitsAndBoardingSigsSent() {
 	comTx := s.liveStore.CurrentRound().Get().CommitmentTx
-	log.Debugf("checking commitment tx: %s", comTx)
 	roundTx, _ := psbt.NewFromRawBytes(strings.NewReader(comTx), true)
 	numOfInputsSigned := 0
 	for _, v := range roundTx.Inputs {
@@ -2319,7 +2318,6 @@ func (s *covenantlessService) checkForfeitsAndBoardingSigsSent() {
 			}
 		}
 	}
-	log.Debugf("at %s checking commitment tx: %s, number of signed inputs: %d", time.Now(), comTx, numOfInputsSigned)
 
 	// Condition: all forfeit txs are signed and
 	// the number of signed boarding inputs matches

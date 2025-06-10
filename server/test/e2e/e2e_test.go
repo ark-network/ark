@@ -52,7 +52,7 @@ func TestMain(m *testing.M) {
 		os.Exit(1)
 	}
 
-	time.Sleep(3 * time.Second)
+	time.Sleep(1 * time.Second)
 
 	_, err := runArkCommand("init", "--server-url", "localhost:7070", "--password", utils.Password, "--network", "regtest", "--explorer", "http://chopsticks:3000")
 	if err != nil {
@@ -881,6 +881,8 @@ func TestSubDustVtxoTransaction(t *testing.T) {
 	// resend some funds to bob so he can settle
 	_, err = runArkCommand("send", "--amount", "1000", "--to", bobAddr, "--password", utils.Password)
 	require.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
 
 	// now that bob has enough funds (greater than dust), he should be able to settle
 	_, err = bob.Settle(ctx, arksdk.WithSubDustVtxos)
