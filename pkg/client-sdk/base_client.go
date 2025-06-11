@@ -382,7 +382,8 @@ func (a *arkClient) init(
 		VtxoMinAmount:              info.VtxoMinAmount,
 		VtxoMaxAmount:              info.VtxoMaxAmount,
 	}
-	walletSvc, err := getWallet(a.store.ConfigStore(), explorerSvc, &cfgData, supportedWallets)
+
+	walletSvc, err := getWallet(a.store.ConfigStore(), &cfgData, supportedWallets)
 	if err != nil {
 		return err
 	}
@@ -396,6 +397,9 @@ func (a *arkClient) init(
 		a.store.ConfigStore().CleanData(ctx)
 		return err
 	}
+
+	// subscribe to boarding address events
+	explorerSvc.SubscribeToAddressEvent(walletSvc.SubscribeAddressEvent(ctx))
 
 	a.Config = &cfgData
 	a.wallet = walletSvc
@@ -463,11 +467,11 @@ func getIndexer(clientType, serverUrl string) (indexer.Indexer, error) {
 }
 
 func getWallet(
-	configStore types.ConfigStore, explorerSvc explorer.Explorer, data *types.Config, supportedWallets utils.SupportedType[struct{}],
+	configStore types.ConfigStore, data *types.Config, supportedWallets utils.SupportedType[struct{}],
 ) (wallet.WalletService, error) {
 	switch data.WalletType {
 	case wallet.SingleKeyWallet:
-		return getSingleKeyWallet(configStore, explorerSvc)
+		return getSingleKeyWallet(configStore)
 	default:
 		return nil, fmt.Errorf(
 			"unsupported wallet type '%s', please select one of: %s",
@@ -476,13 +480,13 @@ func getWallet(
 	}
 }
 
-func getSingleKeyWallet(configStore types.ConfigStore, explorerSvc explorer.Explorer) (wallet.WalletService, error) {
+func getSingleKeyWallet(configStore types.ConfigStore) (wallet.WalletService, error) {
 	walletStore, err := getWalletStore(configStore.GetType(), configStore.GetDatadir())
 	if err != nil {
 		return nil, err
 	}
 
-	return singlekeywallet.NewBitcoinWallet(configStore, explorerSvc, walletStore)
+	return singlekeywallet.NewBitcoinWallet(configStore, walletStore)
 }
 
 func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) {

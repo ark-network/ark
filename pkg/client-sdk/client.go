@@ -188,7 +188,6 @@ func LoadArkClient(sdkStore types.Store) (ArkClient, error) {
 
 	walletSvc, err := getWallet(
 		sdkStore.ConfigStore(),
-		explorerSvc,
 		cfgData,
 		supportedWallets,
 	)
@@ -206,6 +205,9 @@ func LoadArkClient(sdkStore types.Store) (ArkClient, error) {
 			indexer:  indexerSvc,
 		},
 	}
+
+	// subscribe to boarding address events
+	explorerSvc.SubscribeToAddressEvent(walletSvc.SubscribeAddressEvent(context.TODO()))
 
 	if cfgData.WithTransactionFeed {
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
@@ -252,6 +254,9 @@ func LoadArkClientWithWallet(
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
+
+	// subscribe to boarding address events
+	explorerSvc.SubscribeToAddressEvent(walletSvc.SubscribeAddressEvent(context.TODO()))
 
 	indexerSvc, err := getIndexer(cfgData.ClientType, cfgData.ServerUrl)
 	if err != nil {
@@ -1048,17 +1053,7 @@ func (a *covenantlessArkClient) getTransaction(ctx context.Context, txId string)
 }
 
 func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context) {
-	// try to add existing boarding utxos if present during initialization
-	_, boardingAddresses, _, err := a.wallet.GetAddresses(ctx)
-	if err == nil {
-		for _, boardingAddress := range boardingAddresses {
-			if err := a.explorer.TrackAddress(boardingAddress.Address); err != nil {
-				log.WithError(err).Errorf("failed to track boarding address %s", boardingAddress.Address)
-			}
-		}
-	}
-
-	err = a.explorer.ListenAddresses(func(boaringUtxos, mempoolUtxos []explorer.WSUtxo) error {
+	err := a.explorer.ListenAddresses(func(boaringUtxos, mempoolUtxos []explorer.WSUtxo) error {
 		if len(mempoolUtxos) > 0 {
 			newPendingBoardingTxs := make([]types.Transaction, len(mempoolUtxos))
 			createdAt := time.Now()
@@ -1156,10 +1151,6 @@ func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context)
 
 			}
 			log.Debugf("confirmed %d boarding transaction(s)", count)
-		}
-
-		if err != nil {
-			return err
 		}
 		return nil
 	})

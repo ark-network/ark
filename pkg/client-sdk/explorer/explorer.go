@@ -42,9 +42,9 @@ type Explorer interface {
 	) (confirmed bool, blocktime int64, err error)
 	BaseUrl() string
 	GetFeeRate() (float64, error)
-	TrackAddress(addr string) error
 	ListenAddresses(messageHandler func([]WSUtxo, []WSUtxo) error) error
 	FetchMempoolRBFTxIds(txid string) (bool, []string, error)
+	SubscribeToAddressEvent(addressEvent <-chan string)
 }
 
 type AddrTracker struct {
@@ -90,12 +90,15 @@ func (e *explorerSvc) GetNetwork() common.Network {
 	return e.net
 }
 
-func (e *explorerSvc) TrackAddress(addr string) error {
-	if e.addrTracker != nil {
-		return e.addrTracker.TrackAddress(addr)
-	}
-	return nil
-
+func (e *explorerSvc) SubscribeToAddressEvent(addressEvent <-chan string) {
+	go func() {
+		for address := range addressEvent {
+			if e.addrTracker != nil {
+				e.addrTracker.TrackAddress(address)
+				return
+			}
+		}
+	}()
 }
 
 func (e *explorerSvc) GetFeeRate() (float64, error) {

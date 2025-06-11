@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"fmt"
 
-	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
@@ -15,11 +14,11 @@ import (
 )
 
 type singlekeyWallet struct {
-	configStore types.ConfigStore
-	walletStore walletstore.WalletStore
-	explorerSvc explorer.Explorer
-	privateKey  *secp256k1.PrivateKey
-	walletData  *walletstore.WalletData
+	configStore        types.ConfigStore
+	walletStore        walletstore.WalletStore
+	privateKey         *secp256k1.PrivateKey
+	walletData         *walletstore.WalletData
+	addressBroadcaster *utils.Broadcaster[string]
 }
 
 func (w *singlekeyWallet) GetType() string {

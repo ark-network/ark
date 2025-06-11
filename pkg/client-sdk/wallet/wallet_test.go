@@ -7,7 +7,6 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
-	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
 	sdktypes "github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
@@ -63,11 +62,7 @@ func TestWallet(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, walletStore)
 
-			explorerSvc, err := explorer.NewExplorer("", "", common.BitcoinRegTest)
-			require.NoError(t, err)
-			require.NotNil(t, explorerSvc)
-
-			walletSvc, err := singlekeywallet.NewBitcoinWallet(store, explorerSvc, walletStore)
+			walletSvc, err := singlekeywallet.NewBitcoinWallet(store, walletStore)
 			require.NoError(t, err)
 			require.NotNil(t, walletSvc)
 

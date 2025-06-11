@@ -28,7 +28,7 @@ type bitcoinWallet struct {
 }
 
 func NewBitcoinWallet(
-	configStore types.ConfigStore, explorerSvc explorer.Explorer, walletStore walletstore.WalletStore,
+	configStore types.ConfigStore, walletStore walletstore.WalletStore,
 ) (wallet.WalletService, error) {
 	walletData, err := walletStore.GetWallet()
 	if err != nil {
@@ -36,12 +36,31 @@ func NewBitcoinWallet(
 	}
 	return &bitcoinWallet{
 		&singlekeyWallet{
-			configStore: configStore,
-			walletStore: walletStore,
-			walletData:  walletData,
-			explorerSvc: explorerSvc,
+			configStore:        configStore,
+			walletStore:        walletStore,
+			walletData:         walletData,
+			addressBroadcaster: utils.NewBroadcaster[string](10),
 		},
 	}, nil
+}
+
+func (w *bitcoinWallet) SubscribeAddressEvent(
+	ctx context.Context,
+) <-chan string {
+	ch := w.addressBroadcaster.Subscribe()
+
+	w.addressBroadcaster.PublishOnce(func() []string {
+		_, addresses, _, err := w.GetAddresses(ctx)
+		if err != nil {
+			return []string{}
+		}
+		boardingAddresses := make([]string, 0)
+		for _, addr := range addresses {
+			boardingAddresses = append(boardingAddresses, addr.Address)
+		}
+		return boardingAddresses
+	})
+	return ch
 }
 
 func (w *bitcoinWallet) GetAddresses(
@@ -106,11 +125,8 @@ func (w *bitcoinWallet) NewAddress(
 		return nil, nil, err
 	}
 
-	// Track boarding address
-	if err := w.explorerSvc.TrackAddress(
-		boardingAddr.Address); err != nil {
-		return nil, nil, fmt.Errorf("failed to track boarding address: %w", err)
-	}
+	// Publish Boarding address
+	w.addressBroadcaster.Publish(boardingAddr.Address)
 
 	return &wallet.TapscriptsAddress{
 		Tapscripts: offchainAddr.Tapscripts,
@@ -126,11 +142,8 @@ func (w *bitcoinWallet) NewAddresses(
 		return nil, nil, err
 	}
 
-	// Track boarding address
-	if err := w.explorerSvc.TrackAddress(
-		boardingAddr.Address); err != nil {
-		return nil, nil, fmt.Errorf("failed to track boarding address: %w", err)
-	}
+	// Publish Boarding address
+	w.addressBroadcaster.Publish(boardingAddr.Address)
 
 	offchainAddrs := make([]wallet.TapscriptsAddress, 0, num)
 	boardingAddrs := make([]wallet.TapscriptsAddress, 0, num)
