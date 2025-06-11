@@ -221,10 +221,10 @@ func (e *indexerService) GetConnectors(ctx context.Context, request *arkv1.GetCo
 }
 
 func (e *indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosRequest) (*arkv1.GetVtxosResponse, error) {
-	pubkeys, err := parseArkAddresses(request.GetAddresses())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
+	if len(request.GetAddresses()) > 0 && len(request.GetOutpoints()) > 0 {
+		return nil, status.Error(codes.InvalidArgument, "addresses and outpoints can't be set at the same time")
 	}
+
 	page, err := parsePage(request.GetPage())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
@@ -233,11 +233,29 @@ func (e *indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosRe
 		return nil, status.Error(codes.InvalidArgument, "spendable and spent only can't be true at the same time")
 	}
 
-	resp, err := e.indexerSvc.GetVtxos(
-		ctx, pubkeys, request.GetSpendableOnly(), request.GetSpentOnly(), page,
-	)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get vtxos: %v", err)
+	var resp *application.GetVtxosResp
+	if len(request.GetAddresses()) > 0 {
+		pubkeys, err := parseArkAddresses(request.GetAddresses())
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+
+		resp, err = e.indexerSvc.GetVtxos(
+			ctx, pubkeys, request.GetSpendableOnly(), request.GetSpentOnly(), page,
+		)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get vtxos: %v", err)
+		}
+	} else {
+		outpoints, err := parseOutpoints(request.GetOutpoints())
+		if err != nil {
+			return nil, status.Error(codes.InvalidArgument, err.Error())
+		}
+
+		resp, err = e.indexerSvc.GetVtxosByOutpoint(ctx, outpoints, page)
+		if err != nil {
+			return nil, status.Errorf(codes.Internal, "failed to get vtxos: %v", err)
+		}
 	}
 
 	vtxos := make([]*arkv1.IndexerVtxo, len(resp.Vtxos))
@@ -246,34 +264,6 @@ func (e *indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosRe
 	}
 
 	return &arkv1.GetVtxosResponse{
-		Vtxos: vtxos,
-		Page:  protoPage(resp.Page),
-	}, nil
-}
-
-func (e *indexerService) GetVtxosByOutpoint(
-	ctx context.Context, request *arkv1.GetVtxosByOutpointRequest,
-) (*arkv1.GetVtxosByOutpointResponse, error) {
-	outpoints, err := parseOutpoints(request.GetOutpoints())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-	page, err := parsePage(request.GetPage())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	resp, err := e.indexerSvc.GetVtxosByOutpoint(ctx, outpoints, page)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get vtxos by outpoints: %v", err)
-	}
-
-	vtxos := make([]*arkv1.IndexerVtxo, len(resp.Vtxos))
-	for i, vtxo := range resp.Vtxos {
-		vtxos[i] = newIndexerVtxo(vtxo)
-	}
-
-	return &arkv1.GetVtxosByOutpointResponse{
 		Vtxos: vtxos,
 		Page:  protoPage(resp.Page),
 	}, nil
@@ -708,7 +698,8 @@ func newIndexerVtxo(vtxo domain.Vtxo) *arkv1.IndexerVtxo {
 		ExpiresAt:      vtxo.ExpireAt,
 		Amount:         vtxo.Amount,
 		Script:         vtxo.PubKey,
-		IsLeaf:         vtxo.RedeemTx == "",
+		IsLeaf:         !vtxo.IsPending(),
+		IsPreconfirmed: vtxo.IsPending(),
 		IsSwept:        vtxo.Swept,
 		IsSpent:        vtxo.Spent,
 		SpentBy:        vtxo.SpentBy,

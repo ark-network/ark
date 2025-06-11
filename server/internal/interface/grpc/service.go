@@ -210,7 +210,6 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		subscriptionTimeoutDuration := time.Minute // TODO let to be set via config
 		indexerHandler := handlers.NewIndexerService(indexerSvc, eventsCh, subscriptionTimeoutDuration)
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
-		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
 		arkv1.RegisterIndexerServiceServer(grpcServer, indexerHandler)
 		onInit = nil
 		onUnlock = nil
@@ -269,35 +268,20 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		}),
 	)
 	ctx := context.Background()
-	if err := arkv1.RegisterAdminServiceHandler(
-		ctx, gwmux, conn,
-	); err != nil {
+	if err := arkv1.RegisterAdminServiceHandler(ctx, gwmux, conn); err != nil {
 		return err
 	}
-	if err := arkv1.RegisterWalletServiceHandler(
-		ctx, gwmux, conn,
-	); err != nil {
+	if err := arkv1.RegisterWalletServiceHandler(ctx, gwmux, conn); err != nil {
 		return err
 	}
-	if err := arkv1.RegisterWalletInitializerServiceHandler(
-		ctx, gwmux, conn,
-	); err != nil {
+	if err := arkv1.RegisterWalletInitializerServiceHandler(ctx, gwmux, conn); err != nil {
 		return err
 	}
 	if withAppSvc {
-		if err := arkv1.RegisterArkServiceHandler(
-			ctx, gwmux, conn,
-		); err != nil {
+		if err := arkv1.RegisterArkServiceHandler(ctx, gwmux, conn); err != nil {
 			return err
 		}
-		if err := arkv1.RegisterExplorerServiceHandler(
-			ctx, gwmux, conn,
-		); err != nil {
-			return err
-		}
-		if err := arkv1.RegisterIndexerServiceHandler(
-			ctx, gwmux, conn,
-		); err != nil {
+		if err := arkv1.RegisterIndexerServiceHandler(ctx, gwmux, conn); err != nil {
 			return err
 		}
 	}

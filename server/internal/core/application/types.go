@@ -19,41 +19,22 @@ type Service interface {
 	ConfirmRegistration(ctx context.Context, intentId string) error
 	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
-	SignRoundTx(ctx context.Context, roundTx string) error
-	GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error)
-	GetRoundById(ctx context.Context, id string) (*domain.Round, error)
-	GetCurrentRound(ctx context.Context) (*domain.Round, error)
+	SignCommitmentTx(ctx context.Context, commitmentTx string) error
 	GetEventsChannel(ctx context.Context) <-chan []domain.Event
-	ListVtxos(
-		ctx context.Context, address string,
-	) (spendableVtxos, spentVtxos []domain.Vtxo, err error)
 	GetInfo(ctx context.Context) (*ServiceInfo, error)
-	SubmitOffchainTx(ctx context.Context, checkpointTxs []string, signedRedeemTx string) (
-		signedCheckpoints []string,
-		finalRedeemTx string, redeemTxid string,
-		err error,
+	SubmitTx(ctx context.Context, checkpointTxs []string, signedVirtualTx string) (
+		virtualTxid, finalVirtualTx string, signedCheckpointTxs []string, err error,
 	)
-	FinalizeOffchainTx(
-		ctx context.Context, txid string, finalCheckpoints []string,
-	) error
-	GetBoardingAddress(
-		ctx context.Context, userPubkey *secp256k1.PublicKey,
-	) (address string, scripts []string, err error)
+	FinalizeTx(ctx context.Context, txid string, finalCheckpointTxs []string) error
 	// Tree signing methods
-	RegisterCosignerNonces(
-		ctx context.Context, roundID string,
-		pubkey *secp256k1.PublicKey, nonces string,
-	) error
-	RegisterCosignerSignatures(
-		ctx context.Context, roundID string,
-		pubkey *secp256k1.PublicKey, signatures string,
-	) error
+	RegisterCosignerNonces(ctx context.Context, pubkey *secp256k1.PublicKey, nonces, batchId string) error
+	RegisterCosignerSignatures(ctx context.Context, pubkey *secp256k1.PublicKey, signatures, batchId string) error
 	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
 	GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error)
 	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
-	GetTxRequestQueue(ctx context.Context, requestIds ...string) ([]TxRequestInfo, error)
-	DeleteTxRequests(ctx context.Context, requestIds ...string) error
-	DeleteTxRequestsByProof(ctx context.Context, bip322signature bip322.Signature, message tree.DeleteIntentMessage) error
+	ListIntents(ctx context.Context, intentIds ...string) ([]IntentInfo, error)
+	DeleteIntents(ctx context.Context, intentIds ...string) error
+	DeleteIntentsByProof(ctx context.Context, bip322signature bip322.Signature, message tree.DeleteIntentMessage) error
 
 	// TODO remove this in v7
 	GetIndexerTxChannel(ctx context.Context) <-chan TransactionEvent
@@ -102,8 +83,8 @@ func (outpoint txOutpoint) GetIndex() uint32 {
 }
 
 const (
-	RoundTransaction  TransactionEventType = "round_tx"
-	RedeemTransaction TransactionEventType = "redeem_tx"
+	CommitmentTransaction TransactionEventType = "commitment_tx"
+	VirtualTransaction    TransactionEventType = "virtual_tx"
 )
 
 type TransactionEventType string
@@ -115,53 +96,53 @@ type TransactionEvent interface {
 	GetTxId() string
 }
 
-type RoundTransactionEvent struct {
-	RoundTxid      string
+type CommitmentTransactionEvent struct {
+	Txid           string
 	SpentVtxos     []domain.Vtxo
 	SpendableVtxos []domain.Vtxo
 	TxHex          string
 }
 
-func (r RoundTransactionEvent) Type() TransactionEventType {
-	return RoundTransaction
+func (r CommitmentTransactionEvent) Type() TransactionEventType {
+	return CommitmentTransaction
 }
 
-func (r RoundTransactionEvent) GetTxId() string {
-	return r.RoundTxid
+func (r CommitmentTransactionEvent) GetTxId() string {
+	return r.Txid
 }
 
-func (r RoundTransactionEvent) GetSpentVtxos() []domain.Vtxo {
+func (r CommitmentTransactionEvent) GetSpentVtxos() []domain.Vtxo {
 	return r.SpentVtxos
 }
 
-func (r RoundTransactionEvent) GetSpendableVtxos() []domain.Vtxo {
+func (r CommitmentTransactionEvent) GetSpendableVtxos() []domain.Vtxo {
 	return r.SpendableVtxos
 }
 
-type RedeemTransactionEvent struct {
-	RedeemTxid     string
+type VirtualTransactionEvent struct {
+	Txid           string
 	SpentVtxos     []domain.Vtxo
 	SpendableVtxos []domain.Vtxo
 	TxHex          string
 }
 
-func (a RedeemTransactionEvent) Type() TransactionEventType {
-	return RedeemTransaction
+func (a VirtualTransactionEvent) Type() TransactionEventType {
+	return VirtualTransaction
 }
 
-func (r RedeemTransactionEvent) GetTxId() string {
-	return r.RedeemTxid
+func (r VirtualTransactionEvent) GetTxId() string {
+	return r.Txid
 }
 
-func (r RedeemTransactionEvent) GetSpentVtxos() []domain.Vtxo {
+func (r VirtualTransactionEvent) GetSpentVtxos() []domain.Vtxo {
 	return r.SpentVtxos
 }
 
-func (r RedeemTransactionEvent) GetSpendableVtxos() []domain.Vtxo {
+func (r VirtualTransactionEvent) GetSpendableVtxos() []domain.Vtxo {
 	return r.SpendableVtxos
 }
 
-type TxRequestInfo struct {
+type IntentInfo struct {
 	Id        string
 	CreatedAt time.Time
 	Receivers []struct {
