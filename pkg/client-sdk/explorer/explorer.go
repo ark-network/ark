@@ -94,7 +94,10 @@ func (e *explorerSvc) SubscribeToAddressEvent(addressEvent <-chan string) {
 	go func() {
 		for address := range addressEvent {
 			if e.addrTracker != nil {
-				e.addrTracker.TrackAddress(address)
+				err := e.addrTracker.TrackAddress(address)
+				if err != nil {
+					log.Printf("failed to subscribe to address %s: %v", address, err)
+				}
 				return
 			}
 		}
