@@ -76,7 +76,9 @@ func (s *treeSigningSessionsStore) Get(roundId string) (*ports.MusigSigningSessi
 		return nil, false
 	}
 	nbCosigners := 0
-	fmt.Sscanf(meta["NbCosigners"], "%d", &nbCosigners)
+	if _, err := fmt.Sscanf(meta["NbCosigners"], "%d", &nbCosigners); err != nil {
+		log.Warnf("get:failed to parse NbCosigners: %v", err)
+	}
 
 	noncesKey := fmt.Sprintf(treeSessNoncesKeyFmt, roundId)
 	noncesMap, _ := s.rdb.HGetAll(ctx, noncesKey).Result()
@@ -167,7 +169,9 @@ func (s *treeSigningSessionsStore) watchNoncesCollected(roundId string) {
 			continue
 		}
 		nbCosigners := 0
-		fmt.Sscanf(meta["NbCosigners"], "%d", &nbCosigners)
+		if _, err := fmt.Sscanf(meta["NbCosigners"], "%d", &nbCosigners); err != nil {
+			log.Warnf("watchNoncesCollected:failed to parse NbCosigners: %v", err)
+		}
 		noncesMap, _ := s.rdb.HGetAll(ctx, noncesKey).Result()
 		if len(noncesMap) == nbCosigners-1 {
 			if s.nonceCh != nil {
@@ -188,7 +192,9 @@ func (s *treeSigningSessionsStore) watchSigsCollected(roundId string) {
 			continue
 		}
 		nbCosigners := 0
-		fmt.Sscanf(meta["NbCosigners"], "%d", &nbCosigners)
+		if _, err := fmt.Sscanf(meta["NbCosigners"], "%d", &nbCosigners); err != nil {
+			log.Warnf("watchSigsCollected:failed to parse NbCosigners: %v", err)
+		}
 		sigsMap, _ := s.rdb.HGetAll(ctx, sigsKey).Result()
 		if len(sigsMap) == nbCosigners-1 {
 			if s.sigsCh != nil {
