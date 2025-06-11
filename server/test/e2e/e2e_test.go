@@ -102,6 +102,7 @@ func TestSettleInSameRound(t *testing.T) {
 		wwg := &sync.WaitGroup{}
 		wwg.Add(1)
 		go func() {
+			// nolint
 			alice.NotifyIncomingFunds(ctx, aliceAddr)
 			wwg.Done()
 		}()
@@ -184,6 +185,7 @@ func TestSettleInSameRound(t *testing.T) {
 		wwg := &sync.WaitGroup{}
 		wwg.Add(1)
 		go func() {
+			// nolint
 			alice.NotifyIncomingFunds(ctx, aliceAddr)
 			wwg.Done()
 		}()
@@ -197,6 +199,7 @@ func TestSettleInSameRound(t *testing.T) {
 		wwg := &sync.WaitGroup{}
 		wwg.Add(1)
 		go func() {
+			// nolint
 			alice.NotifyIncomingFunds(ctx, aliceAddr)
 			wwg.Done()
 		}()
@@ -786,7 +789,9 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		// make sure the vtxo of bob is not redeemed
 		// the checkpoint is not the bob's virtual tx
 		opt := &indexer.GetVtxosRequestOption{}
+		// nolint
 		opt.WithAddresses([]string{bobAddrStr})
+		// nolint
 		opt.WithSpentOnly()
 
 		resp, err := indexerSvc.GetVtxos(ctx, *opt)

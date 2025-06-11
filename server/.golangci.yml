@@ -1,7 +1,0 @@
-version: "2"
-
-linters:
-  exclusions:
-    paths:
-      # regex matching the test/ folder
-      - test/
