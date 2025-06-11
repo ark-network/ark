@@ -1,11 +1,19 @@
 package indexer
 
-import "context"
+import (
+	"context"
+	"time"
+
+	"github.com/ark-network/ark/common/tree"
+	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
+)
 
 type Indexer interface {
 	GetCommitmentTx(ctx context.Context, txid string) (*CommitmentTx, error)
 	GetCommitmentTxLeaves(ctx context.Context, txid string, opts ...RequestOption) (*CommitmentTxLeavesResponse, error)
 	GetVtxoTree(ctx context.Context, batchOutpoint Outpoint, opts ...RequestOption) (*VtxoTreeResponse, error)
+	GetFullVtxoTree(ctx context.Context, batchOutpoint Outpoint, opts ...RequestOption) (tree.TxTree, error)
 	GetVtxoTreeLeaves(ctx context.Context, batchOutpoint Outpoint, opts ...RequestOption) (*VtxoTreeLeavesResponse, error)
 	GetForfeitTxs(ctx context.Context, txid string, opts ...RequestOption) (*ForfeitTxsResponse, error)
 	GetConnectors(ctx context.Context, txid string, opts ...RequestOption) (*ConnectorsResponse, error)
@@ -17,6 +25,8 @@ type Indexer interface {
 	SubscribeForScripts(ctx context.Context, subscriptionId string, scripts []string) (string, error)
 	UnsubscribeForScripts(ctx context.Context, subscriptionId string, scripts []string) error
 	GetSubscription(ctx context.Context, subscriptionId string) (<-chan *ScriptEvent, func(), error)
+
+	Close()
 }
 
 type CommitmentTxLeavesResponse struct {
@@ -85,6 +95,28 @@ type PageResponse struct {
 	Total   int32
 }
 
+type TxNodes []TxNode
+
+func (t TxNodes) ToTree() tree.TxTree {
+	vtxoTree := make(tree.TxTree, 0)
+	for _, node := range t {
+		if len(vtxoTree) <= int(node.Level) {
+			extendArray(vtxoTree, int(node.Level))
+		}
+		level := vtxoTree[node.Level]
+		if len(level) <= int(node.LevelIndex) {
+			extendArray(level, int(node.LevelIndex))
+		}
+		level[node.LevelIndex] = tree.Node{
+			Txid:       node.Txid,
+			ParentTxid: node.ParentTxid,
+			Level:      node.Level,
+			LevelIndex: node.LevelIndex,
+		}
+	}
+	return vtxoTree
+}
+
 type TxNode struct {
 	Txid       string
 	ParentTxid string
@@ -124,6 +156,41 @@ type Vtxo struct {
 	IsSpent        bool
 	SpentBy        string
 	CommitmentTxid string
+}
+
+func (v Vtxo) ToClient() client.Vtxo {
+	return client.Vtxo{
+		Outpoint: client.Outpoint{
+			Txid: v.Outpoint.Txid,
+			VOut: v.Outpoint.VOut,
+		},
+		PubKey:    v.Script,
+		Amount:    v.Amount,
+		RoundTxid: v.CommitmentTxid,
+		ExpiresAt: time.Unix(v.ExpiresAt, 0),
+		CreatedAt: time.Unix(v.CreatedAt, 0),
+		IsPending: !v.IsLeaf,
+		SpentBy:   v.SpentBy,
+		Swept:     v.IsSwept,
+		Spent:     v.IsSpent,
+	}
+}
+
+func (v Vtxo) ToType() types.Vtxo {
+	return types.Vtxo{
+		VtxoKey: types.VtxoKey{
+			Txid: v.Outpoint.Txid,
+			VOut: v.Outpoint.VOut,
+		},
+		PubKey:    v.Script,
+		Amount:    v.Amount,
+		RoundTxid: v.CommitmentTxid,
+		ExpiresAt: time.Unix(v.ExpiresAt, 0),
+		CreatedAt: time.Unix(v.CreatedAt, 0),
+		Pending:   !v.IsLeaf,
+		SpentBy:   v.SpentBy,
+		Spent:     v.IsSpent,
+	}
 }
 
 type TxType int

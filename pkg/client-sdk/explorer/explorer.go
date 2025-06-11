@@ -153,6 +153,7 @@ func (e *explorerSvc) broadcastPackage(txs ...string) (string, error) {
 	if err != nil {
 		return "", err
 	}
+	// nolint
 	defer resp.Body.Close()
 
 	bodyResponse, err := io.ReadAll(resp.Body)

@@ -647,7 +647,7 @@ func (a *covenantlessArkClient) SendOffChain(
 	}
 
 	// TODO store signed virtual tx client side ?
-	signedCheckpoints, _, virtualTxid, err := a.client.SubmitOffchainTx(ctx, signedVirtualTx, checkpointsTxs)
+	virtualTxid, _, signedCheckpoints, err := a.client.SubmitTx(ctx, signedVirtualTx, checkpointsTxs)
 	if err != nil {
 		return "", err
 	}
@@ -662,7 +662,7 @@ func (a *covenantlessArkClient) SendOffChain(
 		finalCheckpoints = append(finalCheckpoints, signedTx)
 	}
 
-	if err = a.client.FinalizeOffchainTx(ctx, virtualTxid, finalCheckpoints); err != nil {
+	if err = a.client.FinalizeTx(ctx, virtualTxid, finalCheckpoints); err != nil {
 		return "", err
 	}
 
@@ -1060,12 +1060,8 @@ func (a *covenantlessArkClient) GetTransactionHistory(
 }
 
 func (a *covenantlessArkClient) RegisterIntent(
-	ctx context.Context,
-	vtxos []client.Vtxo,
-	boardingUtxos []types.Utxo,
-	notes []string,
-	outputs []client.Output,
-	musig2Data *tree.Musig2,
+	ctx context.Context, vtxos []client.Vtxo, boardingUtxos []types.Utxo,
+	notes []string, outputs []client.Output, musig2Data *tree.Musig2,
 ) (string, error) {
 	vtxosWithTapscripts, err := a.populateVtxosWithTapscripts(ctx, vtxos)
 	if err != nil {
@@ -1089,10 +1085,7 @@ func (a *covenantlessArkClient) RegisterIntent(
 }
 
 func (a *covenantlessArkClient) DeleteIntent(
-	ctx context.Context,
-	vtxos []client.Vtxo,
-	boardingUtxos []types.Utxo,
-	notes []string,
+	ctx context.Context, vtxos []client.Vtxo, boardingUtxos []types.Utxo, notes []string,
 ) error {
 	vtxosWithTapscripts, err := a.populateVtxosWithTapscripts(ctx, vtxos)
 	if err != nil {
@@ -1111,7 +1104,7 @@ func (a *covenantlessArkClient) DeleteIntent(
 		return err
 	}
 
-	return a.client.DeleteIntent(ctx, "", bip322Signature, bip322Message)
+	return a.client.DeleteIntent(ctx, bip322Signature, bip322Message)
 }
 
 func (a *covenantlessArkClient) listenForArkTxs(ctx context.Context) {
@@ -2092,27 +2085,11 @@ func (a *covenantlessArkClient) handleRoundStream(
 		step = roundSigningNoncesGenerated
 	}
 
-	deleteIntent := func() error {
-		// delete only if the intent has not been confirmed yet
-		if step == start {
-			if err := a.client.DeleteIntent(ctx, intentID, "", ""); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
-
 	for {
 		select {
 		case <-cancelCh:
-			if err := deleteIntent(); err != nil {
-				return "", err
-			}
 			return "", fmt.Errorf("canceled")
 		case <-ctx.Done():
-			if err := deleteIntent(); err != nil {
-				return "", err
-			}
 			return "", fmt.Errorf("context done %s", ctx.Err())
 		case notify := <-eventsCh:
 			if notify.Err != nil {
@@ -2827,12 +2804,15 @@ func (a *covenantlessArkClient) getRedeemBranches(
 		}
 
 		if _, ok := vtxoTrees[vtxo.RoundTxid]; !ok {
-			round, err := a.client.GetRound(ctx, vtxo.RoundTxid)
+			vtxoTree, err := a.indexer.GetFullVtxoTree(ctx, indexer.Outpoint{
+				Txid: vtxo.RoundTxid,
+				VOut: 0,
+			})
 			if err != nil {
 				return nil, err
 			}
 
-			vtxoTrees[vtxo.RoundTxid] = round.Tree
+			vtxoTrees[vtxo.RoundTxid] = vtxoTree
 		}
 
 		redeemBranch, err := redemption.NewRedeemBranch(
@@ -3156,14 +3136,17 @@ func (a *covenantlessArkClient) handleRoundTx(
 		return err
 	}
 
-	// Check if any of the claimed boarding utxos is ours.
-	boardingTxids := make([]string, 0, len(roundTx.ClaimedBoardingUtxos))
-	for _, utxo := range roundTx.ClaimedBoardingUtxos {
-		boardingTxids = append(boardingTxids, utxo.Txid)
+	tx := &wire.MsgTx{}
+	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(roundTx.Hex))); err != nil {
+		return err
 	}
-	pendingBoardingTxs, err := a.store.TransactionStore().GetTransactions(
-		ctx, boardingTxids,
-	)
+
+	// Check if any of the claimed boarding utxos is ours.
+	boardingTxids := make([]string, 0, len(tx.TxIn))
+	for _, in := range tx.TxIn {
+		boardingTxids = append(boardingTxids, in.PreviousOutPoint.Hash.String())
+	}
+	pendingBoardingTxs, err := a.store.TransactionStore().GetTransactions(ctx, boardingTxids)
 	if err != nil {
 		return err
 	}

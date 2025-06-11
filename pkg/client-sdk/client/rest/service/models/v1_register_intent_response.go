@@ -17,8 +17,8 @@ import (
 // swagger:model v1RegisterIntentResponse
 type V1RegisterIntentResponse struct {
 
-	// request Id
-	RequestID string `json:"requestId,omitempty"`
+	// intent Id
+	IntentID string `json:"intentId,omitempty"`
 }
 
 // Validate validates this v1 register intent response

@@ -17,11 +17,11 @@ import (
 // swagger:model v1SubmitTreeNoncesRequest
 type V1SubmitTreeNoncesRequest struct {
 
+	// batch Id
+	BatchID string `json:"batchId,omitempty"`
+
 	// pubkey
 	Pubkey string `json:"pubkey,omitempty"`
-
-	// round Id
-	RoundID string `json:"roundId,omitempty"`
 
 	// tree nonces
 	TreeNonces string `json:"treeNonces,omitempty"`

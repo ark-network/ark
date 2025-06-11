@@ -18,6 +18,7 @@ import (
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 	filestore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/file"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
@@ -166,14 +167,24 @@ func (a *arkClient) ListVtxos(
 		return
 	}
 
+	addresses := make([]string, 0, len(offchainAddrs))
 	for _, addr := range offchainAddrs {
-		spendable, spent, err := a.client.ListVtxos(ctx, addr.Address)
-		if err != nil {
-			return nil, nil, err
-		}
+		addresses = append(addresses, addr.Address)
+	}
+	opt := &indexer.GetVtxosRequestOption{}
+	// nolint
+	opt.WithAddresses(addresses)
+	resp, err := a.indexer.GetVtxos(ctx, *opt)
+	if err != nil {
+		return nil, nil, err
+	}
 
-		spendableVtxos = append(spendableVtxos, spendable...)
-		spentVtxos = append(spentVtxos, spent...)
+	for _, vtxo := range resp.Vtxos {
+		if vtxo.IsSpent {
+			spentVtxos = append(spentVtxos, vtxo.ToClient())
+		} else {
+			spendableVtxos = append(spendableVtxos, vtxo.ToClient())
+		}
 	}
 
 	return
@@ -186,11 +197,28 @@ func (a *arkClient) NotifyIncomingFunds(
 		return nil, fmt.Errorf("wallet not initialized")
 	}
 
-	eventCh, closeFn, err := a.client.SubscribeForAddress(ctx, addr)
+	decoded, err := common.DecodeAddress(addr)
 	if err != nil {
 		return nil, err
 	}
-	defer closeFn()
+
+	scripts := []string{
+		hex.EncodeToString(schnorr.SerializePubKey(decoded.VtxoTapKey)),
+	}
+	subId, err := a.indexer.SubscribeForScripts(ctx, "", scripts)
+	if err != nil {
+		return nil, err
+	}
+
+	eventCh, closeFn, err := a.indexer.GetSubscription(ctx, subId)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		// nolint
+		a.indexer.UnsubscribeForScripts(ctx, subId, scripts)
+		closeFn()
+	}()
 
 	event := <-eventCh
 
@@ -201,7 +229,7 @@ func (a *arkClient) NotifyIncomingFunds(
 
 	incomingVtxos := make([]types.Vtxo, 0)
 	for _, vtxo := range event.NewVtxos {
-		incomingVtxos = append(incomingVtxos, toTypesVtxo(vtxo))
+		incomingVtxos = append(incomingVtxos, vtxo.ToType())
 	}
 	return incomingVtxos, nil
 }

@@ -12,10 +12,10 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1BatchTreeSignatureEvent v1 batch tree signature event
+// V1TreeSignatureEvent v1 tree signature event
 //
-// swagger:model v1BatchTreeSignatureEvent
-type V1BatchTreeSignatureEvent struct {
+// swagger:model v1TreeSignatureEvent
+type V1TreeSignatureEvent struct {
 
 	// batch index
 	BatchIndex int32 `json:"batchIndex,omitempty"`
@@ -36,18 +36,18 @@ type V1BatchTreeSignatureEvent struct {
 	Topic []string `json:"topic"`
 }
 
-// Validate validates this v1 batch tree signature event
-func (m *V1BatchTreeSignatureEvent) Validate(formats strfmt.Registry) error {
+// Validate validates this v1 tree signature event
+func (m *V1TreeSignatureEvent) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-// ContextValidate validates this v1 batch tree signature event based on context it is used
-func (m *V1BatchTreeSignatureEvent) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+// ContextValidate validates this v1 tree signature event based on context it is used
+func (m *V1TreeSignatureEvent) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	return nil
 }
 
 // MarshalBinary interface implementation
-func (m *V1BatchTreeSignatureEvent) MarshalBinary() ([]byte, error) {
+func (m *V1TreeSignatureEvent) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -55,8 +55,8 @@ func (m *V1BatchTreeSignatureEvent) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *V1BatchTreeSignatureEvent) UnmarshalBinary(b []byte) error {
-	var res V1BatchTreeSignatureEvent
+func (m *V1TreeSignatureEvent) UnmarshalBinary(b []byte) error {
+	var res V1TreeSignatureEvent
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

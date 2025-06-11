@@ -17,11 +17,11 @@ import (
 // swagger:model v1SubmitTreeSignaturesRequest
 type V1SubmitTreeSignaturesRequest struct {
 
+	// batch Id
+	BatchID string `json:"batchId,omitempty"`
+
 	// pubkey
 	Pubkey string `json:"pubkey,omitempty"`
-
-	// round Id
-	RoundID string `json:"roundId,omitempty"`
 
 	// tree signatures
 	TreeSignatures string `json:"treeSignatures,omitempty"`

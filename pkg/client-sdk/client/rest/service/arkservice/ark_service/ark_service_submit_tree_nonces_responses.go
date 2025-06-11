@@ -88,12 +88,12 @@ func (o *ArkServiceSubmitTreeNoncesOK) Code() int {
 
 func (o *ArkServiceSubmitTreeNoncesOK) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/tree/submitNonces][%d] arkServiceSubmitTreeNoncesOK %s", 200, payload)
+	return fmt.Sprintf("[POST /v1/batch/tree/submitNonces][%d] arkServiceSubmitTreeNoncesOK %s", 200, payload)
 }
 
 func (o *ArkServiceSubmitTreeNoncesOK) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/tree/submitNonces][%d] arkServiceSubmitTreeNoncesOK %s", 200, payload)
+	return fmt.Sprintf("[POST /v1/batch/tree/submitNonces][%d] arkServiceSubmitTreeNoncesOK %s", 200, payload)
 }
 
 func (o *ArkServiceSubmitTreeNoncesOK) GetPayload() models.V1SubmitTreeNoncesResponse {
@@ -160,12 +160,12 @@ func (o *ArkServiceSubmitTreeNoncesDefault) Code() int {
 
 func (o *ArkServiceSubmitTreeNoncesDefault) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/tree/submitNonces][%d] ArkService_SubmitTreeNonces default %s", o._statusCode, payload)
+	return fmt.Sprintf("[POST /v1/batch/tree/submitNonces][%d] ArkService_SubmitTreeNonces default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceSubmitTreeNoncesDefault) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/tree/submitNonces][%d] ArkService_SubmitTreeNonces default %s", o._statusCode, payload)
+	return fmt.Sprintf("[POST /v1/batch/tree/submitNonces][%d] ArkService_SubmitTreeNonces default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceSubmitTreeNoncesDefault) GetPayload() *models.RPCStatus {

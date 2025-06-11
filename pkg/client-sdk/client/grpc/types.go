@@ -11,35 +11,16 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 )
 
-type out client.Output
-
-func (o out) toProto() *arkv1.Output {
-	return &arkv1.Output{
-		Address: o.Address,
-		Amount:  o.Amount,
-	}
-}
-
-type outs []client.Output
-
-func (o outs) toProto() []*arkv1.Output {
-	list := make([]*arkv1.Output, 0, len(o))
-	for _, oo := range o {
-		list = append(list, out(oo).toProto())
-	}
-	return list
-}
-
 // wrapper for GetEventStreamResponse and PingResponse
 type eventResponse interface {
-	GetRoundFailed() *arkv1.RoundFailed
+	GetBatchFailed() *arkv1.BatchFailed
 	GetBatchStarted() *arkv1.BatchStartedEvent
-	GetRoundFinalization() *arkv1.RoundFinalizationEvent
-	GetRoundFinalized() *arkv1.RoundFinalizedEvent
-	GetRoundSigning() *arkv1.RoundSigningEvent
-	GetRoundSigningNoncesGenerated() *arkv1.RoundSigningNoncesGeneratedEvent
-	GetBatchTree() *arkv1.BatchTreeEvent
-	GetBatchTreeSignature() *arkv1.BatchTreeSignatureEvent
+	GetBatchFinalization() *arkv1.BatchFinalizationEvent
+	GetBatchFinalized() *arkv1.BatchFinalizedEvent
+	GetTreeSigningStarted() *arkv1.TreeSigningStartedEvent
+	GetTreeNoncesAggregated() *arkv1.TreeNoncesAggregatedEvent
+	GetTreeTx() *arkv1.TreeTxEvent
+	GetTreeSignature() *arkv1.TreeSignatureEvent
 }
 
 type event struct {
@@ -47,7 +28,7 @@ type event struct {
 }
 
 func (e event) toRoundEvent() (client.RoundEvent, error) {
-	if ee := e.GetRoundFailed(); ee != nil {
+	if ee := e.GetBatchFailed(); ee != nil {
 		return client.RoundFailedEvent{
 			ID:     ee.GetId(),
 			Reason: ee.GetReason(),
@@ -63,32 +44,32 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		}, nil
 	}
 
-	if ee := e.GetRoundFinalization(); ee != nil {
+	if ee := e.GetBatchFinalization(); ee != nil {
 		connectorsIndex := connectorsIndexFromProto{ee.GetConnectorsIndex()}.parse()
 
 		return client.RoundFinalizationEvent{
 			ID:              ee.GetId(),
-			Tx:              ee.GetRoundTx(),
+			Tx:              ee.GetCommitmentTx(),
 			ConnectorsIndex: connectorsIndex,
 		}, nil
 	}
 
-	if ee := e.GetRoundFinalized(); ee != nil {
+	if ee := e.GetBatchFinalized(); ee != nil {
 		return client.RoundFinalizedEvent{
 			ID:   ee.GetId(),
-			Txid: ee.GetRoundTxid(),
+			Txid: ee.GetCommitmentTxid(),
 		}, nil
 	}
 
-	if ee := e.GetRoundSigning(); ee != nil {
+	if ee := e.GetTreeSigningStarted(); ee != nil {
 		return client.RoundSigningStartedEvent{
 			ID:               ee.GetId(),
-			UnsignedRoundTx:  ee.GetUnsignedRoundTx(),
+			UnsignedRoundTx:  ee.GetUnsignedCommitmentTx(),
 			CosignersPubkeys: ee.GetCosignersPubkeys(),
 		}, nil
 	}
 
-	if ee := e.GetRoundSigningNoncesGenerated(); ee != nil {
+	if ee := e.GetTreeNoncesAggregated(); ee != nil {
 		nonces, err := tree.DecodeNonces(hex.NewDecoder(strings.NewReader(ee.GetTreeNonces())))
 		if err != nil {
 			return nil, err
@@ -99,7 +80,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		}, nil
 	}
 
-	if ee := e.GetBatchTree(); ee != nil {
+	if ee := e.GetTreeTx(); ee != nil {
 		treeTx := ee.GetTreeTx()
 
 		return client.BatchTreeEvent{
@@ -117,7 +98,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 		}, nil
 	}
 
-	if ee := e.GetBatchTreeSignature(); ee != nil {
+	if ee := e.GetTreeSignature(); ee != nil {
 		return client.BatchTreeSignatureEvent{
 			ID:         ee.GetId(),
 			Topic:      ee.GetTopic(),
@@ -142,10 +123,9 @@ func (v vtxo) toVtxo() client.Vtxo {
 			VOut: v.GetOutpoint().GetVout(),
 		},
 		Amount:    v.GetAmount(),
-		RoundTxid: v.GetRoundTxid(),
-		ExpiresAt: time.Unix(v.GetExpireAt(), 0),
-		IsPending: v.GetIsPending(),
-		RedeemTx:  v.GetRedeemTx(),
+		RoundTxid: v.GetCommitmentTxid(),
+		ExpiresAt: time.Unix(v.GetExpiresAt(), 0),
+		IsPending: v.GetPreconfirmed(),
 		SpentBy:   v.GetSpentBy(),
 		PubKey:    v.GetPubkey(),
 		CreatedAt: time.Unix(v.GetCreatedAt(), 0),
@@ -162,55 +142,6 @@ func (v vtxos) toVtxos() []client.Vtxo {
 		list = append(list, vtxo{vv}.toVtxo())
 	}
 	return list
-}
-
-func toProtoInput(i client.Input) *arkv1.Input {
-	return &arkv1.Input{
-		Outpoint: &arkv1.Outpoint{
-			Txid: i.Txid,
-			Vout: i.VOut,
-		},
-		TaprootTree: &arkv1.Tapscripts{
-			Scripts: i.Tapscripts,
-		},
-	}
-}
-
-type ins []client.Input
-
-func (i ins) toProto() []*arkv1.Input {
-	list := make([]*arkv1.Input, 0, len(i))
-	for _, ii := range i {
-		list = append(list, toProtoInput(ii))
-	}
-	return list
-}
-
-type treeFromProto struct {
-	*arkv1.Tree
-}
-
-func (t treeFromProto) parse() tree.TxTree {
-	levels := make(tree.TxTree, 0, len(t.GetLevels()))
-
-	for _, level := range t.GetLevels() {
-		nodes := make([]tree.Node, 0, len(level.Nodes))
-
-		for _, node := range level.Nodes {
-			nodes = append(nodes, tree.Node{
-				Txid:       node.GetTxid(),
-				Tx:         node.GetTx(),
-				ParentTxid: node.GetParentTxid(),
-				Leaf:       node.GetLeaf(),
-				Level:      node.GetLevel(),
-				LevelIndex: node.GetLevelIndex(),
-			})
-		}
-
-		levels = append(levels, nodes)
-	}
-
-	return levels
 }
 
 type connectorsIndexFromProto struct {

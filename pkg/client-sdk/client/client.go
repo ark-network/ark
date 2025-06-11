@@ -30,39 +30,20 @@ type RoundEvent interface {
 
 type TransportClient interface {
 	GetInfo(ctx context.Context) (*Info, error)
-	RegisterInputsForNextRound(
-		ctx context.Context, inputs []Input,
-	) (string, error)
-	RegisterIntent(
-		ctx context.Context, signature, message string,
-	) (string, error)
-	DeleteIntent(ctx context.Context, requestID, signature, message string) error
-	ConfirmRegistration(ctx context.Context, intentID string) error
-	RegisterOutputsForNextRound(
-		ctx context.Context, requestID string, outputs []Output, musig2 *tree.Musig2,
-	) error
-	SubmitTreeNonces(
-		ctx context.Context, roundID, cosignerPubkey string, nonces tree.TreeNonces,
-	) error
-	SubmitTreeSignatures(
-		ctx context.Context, roundID, cosignerPubkey string, signatures tree.TreePartialSigs,
-	) error
-	SubmitSignedForfeitTxs(
-		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
-	) error
+	RegisterIntent(ctx context.Context, signature, message string) (string, error)
+	DeleteIntent(ctx context.Context, signature, message string) error
+	ConfirmRegistration(ctx context.Context, intentId string) error
+	SubmitTreeNonces(ctx context.Context, batchId, cosignerPubkey string, nonces tree.TreeNonces) error
+	SubmitTreeSignatures(ctx context.Context, batchId, cosignerPubkey string, signatures tree.TreePartialSigs) error
+	SubmitSignedForfeitTxs(ctx context.Context, signedForfeitTxs []string, signedCommitmentTx string) error
 	GetEventStream(ctx context.Context) (<-chan RoundEventChannel, func(), error)
-	SubmitOffchainTx(
-		ctx context.Context, virtualTx string, checkpointsTxs []string,
-	) (signedCheckpointsTxs []string, signedVirtualTx, virtualTxid string, err error)
-	FinalizeOffchainTx(
-		ctx context.Context, virtualTxid string, checkpointsTxs []string,
-	) error
-	ListVtxos(ctx context.Context, addr string) ([]Vtxo, []Vtxo, error)
-	GetRound(ctx context.Context, txID string) (*Round, error)
-	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
-	Close()
+	SubmitTx(
+		ctx context.Context, signedVirtualTx string, checkpointTxs []string,
+	) (virtualTxid, finalVirtualTx string, signedCheckpointTxs []string, err error)
+	FinalizeTx(ctx context.Context, virtualTxid string, finalCheckpointTxs []string) error
 	GetTransactionsStream(ctx context.Context) (<-chan TransactionEvent, func(), error)
-	SubscribeForAddress(ctx context.Context, address string) (<-chan AddressEvent, func(), error)
+
+	Close()
 }
 
 type Info struct {
@@ -300,11 +281,10 @@ type TransactionEvent struct {
 }
 
 type RoundTransaction struct {
-	Txid                 string
-	SpentVtxos           []Vtxo
-	SpendableVtxos       []Vtxo
-	ClaimedBoardingUtxos []Outpoint
-	Hex                  string
+	Txid           string
+	SpentVtxos     []Vtxo
+	SpendableVtxos []Vtxo
+	Hex            string
 }
 
 type RedeemTransaction struct {

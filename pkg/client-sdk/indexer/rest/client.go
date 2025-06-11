@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/indexer"
 	"github.com/ark-network/ark/pkg/client-sdk/indexer/rest/service/indexerservice"
@@ -43,6 +44,8 @@ func NewClient(serverURL string) (indexer.Indexer, error) {
 
 	return &restClient{serverURL, svc, reqTimeout}, nil
 }
+
+func (c *restClient) Close() {}
 
 func (a *restClient) GetCommitmentTx(ctx context.Context, txid string) (*indexer.CommitmentTx, error) {
 	params := indexer_service.NewIndexerServiceGetCommitmentTxParams().WithTxid(txid)
@@ -170,6 +173,29 @@ func (a *restClient) GetVtxoTree(
 	}, nil
 }
 
+func (a *restClient) GetFullVtxoTree(
+	ctx context.Context, batchOutpoint indexer.Outpoint, opts ...indexer.RequestOption,
+) (tree.TxTree, error) {
+	resp, err := a.GetVtxoTree(ctx, batchOutpoint, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	var allTxs indexer.TxNodes = resp.Tree
+	for resp.Page != nil && resp.Page.Next != resp.Page.Total {
+		opt := indexer.RequestOption{}
+		opt.WithPage(&indexer.PageRequest{
+			Index: resp.Page.Next,
+		})
+		resp, err = a.GetVtxoTree(ctx, batchOutpoint, opts...)
+		if err != nil {
+			return nil, err
+		}
+		allTxs = append(allTxs, resp.Tree...)
+	}
+	return allTxs.ToTree(), nil
+}
+
 func (a *restClient) GetVtxoTreeLeaves(
 	ctx context.Context, batchOutpoint indexer.Outpoint, opts ...indexer.RequestOption,
 ) (*indexer.VtxoTreeLeavesResponse, error) {
@@ -263,33 +289,8 @@ func (a *restClient) GetVtxos(
 	}
 	opt := opts[0]
 
-	if len(opt.GetOutpoints()) > 0 {
-		params := indexer_service.NewIndexerServiceGetVtxosByOutpointParams().
-			WithOutpoints(opt.GetOutpoints())
-		if page := opt.GetPage(); page != nil {
-			params.WithPageSize(&page.Size).WithPageIndex(&page.Index)
-		}
-		resp, err := a.svc.IndexerServiceGetVtxosByOutpoint(params)
-		if err != nil {
-			return nil, err
-		}
-
-		vtxos := make([]indexer.Vtxo, 0, len(resp.Payload.Vtxos))
-		for _, vtxo := range resp.Payload.Vtxos {
-			vtxo, err := newIndexerVtxo(vtxo)
-			if err != nil {
-				return nil, err
-			}
-			vtxos = append(vtxos, vtxo)
-		}
-		return &indexer.VtxosResponse{
-			Vtxos: vtxos,
-			Page:  parsePage(resp.Payload.Page),
-		}, nil
-	}
-
 	params := indexer_service.NewIndexerServiceGetVtxosParams().
-		WithAddresses(opt.GetAddresses())
+		WithAddresses(opt.GetAddresses()).WithOutpoints(opt.GetOutpoints())
 	if page := opt.GetPage(); page != nil {
 		params.WithPageSize(&page.Size).WithPageIndex(&page.Index)
 	}

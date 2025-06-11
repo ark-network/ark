@@ -18,18 +18,15 @@ import (
 // swagger:model v1DeleteIntentRequest
 type V1DeleteIntentRequest struct {
 
-	// bip322 signature
-	Bip322Signature *V1Bip322Signature `json:"bip322Signature,omitempty"`
-
-	// intent Id
-	IntentID string `json:"intentId,omitempty"`
+	// proof
+	Proof *V1Bip322Signature `json:"proof,omitempty"`
 }
 
 // Validate validates this v1 delete intent request
 func (m *V1DeleteIntentRequest) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateBip322Signature(formats); err != nil {
+	if err := m.validateProof(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -39,17 +36,17 @@ func (m *V1DeleteIntentRequest) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1DeleteIntentRequest) validateBip322Signature(formats strfmt.Registry) error {
-	if swag.IsZero(m.Bip322Signature) { // not required
+func (m *V1DeleteIntentRequest) validateProof(formats strfmt.Registry) error {
+	if swag.IsZero(m.Proof) { // not required
 		return nil
 	}
 
-	if m.Bip322Signature != nil {
-		if err := m.Bip322Signature.Validate(formats); err != nil {
+	if m.Proof != nil {
+		if err := m.Proof.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("bip322Signature")
+				return ve.ValidateName("proof")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("bip322Signature")
+				return ce.ValidateName("proof")
 			}
 			return err
 		}
@@ -62,7 +59,7 @@ func (m *V1DeleteIntentRequest) validateBip322Signature(formats strfmt.Registry)
 func (m *V1DeleteIntentRequest) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateBip322Signature(ctx, formats); err != nil {
+	if err := m.contextValidateProof(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -72,19 +69,19 @@ func (m *V1DeleteIntentRequest) ContextValidate(ctx context.Context, formats str
 	return nil
 }
 
-func (m *V1DeleteIntentRequest) contextValidateBip322Signature(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1DeleteIntentRequest) contextValidateProof(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.Bip322Signature != nil {
+	if m.Proof != nil {
 
-		if swag.IsZero(m.Bip322Signature) { // not required
+		if swag.IsZero(m.Proof) { // not required
 			return nil
 		}
 
-		if err := m.Bip322Signature.ContextValidate(ctx, formats); err != nil {
+		if err := m.Proof.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("bip322Signature")
+				return ve.ValidateName("proof")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("bip322Signature")
+				return ce.ValidateName("proof")
 			}
 			return err
 		}

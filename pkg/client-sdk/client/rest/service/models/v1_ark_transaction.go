@@ -14,10 +14,10 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1RedeemTransaction v1 redeem transaction
+// V1ArkTransaction v1 ark transaction
 //
-// swagger:model v1RedeemTransaction
-type V1RedeemTransaction struct {
+// swagger:model v1ArkTransaction
+type V1ArkTransaction struct {
 
 	// hex
 	Hex string `json:"hex,omitempty"`
@@ -32,8 +32,8 @@ type V1RedeemTransaction struct {
 	Txid string `json:"txid,omitempty"`
 }
 
-// Validate validates this v1 redeem transaction
-func (m *V1RedeemTransaction) Validate(formats strfmt.Registry) error {
+// Validate validates this v1 ark transaction
+func (m *V1ArkTransaction) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateSpendableVtxos(formats); err != nil {
@@ -50,7 +50,7 @@ func (m *V1RedeemTransaction) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1RedeemTransaction) validateSpendableVtxos(formats strfmt.Registry) error {
+func (m *V1ArkTransaction) validateSpendableVtxos(formats strfmt.Registry) error {
 	if swag.IsZero(m.SpendableVtxos) { // not required
 		return nil
 	}
@@ -76,7 +76,7 @@ func (m *V1RedeemTransaction) validateSpendableVtxos(formats strfmt.Registry) er
 	return nil
 }
 
-func (m *V1RedeemTransaction) validateSpentVtxos(formats strfmt.Registry) error {
+func (m *V1ArkTransaction) validateSpentVtxos(formats strfmt.Registry) error {
 	if swag.IsZero(m.SpentVtxos) { // not required
 		return nil
 	}
@@ -102,8 +102,8 @@ func (m *V1RedeemTransaction) validateSpentVtxos(formats strfmt.Registry) error 
 	return nil
 }
 
-// ContextValidate validate this v1 redeem transaction based on the context it is used
-func (m *V1RedeemTransaction) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+// ContextValidate validate this v1 ark transaction based on the context it is used
+func (m *V1ArkTransaction) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.contextValidateSpendableVtxos(ctx, formats); err != nil {
@@ -120,7 +120,7 @@ func (m *V1RedeemTransaction) ContextValidate(ctx context.Context, formats strfm
 	return nil
 }
 
-func (m *V1RedeemTransaction) contextValidateSpendableVtxos(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1ArkTransaction) contextValidateSpendableVtxos(ctx context.Context, formats strfmt.Registry) error {
 
 	for i := 0; i < len(m.SpendableVtxos); i++ {
 
@@ -145,7 +145,7 @@ func (m *V1RedeemTransaction) contextValidateSpendableVtxos(ctx context.Context,
 	return nil
 }
 
-func (m *V1RedeemTransaction) contextValidateSpentVtxos(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1ArkTransaction) contextValidateSpentVtxos(ctx context.Context, formats strfmt.Registry) error {
 
 	for i := 0; i < len(m.SpentVtxos); i++ {
 
@@ -171,7 +171,7 @@ func (m *V1RedeemTransaction) contextValidateSpentVtxos(ctx context.Context, for
 }
 
 // MarshalBinary interface implementation
-func (m *V1RedeemTransaction) MarshalBinary() ([]byte, error) {
+func (m *V1ArkTransaction) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -179,8 +179,8 @@ func (m *V1RedeemTransaction) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *V1RedeemTransaction) UnmarshalBinary(b []byte) error {
-	var res V1RedeemTransaction
+func (m *V1ArkTransaction) UnmarshalBinary(b []byte) error {
+	var res V1ArkTransaction
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

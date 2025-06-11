@@ -14,23 +14,23 @@ import (
 	"github.com/go-openapi/validate"
 )
 
-// V1RoundFinalizationEvent v1 round finalization event
+// V1BatchFinalizationEvent v1 batch finalization event
 //
-// swagger:model v1RoundFinalizationEvent
-type V1RoundFinalizationEvent struct {
+// swagger:model v1BatchFinalizationEvent
+type V1BatchFinalizationEvent struct {
+
+	// commitment tx
+	CommitmentTx string `json:"commitmentTx,omitempty"`
 
 	// vtxo outpoint encoded as string -> connector outpoint
 	ConnectorsIndex map[string]V1Outpoint `json:"connectorsIndex,omitempty"`
 
 	// id
 	ID string `json:"id,omitempty"`
-
-	// round tx
-	RoundTx string `json:"roundTx,omitempty"`
 }
 
-// Validate validates this v1 round finalization event
-func (m *V1RoundFinalizationEvent) Validate(formats strfmt.Registry) error {
+// Validate validates this v1 batch finalization event
+func (m *V1BatchFinalizationEvent) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateConnectorsIndex(formats); err != nil {
@@ -43,7 +43,7 @@ func (m *V1RoundFinalizationEvent) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1RoundFinalizationEvent) validateConnectorsIndex(formats strfmt.Registry) error {
+func (m *V1BatchFinalizationEvent) validateConnectorsIndex(formats strfmt.Registry) error {
 	if swag.IsZero(m.ConnectorsIndex) { // not required
 		return nil
 	}
@@ -69,8 +69,8 @@ func (m *V1RoundFinalizationEvent) validateConnectorsIndex(formats strfmt.Regist
 	return nil
 }
 
-// ContextValidate validate this v1 round finalization event based on the context it is used
-func (m *V1RoundFinalizationEvent) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+// ContextValidate validate this v1 batch finalization event based on the context it is used
+func (m *V1BatchFinalizationEvent) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.contextValidateConnectorsIndex(ctx, formats); err != nil {
@@ -83,7 +83,7 @@ func (m *V1RoundFinalizationEvent) ContextValidate(ctx context.Context, formats 
 	return nil
 }
 
-func (m *V1RoundFinalizationEvent) contextValidateConnectorsIndex(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1BatchFinalizationEvent) contextValidateConnectorsIndex(ctx context.Context, formats strfmt.Registry) error {
 
 	for k := range m.ConnectorsIndex {
 
@@ -99,7 +99,7 @@ func (m *V1RoundFinalizationEvent) contextValidateConnectorsIndex(ctx context.Co
 }
 
 // MarshalBinary interface implementation
-func (m *V1RoundFinalizationEvent) MarshalBinary() ([]byte, error) {
+func (m *V1BatchFinalizationEvent) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -107,8 +107,8 @@ func (m *V1RoundFinalizationEvent) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *V1RoundFinalizationEvent) UnmarshalBinary(b []byte) error {
-	var res V1RoundFinalizationEvent
+func (m *V1BatchFinalizationEvent) UnmarshalBinary(b []byte) error {
+	var res V1BatchFinalizationEvent
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

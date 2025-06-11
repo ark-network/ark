@@ -18,70 +18,127 @@ import (
 // swagger:model v1GetEventStreamResponse
 type V1GetEventStreamResponse struct {
 
+	// batch failed
+	BatchFailed *V1BatchFailed `json:"batchFailed,omitempty"`
+
+	// batch finalization
+	BatchFinalization *V1BatchFinalizationEvent `json:"batchFinalization,omitempty"`
+
+	// batch finalized
+	BatchFinalized *V1BatchFinalizedEvent `json:"batchFinalized,omitempty"`
+
 	// batch started
 	BatchStarted *V1BatchStartedEvent `json:"batchStarted,omitempty"`
 
-	// batch tree
-	BatchTree *V1BatchTreeEvent `json:"batchTree,omitempty"`
+	// tree nonces aggregated
+	TreeNoncesAggregated *V1TreeNoncesAggregatedEvent `json:"treeNoncesAggregated,omitempty"`
 
-	// batch tree signature
-	BatchTreeSignature *V1BatchTreeSignatureEvent `json:"batchTreeSignature,omitempty"`
+	// tree signature
+	TreeSignature *V1TreeSignatureEvent `json:"treeSignature,omitempty"`
 
-	// round failed
-	RoundFailed *V1RoundFailed `json:"roundFailed,omitempty"`
+	// tree signing started
+	TreeSigningStarted *V1TreeSigningStartedEvent `json:"treeSigningStarted,omitempty"`
 
-	// round finalization
-	RoundFinalization *V1RoundFinalizationEvent `json:"roundFinalization,omitempty"`
-
-	// round finalized
-	RoundFinalized *V1RoundFinalizedEvent `json:"roundFinalized,omitempty"`
-
-	// round signing
-	RoundSigning *V1RoundSigningEvent `json:"roundSigning,omitempty"`
-
-	// round signing nonces generated
-	RoundSigningNoncesGenerated *V1RoundSigningNoncesGeneratedEvent `json:"roundSigningNoncesGenerated,omitempty"`
+	// tree tx
+	TreeTx *V1TreeTxEvent `json:"treeTx,omitempty"`
 }
 
 // Validate validates this v1 get event stream response
 func (m *V1GetEventStreamResponse) Validate(formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.validateBatchFailed(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateBatchFinalization(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateBatchFinalized(formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.validateBatchStarted(formats); err != nil {
 		res = append(res, err)
 	}
 
-	if err := m.validateBatchTree(formats); err != nil {
+	if err := m.validateTreeNoncesAggregated(formats); err != nil {
 		res = append(res, err)
 	}
 
-	if err := m.validateBatchTreeSignature(formats); err != nil {
+	if err := m.validateTreeSignature(formats); err != nil {
 		res = append(res, err)
 	}
 
-	if err := m.validateRoundFailed(formats); err != nil {
+	if err := m.validateTreeSigningStarted(formats); err != nil {
 		res = append(res, err)
 	}
 
-	if err := m.validateRoundFinalization(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateRoundFinalized(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateRoundSigning(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateRoundSigningNoncesGenerated(formats); err != nil {
+	if err := m.validateTreeTx(formats); err != nil {
 		res = append(res, err)
 	}
 
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *V1GetEventStreamResponse) validateBatchFailed(formats strfmt.Registry) error {
+	if swag.IsZero(m.BatchFailed) { // not required
+		return nil
+	}
+
+	if m.BatchFailed != nil {
+		if err := m.BatchFailed.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batchFailed")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batchFailed")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1GetEventStreamResponse) validateBatchFinalization(formats strfmt.Registry) error {
+	if swag.IsZero(m.BatchFinalization) { // not required
+		return nil
+	}
+
+	if m.BatchFinalization != nil {
+		if err := m.BatchFinalization.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batchFinalization")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batchFinalization")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1GetEventStreamResponse) validateBatchFinalized(formats strfmt.Registry) error {
+	if swag.IsZero(m.BatchFinalized) { // not required
+		return nil
+	}
+
+	if m.BatchFinalized != nil {
+		if err := m.BatchFinalized.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batchFinalized")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batchFinalized")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -104,17 +161,17 @@ func (m *V1GetEventStreamResponse) validateBatchStarted(formats strfmt.Registry)
 	return nil
 }
 
-func (m *V1GetEventStreamResponse) validateBatchTree(formats strfmt.Registry) error {
-	if swag.IsZero(m.BatchTree) { // not required
+func (m *V1GetEventStreamResponse) validateTreeNoncesAggregated(formats strfmt.Registry) error {
+	if swag.IsZero(m.TreeNoncesAggregated) { // not required
 		return nil
 	}
 
-	if m.BatchTree != nil {
-		if err := m.BatchTree.Validate(formats); err != nil {
+	if m.TreeNoncesAggregated != nil {
+		if err := m.TreeNoncesAggregated.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("batchTree")
+				return ve.ValidateName("treeNoncesAggregated")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("batchTree")
+				return ce.ValidateName("treeNoncesAggregated")
 			}
 			return err
 		}
@@ -123,17 +180,17 @@ func (m *V1GetEventStreamResponse) validateBatchTree(formats strfmt.Registry) er
 	return nil
 }
 
-func (m *V1GetEventStreamResponse) validateBatchTreeSignature(formats strfmt.Registry) error {
-	if swag.IsZero(m.BatchTreeSignature) { // not required
+func (m *V1GetEventStreamResponse) validateTreeSignature(formats strfmt.Registry) error {
+	if swag.IsZero(m.TreeSignature) { // not required
 		return nil
 	}
 
-	if m.BatchTreeSignature != nil {
-		if err := m.BatchTreeSignature.Validate(formats); err != nil {
+	if m.TreeSignature != nil {
+		if err := m.TreeSignature.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("batchTreeSignature")
+				return ve.ValidateName("treeSignature")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("batchTreeSignature")
+				return ce.ValidateName("treeSignature")
 			}
 			return err
 		}
@@ -142,17 +199,17 @@ func (m *V1GetEventStreamResponse) validateBatchTreeSignature(formats strfmt.Reg
 	return nil
 }
 
-func (m *V1GetEventStreamResponse) validateRoundFailed(formats strfmt.Registry) error {
-	if swag.IsZero(m.RoundFailed) { // not required
+func (m *V1GetEventStreamResponse) validateTreeSigningStarted(formats strfmt.Registry) error {
+	if swag.IsZero(m.TreeSigningStarted) { // not required
 		return nil
 	}
 
-	if m.RoundFailed != nil {
-		if err := m.RoundFailed.Validate(formats); err != nil {
+	if m.TreeSigningStarted != nil {
+		if err := m.TreeSigningStarted.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundFailed")
+				return ve.ValidateName("treeSigningStarted")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundFailed")
+				return ce.ValidateName("treeSigningStarted")
 			}
 			return err
 		}
@@ -161,74 +218,17 @@ func (m *V1GetEventStreamResponse) validateRoundFailed(formats strfmt.Registry) 
 	return nil
 }
 
-func (m *V1GetEventStreamResponse) validateRoundFinalization(formats strfmt.Registry) error {
-	if swag.IsZero(m.RoundFinalization) { // not required
+func (m *V1GetEventStreamResponse) validateTreeTx(formats strfmt.Registry) error {
+	if swag.IsZero(m.TreeTx) { // not required
 		return nil
 	}
 
-	if m.RoundFinalization != nil {
-		if err := m.RoundFinalization.Validate(formats); err != nil {
+	if m.TreeTx != nil {
+		if err := m.TreeTx.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundFinalization")
+				return ve.ValidateName("treeTx")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundFinalization")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *V1GetEventStreamResponse) validateRoundFinalized(formats strfmt.Registry) error {
-	if swag.IsZero(m.RoundFinalized) { // not required
-		return nil
-	}
-
-	if m.RoundFinalized != nil {
-		if err := m.RoundFinalized.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundFinalized")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundFinalized")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *V1GetEventStreamResponse) validateRoundSigning(formats strfmt.Registry) error {
-	if swag.IsZero(m.RoundSigning) { // not required
-		return nil
-	}
-
-	if m.RoundSigning != nil {
-		if err := m.RoundSigning.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundSigning")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundSigning")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *V1GetEventStreamResponse) validateRoundSigningNoncesGenerated(formats strfmt.Registry) error {
-	if swag.IsZero(m.RoundSigningNoncesGenerated) { // not required
-		return nil
-	}
-
-	if m.RoundSigningNoncesGenerated != nil {
-		if err := m.RoundSigningNoncesGenerated.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundSigningNoncesGenerated")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundSigningNoncesGenerated")
+				return ce.ValidateName("treeTx")
 			}
 			return err
 		}
@@ -241,41 +241,104 @@ func (m *V1GetEventStreamResponse) validateRoundSigningNoncesGenerated(formats s
 func (m *V1GetEventStreamResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.contextValidateBatchFailed(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateBatchFinalization(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateBatchFinalized(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.contextValidateBatchStarted(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
-	if err := m.contextValidateBatchTree(ctx, formats); err != nil {
+	if err := m.contextValidateTreeNoncesAggregated(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
-	if err := m.contextValidateBatchTreeSignature(ctx, formats); err != nil {
+	if err := m.contextValidateTreeSignature(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
-	if err := m.contextValidateRoundFailed(ctx, formats); err != nil {
+	if err := m.contextValidateTreeSigningStarted(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
-	if err := m.contextValidateRoundFinalization(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.contextValidateRoundFinalized(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.contextValidateRoundSigning(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.contextValidateRoundSigningNoncesGenerated(ctx, formats); err != nil {
+	if err := m.contextValidateTreeTx(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+func (m *V1GetEventStreamResponse) contextValidateBatchFailed(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.BatchFailed != nil {
+
+		if swag.IsZero(m.BatchFailed) { // not required
+			return nil
+		}
+
+		if err := m.BatchFailed.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batchFailed")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batchFailed")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1GetEventStreamResponse) contextValidateBatchFinalization(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.BatchFinalization != nil {
+
+		if swag.IsZero(m.BatchFinalization) { // not required
+			return nil
+		}
+
+		if err := m.BatchFinalization.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batchFinalization")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batchFinalization")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *V1GetEventStreamResponse) contextValidateBatchFinalized(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.BatchFinalized != nil {
+
+		if swag.IsZero(m.BatchFinalized) { // not required
+			return nil
+		}
+
+		if err := m.BatchFinalized.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batchFinalized")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batchFinalized")
+			}
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -300,19 +363,19 @@ func (m *V1GetEventStreamResponse) contextValidateBatchStarted(ctx context.Conte
 	return nil
 }
 
-func (m *V1GetEventStreamResponse) contextValidateBatchTree(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1GetEventStreamResponse) contextValidateTreeNoncesAggregated(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.BatchTree != nil {
+	if m.TreeNoncesAggregated != nil {
 
-		if swag.IsZero(m.BatchTree) { // not required
+		if swag.IsZero(m.TreeNoncesAggregated) { // not required
 			return nil
 		}
 
-		if err := m.BatchTree.ContextValidate(ctx, formats); err != nil {
+		if err := m.TreeNoncesAggregated.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("batchTree")
+				return ve.ValidateName("treeNoncesAggregated")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("batchTree")
+				return ce.ValidateName("treeNoncesAggregated")
 			}
 			return err
 		}
@@ -321,19 +384,19 @@ func (m *V1GetEventStreamResponse) contextValidateBatchTree(ctx context.Context,
 	return nil
 }
 
-func (m *V1GetEventStreamResponse) contextValidateBatchTreeSignature(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1GetEventStreamResponse) contextValidateTreeSignature(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.BatchTreeSignature != nil {
+	if m.TreeSignature != nil {
 
-		if swag.IsZero(m.BatchTreeSignature) { // not required
+		if swag.IsZero(m.TreeSignature) { // not required
 			return nil
 		}
 
-		if err := m.BatchTreeSignature.ContextValidate(ctx, formats); err != nil {
+		if err := m.TreeSignature.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("batchTreeSignature")
+				return ve.ValidateName("treeSignature")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("batchTreeSignature")
+				return ce.ValidateName("treeSignature")
 			}
 			return err
 		}
@@ -342,19 +405,19 @@ func (m *V1GetEventStreamResponse) contextValidateBatchTreeSignature(ctx context
 	return nil
 }
 
-func (m *V1GetEventStreamResponse) contextValidateRoundFailed(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1GetEventStreamResponse) contextValidateTreeSigningStarted(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.RoundFailed != nil {
+	if m.TreeSigningStarted != nil {
 
-		if swag.IsZero(m.RoundFailed) { // not required
+		if swag.IsZero(m.TreeSigningStarted) { // not required
 			return nil
 		}
 
-		if err := m.RoundFailed.ContextValidate(ctx, formats); err != nil {
+		if err := m.TreeSigningStarted.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundFailed")
+				return ve.ValidateName("treeSigningStarted")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundFailed")
+				return ce.ValidateName("treeSigningStarted")
 			}
 			return err
 		}
@@ -363,82 +426,19 @@ func (m *V1GetEventStreamResponse) contextValidateRoundFailed(ctx context.Contex
 	return nil
 }
 
-func (m *V1GetEventStreamResponse) contextValidateRoundFinalization(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1GetEventStreamResponse) contextValidateTreeTx(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.RoundFinalization != nil {
+	if m.TreeTx != nil {
 
-		if swag.IsZero(m.RoundFinalization) { // not required
+		if swag.IsZero(m.TreeTx) { // not required
 			return nil
 		}
 
-		if err := m.RoundFinalization.ContextValidate(ctx, formats); err != nil {
+		if err := m.TreeTx.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundFinalization")
+				return ve.ValidateName("treeTx")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundFinalization")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *V1GetEventStreamResponse) contextValidateRoundFinalized(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.RoundFinalized != nil {
-
-		if swag.IsZero(m.RoundFinalized) { // not required
-			return nil
-		}
-
-		if err := m.RoundFinalized.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundFinalized")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundFinalized")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *V1GetEventStreamResponse) contextValidateRoundSigning(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.RoundSigning != nil {
-
-		if swag.IsZero(m.RoundSigning) { // not required
-			return nil
-		}
-
-		if err := m.RoundSigning.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundSigning")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundSigning")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-func (m *V1GetEventStreamResponse) contextValidateRoundSigningNoncesGenerated(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.RoundSigningNoncesGenerated != nil {
-
-		if swag.IsZero(m.RoundSigningNoncesGenerated) { // not required
-			return nil
-		}
-
-		if err := m.RoundSigningNoncesGenerated.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("roundSigningNoncesGenerated")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("roundSigningNoncesGenerated")
+				return ce.ValidateName("treeTx")
 			}
 			return err
 		}
