@@ -37,14 +37,9 @@ service IndexerService {
   };
   rpc GetVtxos(GetVtxosRequest) returns (GetVtxosResponse) {
     option (google.api.http) = {
-      get: "/v1/getVtxos/{addresses}"
+      get: "/v1/vtxos"
     };
   };
-  rpc GetVtxosByOutpoint(GetVtxosByOutpointRequest) returns (GetVtxosByOutpointResponse) {
-    option (google.api.http) = {
-      get: "/v1/getVtxosByOutpoint/{outpoints}"
-    };
-  }
   rpc GetTransactionHistory(GetTransactionHistoryRequest) returns (GetTransactionHistoryResponse) {
     option (google.api.http) = {
       get: "/v1/history/{address}"
@@ -144,20 +139,12 @@ message GetVtxoTreeLeavesResponse {
 
 message GetVtxosRequest {
   repeated string addresses = 1;
-  bool spendable_only = 2;
-  bool spent_only = 3;
-  IndexerPageRequest page = 4;
+  repeated string outpoints = 2;
+  bool spendable_only = 3;
+  bool spent_only = 4;
+  IndexerPageRequest page = 5;
 }
 message GetVtxosResponse {
-  repeated IndexerVtxo vtxos = 1;
-  IndexerPageResponse page = 2;
-}
-
-message GetVtxosByOutpointRequest {
-  repeated string outpoints = 1;
-  IndexerPageRequest page = 2;
-}
-message GetVtxosByOutpointResponse {
   repeated IndexerVtxo vtxos = 1;
   IndexerPageResponse page = 2;
 }
@@ -227,9 +214,10 @@ message IndexerVtxo {
   string script = 5;
   bool is_leaf = 6;
   bool is_swept = 7;
-  bool is_spent = 8;
-  string spent_by = 9;
-  string commitment_txid = 10;
+  bool is_preconfirmed = 8;
+  bool is_spent = 9;
+  string spent_by = 10;
+  string commitment_txid = 11;
 }
 
 message IndexerChain {

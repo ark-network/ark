@@ -25,7 +25,6 @@ type IndexerServiceClient interface {
 	GetVtxoTree(ctx context.Context, in *GetVtxoTreeRequest, opts ...grpc.CallOption) (*GetVtxoTreeResponse, error)
 	GetVtxoTreeLeaves(ctx context.Context, in *GetVtxoTreeLeavesRequest, opts ...grpc.CallOption) (*GetVtxoTreeLeavesResponse, error)
 	GetVtxos(ctx context.Context, in *GetVtxosRequest, opts ...grpc.CallOption) (*GetVtxosResponse, error)
-	GetVtxosByOutpoint(ctx context.Context, in *GetVtxosByOutpointRequest, opts ...grpc.CallOption) (*GetVtxosByOutpointResponse, error)
 	GetTransactionHistory(ctx context.Context, in *GetTransactionHistoryRequest, opts ...grpc.CallOption) (*GetTransactionHistoryResponse, error)
 	GetVtxoChain(ctx context.Context, in *GetVtxoChainRequest, opts ...grpc.CallOption) (*GetVtxoChainResponse, error)
 	GetVirtualTxs(ctx context.Context, in *GetVirtualTxsRequest, opts ...grpc.CallOption) (*GetVirtualTxsResponse, error)
@@ -100,15 +99,6 @@ func (c *indexerServiceClient) GetVtxoTreeLeaves(ctx context.Context, in *GetVtx
 func (c *indexerServiceClient) GetVtxos(ctx context.Context, in *GetVtxosRequest, opts ...grpc.CallOption) (*GetVtxosResponse, error) {
 	out := new(GetVtxosResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/GetVtxos", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *indexerServiceClient) GetVtxosByOutpoint(ctx context.Context, in *GetVtxosByOutpointRequest, opts ...grpc.CallOption) (*GetVtxosByOutpointResponse, error) {
-	out := new(GetVtxosByOutpointResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.IndexerService/GetVtxosByOutpoint", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -212,7 +202,6 @@ type IndexerServiceServer interface {
 	GetVtxoTree(context.Context, *GetVtxoTreeRequest) (*GetVtxoTreeResponse, error)
 	GetVtxoTreeLeaves(context.Context, *GetVtxoTreeLeavesRequest) (*GetVtxoTreeLeavesResponse, error)
 	GetVtxos(context.Context, *GetVtxosRequest) (*GetVtxosResponse, error)
-	GetVtxosByOutpoint(context.Context, *GetVtxosByOutpointRequest) (*GetVtxosByOutpointResponse, error)
 	GetTransactionHistory(context.Context, *GetTransactionHistoryRequest) (*GetTransactionHistoryResponse, error)
 	GetVtxoChain(context.Context, *GetVtxoChainRequest) (*GetVtxoChainResponse, error)
 	GetVirtualTxs(context.Context, *GetVirtualTxsRequest) (*GetVirtualTxsResponse, error)
@@ -246,9 +235,6 @@ func (UnimplementedIndexerServiceServer) GetVtxoTreeLeaves(context.Context, *Get
 }
 func (UnimplementedIndexerServiceServer) GetVtxos(context.Context, *GetVtxosRequest) (*GetVtxosResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVtxos not implemented")
-}
-func (UnimplementedIndexerServiceServer) GetVtxosByOutpoint(context.Context, *GetVtxosByOutpointRequest) (*GetVtxosByOutpointResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetVtxosByOutpoint not implemented")
 }
 func (UnimplementedIndexerServiceServer) GetTransactionHistory(context.Context, *GetTransactionHistoryRequest) (*GetTransactionHistoryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTransactionHistory not implemented")
@@ -405,24 +391,6 @@ func _IndexerService_GetVtxos_Handler(srv interface{}, ctx context.Context, dec 
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(IndexerServiceServer).GetVtxos(ctx, req.(*GetVtxosRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _IndexerService_GetVtxosByOutpoint_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetVtxosByOutpointRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(IndexerServiceServer).GetVtxosByOutpoint(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.IndexerService/GetVtxosByOutpoint",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(IndexerServiceServer).GetVtxosByOutpoint(ctx, req.(*GetVtxosByOutpointRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -590,10 +558,6 @@ var IndexerService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetVtxos",
 			Handler:    _IndexerService_GetVtxos_Handler,
-		},
-		{
-			MethodName: "GetVtxosByOutpoint",
-			Handler:    _IndexerService_GetVtxosByOutpoint_Handler,
 		},
 		{
 			MethodName: "GetTransactionHistory",
