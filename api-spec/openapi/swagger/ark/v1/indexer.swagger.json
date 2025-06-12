@@ -1069,7 +1069,7 @@
         "isSwept": {
           "type": "boolean"
         },
-        "isPreconfirmed": {
+        "isRedeemed": {
           "type": "boolean"
         },
         "isSpent": {

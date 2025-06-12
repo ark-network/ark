@@ -183,7 +183,17 @@ func (a *grpcClient) GetFullVtxoTree(
 		}
 		allTxs = append(allTxs, resp.Tree...)
 	}
-	return allTxs.ToTree(), nil
+
+	txids := allTxs.Txids()
+	txResp, err := a.GetVirtualTxs(ctx, txids)
+	if err != nil {
+		return nil, err
+	}
+	txMap := make(map[string]string)
+	for i, tx := range txResp.Txs {
+		txMap[txids[i]] = tx
+	}
+	return allTxs.ToTree(txMap), nil
 }
 
 func (a *grpcClient) GetVtxoTreeLeaves(
@@ -603,6 +613,7 @@ func newIndexerVtxo(vtxo *arkv1.IndexerVtxo) indexer.Vtxo {
 		Script:         vtxo.GetScript(),
 		IsLeaf:         vtxo.GetIsLeaf(),
 		IsSwept:        vtxo.GetIsSwept(),
+		IsRedeemed:     vtxo.GetIsRedeemed(),
 		IsSpent:        vtxo.GetIsSpent(),
 		SpentBy:        vtxo.GetSpentBy(),
 		CommitmentTxid: vtxo.GetCommitmentTxid(),

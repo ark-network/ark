@@ -214,7 +214,7 @@ message IndexerVtxo {
   string script = 5;
   bool is_leaf = 6;
   bool is_swept = 7;
-  bool is_preconfirmed = 8;
+  bool is_redeemed = 8;
   bool is_spent = 9;
   string spent_by = 10;
   string commitment_txid = 11;

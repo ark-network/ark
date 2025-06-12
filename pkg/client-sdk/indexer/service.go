@@ -97,24 +97,32 @@ type PageResponse struct {
 
 type TxNodes []TxNode
 
-func (t TxNodes) ToTree() tree.TxTree {
+func (t TxNodes) ToTree(txMap map[string]string) tree.TxTree {
 	vtxoTree := make(tree.TxTree, 0)
 	for _, node := range t {
 		if len(vtxoTree) <= int(node.Level) {
-			extendArray(vtxoTree, int(node.Level))
+			vtxoTree = extendArray(vtxoTree, int(node.Level))
 		}
-		level := vtxoTree[node.Level]
-		if len(level) <= int(node.LevelIndex) {
-			extendArray(level, int(node.LevelIndex))
+		if len(vtxoTree[node.Level]) <= int(node.LevelIndex) {
+			vtxoTree[node.Level] = extendArray(vtxoTree[node.Level], int(node.LevelIndex))
 		}
-		level[node.LevelIndex] = tree.Node{
+		vtxoTree[node.Level][node.LevelIndex] = tree.Node{
 			Txid:       node.Txid,
 			ParentTxid: node.ParentTxid,
 			Level:      node.Level,
 			LevelIndex: node.LevelIndex,
+			Tx:         txMap[node.Txid],
 		}
 	}
 	return vtxoTree
+}
+
+func (t TxNodes) Txids() []string {
+	txids := make([]string, 0, len(t))
+	for _, node := range t {
+		txids = append(txids, node.Txid)
+	}
+	return txids
 }
 
 type TxNode struct {
@@ -153,6 +161,7 @@ type Vtxo struct {
 	Script         string
 	IsLeaf         bool
 	IsSwept        bool
+	IsRedeemed     bool
 	IsSpent        bool
 	SpentBy        string
 	CommitmentTxid string

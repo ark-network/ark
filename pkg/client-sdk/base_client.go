@@ -180,7 +180,7 @@ func (a *arkClient) ListVtxos(
 	}
 
 	for _, vtxo := range resp.Vtxos {
-		if vtxo.IsSpent {
+		if vtxo.IsSpent || vtxo.IsSwept || vtxo.IsRedeemed {
 			spentVtxos = append(spentVtxos, vtxo.ToClient())
 		} else {
 			spendableVtxos = append(spendableVtxos, vtxo.ToClient())

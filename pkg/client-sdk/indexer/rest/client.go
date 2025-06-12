@@ -193,7 +193,17 @@ func (a *restClient) GetFullVtxoTree(
 		}
 		allTxs = append(allTxs, resp.Tree...)
 	}
-	return allTxs.ToTree(), nil
+
+	txids := allTxs.Txids()
+	txResp, err := a.GetVirtualTxs(ctx, txids)
+	if err != nil {
+		return nil, err
+	}
+	txMap := make(map[string]string)
+	for i, tx := range txResp.Txs {
+		txMap[txids[i]] = tx
+	}
+	return allTxs.ToTree(txMap), nil
 }
 
 func (a *restClient) GetVtxoTreeLeaves(
@@ -705,6 +715,7 @@ func newIndexerVtxo(vtxo *models.V1IndexerVtxo) (indexer.Vtxo, error) {
 		Script:         vtxo.Script,
 		IsLeaf:         vtxo.IsLeaf,
 		IsSwept:        vtxo.IsSwept,
+		IsRedeemed:     vtxo.IsRedeemed,
 		IsSpent:        vtxo.IsSpent,
 		SpentBy:        vtxo.SpentBy,
 		CommitmentTxid: vtxo.CommitmentTxid,

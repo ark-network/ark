@@ -243,35 +243,43 @@ func TestSettleInSameRound(t *testing.T) {
 }
 
 func TestUnilateralExit(t *testing.T) {
-	var receive utils.ArkReceive
-	receiveStr, err := runArkCommand("receive")
+	ctx := context.Background()
+	alice, _ := setupArkSDK(t)
+	defer alice.Stop()
+
+	onchainAddr, arkAddr, boardingAddr, err := alice.Receive(context.Background())
 	require.NoError(t, err)
 
-	err = json.Unmarshal([]byte(receiveStr), &receive)
-	require.NoError(t, err)
-
-	_, err = utils.RunCommand("nigiri", "faucet", receive.Boarding)
+	_, err = utils.RunCommand("nigiri", "faucet", boardingAddr)
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runArkCommand("settle", "--password", utils.Password)
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		vtxos, err := alice.NotifyIncomingFunds(ctx, arkAddr)
+		require.NoError(t, err)
+		require.NotNil(t, vtxos)
+	}()
+	_, err = alice.Settle(ctx)
 	require.NoError(t, err)
+
+	wg.Wait()
 
 	time.Sleep(3 * time.Second)
 
-	var balance utils.ArkBalance
-	balanceStr, err := runArkCommand("balance")
+	balance, err := alice.Balance(ctx, false)
 	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
-	require.NotZero(t, balance.Offchain.Total)
+	require.NotZero(t, balance.OffchainBalance.Total)
 
-	_, err = utils.RunCommand("nigiri", "faucet", receive.Onchain)
+	_, err = utils.RunCommand("nigiri", "faucet", onchainAddr)
 	require.NoError(t, err)
 
 	time.Sleep(5 * time.Second)
 
-	_, err = runArkCommand("redeem", "--force", "--password", utils.Password)
+	err = alice.StartUnilateralExit(ctx)
 	require.NoError(t, err)
 
 	err = utils.GenerateBlock()
@@ -279,13 +287,12 @@ func TestUnilateralExit(t *testing.T) {
 
 	time.Sleep(5 * time.Second)
 
-	balanceStr, err = runArkCommand("balance")
+	balance, err = alice.Balance(ctx, false)
 	require.NoError(t, err)
-	require.NoError(t, json.Unmarshal([]byte(balanceStr), &balance))
-	require.Zero(t, balance.Offchain.Total)
-	require.Greater(t, len(balance.Onchain.Locked), 0)
+	require.Greater(t, len(balance.OnchainBalance.LockedAmount), 0)
+	require.Zero(t, balance.OffchainBalance.Total)
 
-	lockedBalance := balance.Onchain.Locked[0].Amount
+	lockedBalance := balance.OnchainBalance.LockedAmount[0].Amount
 	require.NotZero(t, lockedBalance)
 }
 

@@ -699,7 +699,7 @@ func newIndexerVtxo(vtxo domain.Vtxo) *arkv1.IndexerVtxo {
 		Amount:         vtxo.Amount,
 		Script:         vtxo.PubKey,
 		IsLeaf:         !vtxo.IsPending(),
-		IsPreconfirmed: vtxo.IsPending(),
+		IsRedeemed:     vtxo.Redeemed,
 		IsSwept:        vtxo.Swept,
 		IsSpent:        vtxo.Spent,
 		SpentBy:        vtxo.SpentBy,
