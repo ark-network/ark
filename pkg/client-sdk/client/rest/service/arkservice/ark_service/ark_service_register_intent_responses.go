@@ -88,12 +88,12 @@ func (o *ArkServiceRegisterIntentOK) Code() int {
 
 func (o *ArkServiceRegisterIntentOK) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/registerIntent][%d] arkServiceRegisterIntentOK %s", 200, payload)
+	return fmt.Sprintf("[POST /v1/batch/registerIntent][%d] arkServiceRegisterIntentOK %s", 200, payload)
 }
 
 func (o *ArkServiceRegisterIntentOK) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/registerIntent][%d] arkServiceRegisterIntentOK %s", 200, payload)
+	return fmt.Sprintf("[POST /v1/batch/registerIntent][%d] arkServiceRegisterIntentOK %s", 200, payload)
 }
 
 func (o *ArkServiceRegisterIntentOK) GetPayload() *models.V1RegisterIntentResponse {
@@ -162,12 +162,12 @@ func (o *ArkServiceRegisterIntentDefault) Code() int {
 
 func (o *ArkServiceRegisterIntentDefault) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/registerIntent][%d] ArkService_RegisterIntent default %s", o._statusCode, payload)
+	return fmt.Sprintf("[POST /v1/batch/registerIntent][%d] ArkService_RegisterIntent default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceRegisterIntentDefault) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/registerIntent][%d] ArkService_RegisterIntent default %s", o._statusCode, payload)
+	return fmt.Sprintf("[POST /v1/batch/registerIntent][%d] ArkService_RegisterIntent default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceRegisterIntentDefault) GetPayload() *models.RPCStatus {

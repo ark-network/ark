@@ -51,6 +51,11 @@ func NewClient(serverUrl string) (indexer.Indexer, error) {
 	return &grpcClient{conn, svc, treeCache}, nil
 }
 
+func (a *grpcClient) Close() {
+	// nolint
+	a.conn.Close()
+}
+
 func (a *grpcClient) GetCommitmentTx(ctx context.Context, txid string) (*indexer.CommitmentTx, error) {
 	req := &arkv1.GetCommitmentTxRequest{
 		Txid: txid,
@@ -156,6 +161,39 @@ func (a *grpcClient) GetVtxoTree(
 		Tree: nodes,
 		Page: parsePage(resp.GetPage()),
 	}, nil
+}
+
+func (a *grpcClient) GetFullVtxoTree(
+	ctx context.Context, batchOutpoint indexer.Outpoint, opts ...indexer.RequestOption,
+) (tree.TxTree, error) {
+	resp, err := a.GetVtxoTree(ctx, batchOutpoint, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	var allTxs indexer.TxNodes = resp.Tree
+	for resp.Page != nil && resp.Page.Next != resp.Page.Total {
+		opt := indexer.RequestOption{}
+		opt.WithPage(&indexer.PageRequest{
+			Index: resp.Page.Next,
+		})
+		resp, err = a.GetVtxoTree(ctx, batchOutpoint, opts...)
+		if err != nil {
+			return nil, err
+		}
+		allTxs = append(allTxs, resp.Tree...)
+	}
+
+	txids := allTxs.Txids()
+	txResp, err := a.GetVirtualTxs(ctx, txids)
+	if err != nil {
+		return nil, err
+	}
+	txMap := make(map[string]string)
+	for i, tx := range txResp.Txs {
+		txMap[txids[i]] = tx
+	}
+	return allTxs.ToTree(txMap), nil
 }
 
 func (a *grpcClient) GetVtxoTreeLeaves(
@@ -283,27 +321,10 @@ func (a *grpcClient) GetVtxos(
 	if spentOnly && spentOnly == spendableOnly {
 		return nil, status.Errorf(codes.InvalidArgument, "spendableOnly and spentOnly cannot be both true")
 	}
-	if len(opt.GetOutpoints()) > 0 {
-		resp, err := a.svc.GetVtxosByOutpoint(ctx, &arkv1.GetVtxosByOutpointRequest{
-			Outpoints: opt.GetOutpoints(),
-			Page:      page,
-		})
-		if err != nil {
-			return nil, err
-		}
-		vtxos := make([]indexer.Vtxo, 0, len(resp.GetVtxos()))
-		for _, vtxo := range resp.GetVtxos() {
-			vtxos = append(vtxos, newIndexerVtxo(vtxo))
-		}
-
-		return &indexer.VtxosResponse{
-			Vtxos: vtxos,
-			Page:  parsePage(resp.GetPage()),
-		}, nil
-	}
 
 	req := &arkv1.GetVtxosRequest{
 		Addresses:     opt.GetAddresses(),
+		Outpoints:     opt.GetOutpoints(),
 		SpendableOnly: spendableOnly,
 		SpentOnly:     spentOnly,
 		Page:          page,
@@ -592,6 +613,7 @@ func newIndexerVtxo(vtxo *arkv1.IndexerVtxo) indexer.Vtxo {
 		Script:         vtxo.GetScript(),
 		IsLeaf:         vtxo.GetIsLeaf(),
 		IsSwept:        vtxo.GetIsSwept(),
+		IsRedeemed:     vtxo.GetIsRedeemed(),
 		IsSpent:        vtxo.GetIsSpent(),
 		SpentBy:        vtxo.GetSpentBy(),
 		CommitmentTxid: vtxo.GetCommitmentTxid(),

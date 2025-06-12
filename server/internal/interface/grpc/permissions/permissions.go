@@ -10,12 +10,11 @@ import (
 )
 
 const (
-	EntityWallet   = "wallet"
-	EntityAdmin    = "admin"
-	EntityManager  = "manager"
-	EntityArk      = "ark"
-	EntityExplorer = "explorer"
-	EntityHealth   = "health"
+	EntityWallet  = "wallet"
+	EntityAdmin   = "admin"
+	EntityManager = "manager"
+	EntityArk     = "ark"
+	EntityHealth  = "health"
 )
 
 // ReadOnlyPermissions returns the permissions of the macaroon readonly.macaroon.
@@ -122,14 +121,6 @@ func Whitelist() map[string][]bakery.Op {
 			Entity: EntityArk,
 			Action: "write",
 		}},
-		fmt.Sprintf("/%s/RegisterInputsForNextRound", arkv1.ArkService_ServiceDesc.ServiceName): {{
-			Entity: EntityArk,
-			Action: "write",
-		}},
-		fmt.Sprintf("/%s/RegisterOutputsForNextRound", arkv1.ArkService_ServiceDesc.ServiceName): {{
-			Entity: EntityArk,
-			Action: "write",
-		}},
 		fmt.Sprintf("/%s/SubmitSignedForfeitTxs", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
@@ -142,20 +133,16 @@ func Whitelist() map[string][]bakery.Op {
 			Entity: EntityArk,
 			Action: "read",
 		}},
-		fmt.Sprintf("/%s/SubmitOffchainTx", arkv1.ArkService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/SubmitTx", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
 		}},
-		fmt.Sprintf("/%s/FinalizeOffchainTx", arkv1.ArkService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/FinalizeTx", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
 			Action: "write",
 		}},
 		fmt.Sprintf("/%s/Check", grpchealth.Health_ServiceDesc.ServiceName): {{
 			Entity: EntityHealth,
-			Action: "read",
-		}},
-		fmt.Sprintf("/%s/GetBoardingAddress", arkv1.ArkService_ServiceDesc.ServiceName): {{
-			Entity: EntityArk,
 			Action: "read",
 		}},
 		fmt.Sprintf("/%s/SubmitTreeNonces", arkv1.ArkService_ServiceDesc.ServiceName): {{
@@ -168,22 +155,6 @@ func Whitelist() map[string][]bakery.Op {
 		}},
 		fmt.Sprintf("/%s/GetTransactionsStream", arkv1.ArkService_ServiceDesc.ServiceName): {{
 			Entity: EntityArk,
-			Action: "read",
-		}},
-		fmt.Sprintf("/%s/GetRound", arkv1.ExplorerService_ServiceDesc.ServiceName): {{
-			Entity: EntityExplorer,
-			Action: "read",
-		}},
-		fmt.Sprintf("/%s/GetRoundById", arkv1.ExplorerService_ServiceDesc.ServiceName): {{
-			Entity: EntityExplorer,
-			Action: "read",
-		}},
-		fmt.Sprintf("/%s/ListVtxos", arkv1.ExplorerService_ServiceDesc.ServiceName): {{
-			Entity: EntityExplorer,
-			Action: "read",
-		}},
-		fmt.Sprintf("/%s/SubscribeForAddress", arkv1.ExplorerService_ServiceDesc.ServiceName): {{
-			Entity: EntityExplorer,
 			Action: "read",
 		}},
 	}
@@ -204,6 +175,10 @@ func AllPermissionsByMethod() map[string][]bakery.Op {
 		fmt.Sprintf("/%s/GetBalance", arkv1.WalletService_ServiceDesc.ServiceName): {{
 			Entity: EntityWallet,
 			Action: "read",
+		}},
+		fmt.Sprintf("/%s/Withdraw", arkv1.WalletService_ServiceDesc.ServiceName): {{
+			Entity: EntityWallet,
+			Action: "write",
 		}},
 		fmt.Sprintf("/%s/GetScheduledSweep", arkv1.AdminService_ServiceDesc.ServiceName): {{
 			Entity: EntityManager,
@@ -229,17 +204,13 @@ func AllPermissionsByMethod() map[string][]bakery.Op {
 			Entity: EntityManager,
 			Action: "write",
 		}},
-		fmt.Sprintf("/%s/DeleteTxRequests", arkv1.AdminService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/DeleteIntents", arkv1.AdminService_ServiceDesc.ServiceName): {{
 			Entity: EntityManager,
 			Action: "write",
 		}},
-		fmt.Sprintf("/%s/GetTxRequestQueue", arkv1.AdminService_ServiceDesc.ServiceName): {{
+		fmt.Sprintf("/%s/ListIntents", arkv1.AdminService_ServiceDesc.ServiceName): {{
 			Entity: EntityManager,
 			Action: "read",
-		}},
-		fmt.Sprintf("/%s/Withdraw", arkv1.AdminService_ServiceDesc.ServiceName): {{
-			Entity: EntityManager,
-			Action: "write",
 		}},
 	}
 }

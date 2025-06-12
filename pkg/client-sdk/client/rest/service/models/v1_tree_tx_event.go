@@ -13,10 +13,10 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1BatchTreeEvent v1 batch tree event
+// V1TreeTxEvent v1 tree tx event
 //
-// swagger:model v1BatchTreeEvent
-type V1BatchTreeEvent struct {
+// swagger:model v1TreeTxEvent
+type V1TreeTxEvent struct {
 
 	// batch index
 	BatchIndex int32 `json:"batchIndex,omitempty"`
@@ -31,8 +31,8 @@ type V1BatchTreeEvent struct {
 	TreeTx *V1Node `json:"treeTx,omitempty"`
 }
 
-// Validate validates this v1 batch tree event
-func (m *V1BatchTreeEvent) Validate(formats strfmt.Registry) error {
+// Validate validates this v1 tree tx event
+func (m *V1TreeTxEvent) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateTreeTx(formats); err != nil {
@@ -45,7 +45,7 @@ func (m *V1BatchTreeEvent) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1BatchTreeEvent) validateTreeTx(formats strfmt.Registry) error {
+func (m *V1TreeTxEvent) validateTreeTx(formats strfmt.Registry) error {
 	if swag.IsZero(m.TreeTx) { // not required
 		return nil
 	}
@@ -64,8 +64,8 @@ func (m *V1BatchTreeEvent) validateTreeTx(formats strfmt.Registry) error {
 	return nil
 }
 
-// ContextValidate validate this v1 batch tree event based on the context it is used
-func (m *V1BatchTreeEvent) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+// ContextValidate validate this v1 tree tx event based on the context it is used
+func (m *V1TreeTxEvent) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.contextValidateTreeTx(ctx, formats); err != nil {
@@ -78,7 +78,7 @@ func (m *V1BatchTreeEvent) ContextValidate(ctx context.Context, formats strfmt.R
 	return nil
 }
 
-func (m *V1BatchTreeEvent) contextValidateTreeTx(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1TreeTxEvent) contextValidateTreeTx(ctx context.Context, formats strfmt.Registry) error {
 
 	if m.TreeTx != nil {
 
@@ -100,7 +100,7 @@ func (m *V1BatchTreeEvent) contextValidateTreeTx(ctx context.Context, formats st
 }
 
 // MarshalBinary interface implementation
-func (m *V1BatchTreeEvent) MarshalBinary() ([]byte, error) {
+func (m *V1TreeTxEvent) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -108,8 +108,8 @@ func (m *V1BatchTreeEvent) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *V1BatchTreeEvent) UnmarshalBinary(b []byte) error {
-	var res V1BatchTreeEvent
+func (m *V1TreeTxEvent) UnmarshalBinary(b []byte) error {
+	var res V1TreeTxEvent
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

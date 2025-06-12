@@ -11,88 +11,66 @@ service ArkService {
       get: "/v1/info"
     };
   }
-  rpc GetBoardingAddress(GetBoardingAddressRequest) returns (GetBoardingAddressResponse) {
-    option (google.api.http) = {
-      post: "/v1/boarding"
-      body: "*"
-    };
-  };
-
-  /* In-Round Transaction APIs */
 
   rpc RegisterIntent(RegisterIntentRequest) returns (RegisterIntentResponse) {
     option (google.api.http) = {
-      post: "/v1/round/registerIntent"
+      post: "/v1/batch/registerIntent"
       body: "*"
     };
   };
   rpc DeleteIntent(DeleteIntentRequest) returns (DeleteIntentResponse) {
     option (google.api.http) = {
-      post: "/v1/round/deleteIntent"
+      post: "/v1/batch/deleteIntent"
       body: "*"
     };
   }
-  rpc RegisterInputsForNextRound(RegisterInputsForNextRoundRequest) returns (RegisterInputsForNextRoundResponse) {
-    option (google.api.http) = {
-      post: "/v1/round/registerInputs"
-      body: "*"
-    };
-  };
   rpc ConfirmRegistration(ConfirmRegistrationRequest) returns (ConfirmRegistrationResponse) {
     option (google.api.http) = {
       post: "/v1/batch/ack"
       body: "*"
     };
   };
-  rpc RegisterOutputsForNextRound(RegisterOutputsForNextRoundRequest) returns (RegisterOutputsForNextRoundResponse) {
-    option (google.api.http) = {
-      post: "/v1/round/registerOutputs"
-      body: "*"
-    };
-  };
   rpc SubmitTreeNonces(SubmitTreeNoncesRequest) returns (SubmitTreeNoncesResponse) {
     option (google.api.http) = {
-      post: "/v1/round/tree/submitNonces"
+      post: "/v1/batch/tree/submitNonces"
       body: "*"
     };
   }
   rpc SubmitTreeSignatures(SubmitTreeSignaturesRequest) returns (SubmitTreeSignaturesResponse) {
     option (google.api.http) = {
-      post: "/v1/round/tree/submitSignatures"
+      post: "/v1/batch/tree/submitSignatures"
       body: "*"
     };
   }
   rpc SubmitSignedForfeitTxs(SubmitSignedForfeitTxsRequest) returns (SubmitSignedForfeitTxsResponse) {
     option (google.api.http) = {
-      post: "/v1/round/submitForfeitTxs"
+      post: "/v1/batch/submitForfeitTxs"
       body: "*"
     };
   };
   rpc GetEventStream(GetEventStreamRequest) returns (stream GetEventStreamResponse) {
     option (google.api.http) = {
-      get: "/v1/events"
+      get: "/v1/batch/events"
     };
   };
 
-  /* Out-of-Round Transaction APIs */
-
-  rpc SubmitOffchainTx(SubmitOffchainTxRequest) returns (SubmitOffchainTxResponse) {
+  rpc SubmitTx(SubmitTxRequest) returns (SubmitTxResponse) {
     option (google.api.http) = {
-      post: "/v1/offchain-tx/submit"
+      post: "/v1/tx/submit"
       body: "*"
     };
   }
 
-  rpc FinalizeOffchainTx(FinalizeOffchainTxRequest) returns (FinalizeOffchainTxResponse) {
+  rpc FinalizeTx(FinalizeTxRequest) returns (FinalizeTxResponse) {
     option (google.api.http) = {
-      post: "/v1/offchain-tx/finalize"
+      post: "/v1/tx/finalize"
       body: "*"
     };
   }
 
   rpc GetTransactionsStream(GetTransactionsStreamRequest) returns (stream GetTransactionsStreamResponse) {
     option (google.api.http) = {
-      get: "/v1/transactions"
+      get: "/v1/txs"
     };
   }
 }
@@ -115,38 +93,18 @@ message GetInfoResponse {
   int64 boarding_exit_delay = 14;
 }
 
-message GetBoardingAddressRequest {
-  string pubkey = 1;
-}
-message GetBoardingAddressResponse {
-  string address = 1;
-  Tapscripts taproot_tree = 2;
-}
-
-/* In-Round Transaction API messages */
-
 message RegisterIntentRequest {
   // BIP322 signature embeds the outpoints and the proof of funds
-  Bip322Signature bip322_signature = 1;
+  Bip322Signature intent = 1;
 }
 message RegisterIntentResponse {
-  string request_id = 1;
+  string intent_id = 1;
 }
 
 message DeleteIntentRequest {
-  oneof proof {
-    string intent_id = 1;
-    Bip322Signature bip322_signature = 2;
-  }
+  Bip322Signature proof = 2;
 }
 message DeleteIntentResponse {}
-
-message RegisterInputsForNextRoundRequest {
-  repeated Input inputs = 1;
-}
-message RegisterInputsForNextRoundResponse {
-  string request_id = 1;
-}
 
 message ConfirmRegistrationRequest {
   string intent_id = 1;
@@ -160,23 +118,15 @@ message Musig2 {
   bool signing_all = 2;
 }
 
-message RegisterOutputsForNextRoundRequest {
-  string request_id = 1;
-  // List of receivers for to convert to leaves in the next VTXO tree.
-  repeated Output outputs = 2;
-  optional Musig2 musig2 = 3;
-}
-message RegisterOutputsForNextRoundResponse {}
-
 message SubmitTreeNoncesRequest {
-  string round_id = 1;
+  string batch_id = 1;
   string pubkey = 2;
   string tree_nonces = 3;
 }
 message SubmitTreeNoncesResponse {}
 
 message SubmitTreeSignaturesRequest {
-  string round_id = 1;
+  string batch_id = 1;
   string pubkey = 2;
   string tree_signatures = 3;
 }
@@ -185,8 +135,8 @@ message SubmitTreeSignaturesResponse {}
 message SubmitSignedForfeitTxsRequest {
   // Forfeit txs signed by the user.
   repeated string signed_forfeit_txs = 1;
-  // The user has to sign also the round tx if he registerd a boarding UTXO.
-  optional string signed_round_tx = 2;
+  // The user has to sign also the commitment tx if he registerd a boarding UTXO.
+  optional string signed_commitment_tx = 2;
 }
 message SubmitSignedForfeitTxsResponse {}
 
@@ -194,38 +144,36 @@ message GetEventStreamRequest {}
 message GetEventStreamResponse {
   oneof event {
     BatchStartedEvent batch_started = 1;
-    RoundFinalizationEvent round_finalization = 2;
-    RoundFinalizedEvent round_finalized = 3;
-    RoundFailed round_failed = 4;
-    RoundSigningEvent round_signing = 5;
-    RoundSigningNoncesGeneratedEvent round_signing_nonces_generated = 6;
-    BatchTreeEvent batch_tree = 7;
-    BatchTreeSignatureEvent batch_tree_signature = 8;
+    BatchFinalizationEvent batch_finalization = 2;
+    BatchFinalizedEvent batch_finalized = 3;
+    BatchFailed batch_failed = 4;
+    TreeSigningStartedEvent tree_signing_started = 5;
+    TreeNoncesAggregatedEvent tree_nonces_aggregated = 6;
+    TreeTxEvent tree_tx = 7;
+    TreeSignatureEvent tree_signature = 8;
   }
 }
 
-/* Out-of-Round Transaction API messages */
-
-message SubmitOffchainTxRequest {
-  string virtual_tx = 1;
+message SubmitTxRequest {
+  string signed_virtual_tx = 1;
   repeated string checkpoint_txs = 2;
 }
-message SubmitOffchainTxResponse {
-  string signed_virtual_tx = 1;
-  string txid = 2;
+message SubmitTxResponse {
+  string txid = 1;
+  string final_virtual_tx = 2;
   repeated string signed_checkpoint_txs = 3;
 }
 
-message FinalizeOffchainTxRequest {
+message FinalizeTxRequest {
   string txid = 1;
-  repeated string checkpoint_txs = 2;
+  repeated string final_checkpoint_txs = 2;
 }
-message FinalizeOffchainTxResponse {}
+message FinalizeTxResponse {}
 
 message GetTransactionsStreamRequest {}
 message GetTransactionsStreamResponse {
   oneof tx {
-    RoundTransaction round = 1;
-    RedeemTransaction redeem = 2;
+    ArkTransaction commitment_tx = 1;
+    ArkTransaction virtual_tx = 2;
   }
 }

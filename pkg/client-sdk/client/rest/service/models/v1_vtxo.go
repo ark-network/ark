@@ -21,26 +21,23 @@ type V1Vtxo struct {
 	// amount
 	Amount string `json:"amount,omitempty"`
 
+	// commitment txid
+	CommitmentTxid string `json:"commitmentTxid,omitempty"`
+
 	// created at
 	CreatedAt string `json:"createdAt,omitempty"`
 
-	// expire at
-	ExpireAt string `json:"expireAt,omitempty"`
-
-	// is pending
-	IsPending bool `json:"isPending,omitempty"`
+	// expires at
+	ExpiresAt string `json:"expiresAt,omitempty"`
 
 	// outpoint
 	Outpoint *V1Outpoint `json:"outpoint,omitempty"`
 
+	// preconfirmed
+	Preconfirmed bool `json:"preconfirmed,omitempty"`
+
 	// pubkey
 	Pubkey string `json:"pubkey,omitempty"`
-
-	// redeem tx
-	RedeemTx string `json:"redeemTx,omitempty"`
-
-	// round txid
-	RoundTxid string `json:"roundTxid,omitempty"`
 
 	// spent
 	Spent bool `json:"spent,omitempty"`

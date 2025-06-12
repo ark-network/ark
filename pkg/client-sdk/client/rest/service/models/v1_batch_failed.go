@@ -12,10 +12,10 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1RoundFailed v1 round failed
+// V1BatchFailed v1 batch failed
 //
-// swagger:model v1RoundFailed
-type V1RoundFailed struct {
+// swagger:model v1BatchFailed
+type V1BatchFailed struct {
 
 	// id
 	ID string `json:"id,omitempty"`
@@ -24,18 +24,18 @@ type V1RoundFailed struct {
 	Reason string `json:"reason,omitempty"`
 }
 
-// Validate validates this v1 round failed
-func (m *V1RoundFailed) Validate(formats strfmt.Registry) error {
+// Validate validates this v1 batch failed
+func (m *V1BatchFailed) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-// ContextValidate validates this v1 round failed based on context it is used
-func (m *V1RoundFailed) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+// ContextValidate validates this v1 batch failed based on context it is used
+func (m *V1BatchFailed) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	return nil
 }
 
 // MarshalBinary interface implementation
-func (m *V1RoundFailed) MarshalBinary() ([]byte, error) {
+func (m *V1BatchFailed) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -43,8 +43,8 @@ func (m *V1RoundFailed) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *V1RoundFailed) UnmarshalBinary(b []byte) error {
-	var res V1RoundFailed
+func (m *V1BatchFailed) UnmarshalBinary(b []byte) error {
+	var res V1BatchFailed
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

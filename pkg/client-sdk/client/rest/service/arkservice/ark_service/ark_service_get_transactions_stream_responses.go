@@ -91,12 +91,12 @@ func (o *ArkServiceGetTransactionsStreamOK) Code() int {
 
 func (o *ArkServiceGetTransactionsStreamOK) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/transactions][%d] arkServiceGetTransactionsStreamOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/txs][%d] arkServiceGetTransactionsStreamOK %s", 200, payload)
 }
 
 func (o *ArkServiceGetTransactionsStreamOK) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/transactions][%d] arkServiceGetTransactionsStreamOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/txs][%d] arkServiceGetTransactionsStreamOK %s", 200, payload)
 }
 
 func (o *ArkServiceGetTransactionsStreamOK) GetPayload() *ArkServiceGetTransactionsStreamOKBody {
@@ -165,12 +165,12 @@ func (o *ArkServiceGetTransactionsStreamDefault) Code() int {
 
 func (o *ArkServiceGetTransactionsStreamDefault) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/transactions][%d] ArkService_GetTransactionsStream default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/txs][%d] ArkService_GetTransactionsStream default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceGetTransactionsStreamDefault) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/transactions][%d] ArkService_GetTransactionsStream default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/txs][%d] ArkService_GetTransactionsStream default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceGetTransactionsStreamDefault) GetPayload() *models.RPCStatus {

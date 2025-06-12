@@ -91,12 +91,12 @@ func (o *ArkServiceGetEventStreamOK) Code() int {
 
 func (o *ArkServiceGetEventStreamOK) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/events][%d] arkServiceGetEventStreamOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/batch/events][%d] arkServiceGetEventStreamOK %s", 200, payload)
 }
 
 func (o *ArkServiceGetEventStreamOK) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/events][%d] arkServiceGetEventStreamOK %s", 200, payload)
+	return fmt.Sprintf("[GET /v1/batch/events][%d] arkServiceGetEventStreamOK %s", 200, payload)
 }
 
 func (o *ArkServiceGetEventStreamOK) GetPayload() *ArkServiceGetEventStreamOKBody {
@@ -165,12 +165,12 @@ func (o *ArkServiceGetEventStreamDefault) Code() int {
 
 func (o *ArkServiceGetEventStreamDefault) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/events][%d] ArkService_GetEventStream default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/batch/events][%d] ArkService_GetEventStream default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceGetEventStreamDefault) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[GET /v1/events][%d] ArkService_GetEventStream default %s", o._statusCode, payload)
+	return fmt.Sprintf("[GET /v1/batch/events][%d] ArkService_GetEventStream default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceGetEventStreamDefault) GetPayload() *models.RPCStatus {

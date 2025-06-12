@@ -33,6 +33,9 @@ type V1IndexerVtxo struct {
 	// is leaf
 	IsLeaf bool `json:"isLeaf,omitempty"`
 
+	// is redeemed
+	IsRedeemed bool `json:"isRedeemed,omitempty"`
+
 	// is spent
 	IsSpent bool `json:"isSpent,omitempty"`
 
