@@ -21,6 +21,7 @@ import (
 	"github.com/ark-network/ark/common/note"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
+	"github.com/ark-network/ark/pkg/client-sdk/explorer"
 	"github.com/ark-network/ark/pkg/client-sdk/indexer"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
@@ -175,7 +176,7 @@ func LoadArkClient(sdkStore types.Store) (ArkClient, error) {
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.Network.Name)
+	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.ExplorerWSURL, cfgData.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -206,6 +207,9 @@ func LoadArkClient(sdkStore types.Store) (ArkClient, error) {
 	}
 
 	if cfgData.WithTransactionFeed {
+		// subscribe to boarding address events
+		explorerSvc.SubscribeToAddressEvent(walletSvc.GetAddressSubscription(context.TODO()))
+
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		covenantlessClient.txStreamCtxCancel = txStreamCtxCancel
 		if err := covenantlessClient.refreshDb(context.Background()); err != nil {
@@ -213,7 +217,7 @@ func LoadArkClient(sdkStore types.Store) (ArkClient, error) {
 		}
 		go covenantlessClient.listenForArkTxs(txStreamCtx)
 		if cfgData.UtxoMaxAmount != 0 {
-			go covenantlessClient.listenForBoardingTxs(txStreamCtx)
+			go covenantlessClient.listenWebsocketBoardingTxns(txStreamCtx)
 		}
 	}
 
@@ -246,7 +250,7 @@ func LoadArkClientWithWallet(
 		return nil, fmt.Errorf("failed to setup transport client: %s", err)
 	}
 
-	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.Network.Name)
+	explorerSvc, err := getExplorer(cfgData.ExplorerURL, cfgData.ExplorerWSURL, cfgData.Network.Name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
@@ -268,6 +272,9 @@ func LoadArkClientWithWallet(
 	}
 
 	if cfgData.WithTransactionFeed {
+		// subscribe to boarding address events
+		explorerSvc.SubscribeToAddressEvent(walletSvc.GetAddressSubscription(context.TODO()))
+
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		covenantlessClient.txStreamCtxCancel = txStreamCtxCancel
 		if err := covenantlessClient.refreshDb(context.Background()); err != nil {
@@ -275,7 +282,7 @@ func LoadArkClientWithWallet(
 		}
 		go covenantlessClient.listenForArkTxs(txStreamCtx)
 		if cfgData.UtxoMaxAmount != 0 {
-			go covenantlessClient.listenForBoardingTxs(txStreamCtx)
+			go covenantlessClient.listenWebsocketBoardingTxns(txStreamCtx)
 		}
 	}
 
@@ -295,7 +302,7 @@ func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
 		}
 		go a.listenForArkTxs(txStreamCtx)
 		if a.UtxoMaxAmount != 0 {
-			go a.listenForBoardingTxs(txStreamCtx)
+			go a.listenWebsocketBoardingTxns(txStreamCtx)
 		}
 	}
 
@@ -315,7 +322,7 @@ func (a *covenantlessArkClient) InitWithWallet(ctx context.Context, args InitWit
 		}
 		go a.listenForArkTxs(txStreamCtx)
 		if a.UtxoMaxAmount != 0 {
-			go a.listenForBoardingTxs(txStreamCtx)
+			go a.listenWebsocketBoardingTxns(txStreamCtx)
 		}
 	}
 
@@ -1005,6 +1012,156 @@ func (a *covenantlessArkClient) refreshVtxoDb(spendableVtxos, spentVtxos []clien
 	return nil
 }
 
+func (a *covenantlessArkClient) getTransaction(ctx context.Context, txId string) (string, uint64, error) {
+	_, boardingAddresses, _, err := a.wallet.GetAddresses(ctx)
+	if err != nil {
+		return "", 0, err
+	}
+
+	txHex, err := a.explorer.GetTxHex(txId)
+	if err != nil {
+		return "", 0, err
+	}
+	rawTx := &wire.MsgTx{}
+	if err := rawTx.Deserialize(strings.NewReader(txHex)); err != nil {
+		return "", 0, err
+	}
+
+	netParams := utils.ToBitcoinNetwork(a.Network)
+	amount := uint64(0)
+	for _, addr := range boardingAddresses {
+		decoded, err := btcutil.DecodeAddress(addr.Address, &netParams)
+		if err != nil {
+			return "", 0, err
+		}
+		pkScript, err := txscript.PayToAddrScript(decoded)
+		if err != nil {
+			return "", 0, err
+		}
+		for _, out := range rawTx.TxOut {
+			if bytes.Equal(out.PkScript, pkScript) {
+				amount = uint64(out.Value)
+				break
+			}
+		}
+		if amount > 0 {
+			break
+		}
+	}
+
+	return txHex, amount, nil
+}
+
+func (a *covenantlessArkClient) listenWebsocketBoardingTxns(ctx context.Context) {
+	err := a.explorer.ListenAddresses(func(boaringUtxos, mempoolUtxos []explorer.WSUtxo) error {
+		if len(mempoolUtxos) > 0 {
+			newPendingBoardingTxs := make([]types.Transaction, len(mempoolUtxos))
+			createdAt := time.Now()
+
+			for _, u := range mempoolUtxos {
+
+				isRbf, replacementTxIds, err := a.explorer.FetchMempoolRBFTxIds(u.Txid)
+				if err != nil {
+					return err
+				}
+
+				if isRbf {
+					txHex, amount, err := a.getTransaction(ctx, u.Txid)
+					if err != nil {
+						log.WithError(err).Errorf("failed to get rbf transaction %s", u.Txid)
+						return err
+					}
+
+					rbfTransactions := make(map[string]types.Transaction, 0)
+					for _, rbfTxId := range replacementTxIds {
+						rbfTransactions[rbfTxId] = types.Transaction{
+							TransactionKey: types.TransactionKey{
+								BoardingTxid: u.Txid,
+							},
+							Hex:       txHex,
+							Amount:    amount,
+							Type:      types.TxReceived,
+							CreatedAt: time.Now(),
+						}
+					}
+
+					count, err := a.store.TransactionStore().RbfTransactions(ctx, rbfTransactions)
+					if err != nil {
+						log.WithError(err).Error("failed to update rbf boarding transactions")
+						return err
+					}
+					log.Debugf("replaced %d transaction(s)", count)
+
+					continue
+				}
+
+				newPendingBoardingTxs = append(newPendingBoardingTxs, types.Transaction{
+					TransactionKey: types.TransactionKey{
+						BoardingTxid: u.Txid,
+					},
+					Amount:    u.Value,
+					Type:      types.TxReceived,
+					CreatedAt: createdAt,
+				})
+			}
+
+			count, err := a.store.TransactionStore().
+				AddTransactions(ctx, newPendingBoardingTxs)
+
+			if err != nil {
+				log.WithError(err).Error("failed to add new boarding transactions")
+				return err
+			}
+			log.Debugf("added %d boarding transaction(s)", count)
+		}
+
+		if len(boaringUtxos) > 0 {
+			ids := make([]string, 0, len(boaringUtxos))
+			for _, u := range boaringUtxos {
+				ids = append(ids, u.Txid)
+			}
+			count, err := a.store.TransactionStore().ConfirmTransactions(
+				ctx, ids, time.Now(),
+			)
+			if err != nil {
+				log.WithError(err).Error("failed to update boarding transactions")
+				return err
+			}
+			// ensure that we add transactions that were not in memepool
+			// but were confirmed in the blockchain
+			if count != len(boaringUtxos) {
+				newPendingBoardingTxs := make([]types.Transaction, len(boaringUtxos))
+				for _, u := range boaringUtxos {
+					newPendingBoardingTxs = append(newPendingBoardingTxs, types.Transaction{
+						TransactionKey: types.TransactionKey{
+							BoardingTxid: u.Txid,
+						},
+						Amount:    u.Value,
+						Type:      types.TxReceived,
+						CreatedAt: time.Now(),
+					})
+				}
+				count, err = a.store.TransactionStore().AddTransactions(
+					ctx, newPendingBoardingTxs,
+				)
+				if err != nil {
+					log.WithError(err).Error("failed to add new boarding transactions")
+					return err
+				}
+
+			}
+			log.Debugf("confirmed %d boarding transaction(s)", count)
+		}
+		return nil
+	})
+
+	// falback to polling if websocket fails
+	if err != nil {
+		log.WithError(err).Error("Failed to listen for boarding utxos on websocket, falling back to polling")
+		a.listenForBoardingTxs(ctx)
+	}
+}
+
 func (a *covenantlessArkClient) listenForBoardingTxs(ctx context.Context) {
 	ticker := time.NewTicker(2 * time.Second)
 	defer ticker.Stop()
@@ -1076,35 +1233,12 @@ func (a *covenantlessArkClient) getBoardingTransactions(
 				return nil, nil, nil, err
 			}
 			if isRbf {
-				txHex, err := a.explorer.GetTxHex(replacedBy)
+				txHex, amount, err := a.getTransaction(ctx, replacedBy)
 				if err != nil {
+					log.WithError(err).Errorf("failed to get rbf transaction %s", replacedBy)
 					return nil, nil, nil, err
 				}
-				rawTx := &wire.MsgTx{}
-				if err := rawTx.Deserialize(strings.NewReader(txHex)); err != nil {
-					return nil, nil, nil, err
-				}
-				amount := uint64(0)
-				netParams := utils.ToBitcoinNetwork(a.Network)
-				for _, addr := range boardingAddrs {
-					decoded, err := btcutil.DecodeAddress(addr.Address, &netParams)
-					if err != nil {
-						return nil, nil, nil, err
-					}
-					pkScript, err := txscript.PayToAddrScript(decoded)
-					if err != nil {
-						return nil, nil, nil, err
-					}
-					for _, out := range rawTx.TxOut {
-						if bytes.Equal(out.PkScript, pkScript) {
-							amount = uint64(out.Value)
-							break
-						}
-					}
-					if amount > 0 {
-						break
-					}
-				}
+
 				rbfTxs[tx.BoardingTxid] = types.Transaction{
 					TransactionKey: types.TransactionKey{
 						BoardingTxid: replacedBy,

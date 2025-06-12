@@ -23,6 +23,7 @@ type storeData struct {
 	BoardingExitDelay          string `json:"boarding_exit_delay"`
 	BoardingDescriptorTemplate string `json:"boarding_descriptor_template"`
 	ExplorerURL                string `json:"explorer_url"`
+	ExplorerWSURL              string `json:"explorer_ws_url"`
 	ForfeitAddress             string `json:"forfeit_address"`
 	WithTransactionFeed        string `json:"with_transaction_feed"`
 	MarketHourStartTime        string `json:"market_hour_start_time"`
@@ -55,6 +56,7 @@ func (d storeData) decode() types.Config {
 	buf, _ := hex.DecodeString(d.ServerPubKey)
 	serverPubkey, _ := secp256k1.ParsePubKey(buf)
 	explorerURL := d.ExplorerURL
+	explorerWSURL := d.ExplorerWSURL
 	nextStartTime, _ := strconv.Atoi(d.MarketHourStartTime)
 	nextEndTime, _ := strconv.Atoi(d.MarketHourEndTime)
 	period, _ := strconv.Atoi(d.MarketHourPeriod)
@@ -92,6 +94,7 @@ func (d storeData) decode() types.Config {
 		BoardingExitDelay:          common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(boardingExitDelay)},
 		BoardingDescriptorTemplate: d.BoardingDescriptorTemplate,
 		ExplorerURL:                explorerURL,
+		ExplorerWSURL:              explorerWSURL,
 		ForfeitAddress:             d.ForfeitAddress,
 		WithTransactionFeed:        withTransactionFeed,
 		MarketHourStartTime:        int64(nextStartTime),
@@ -119,6 +122,7 @@ func (d storeData) asMap() map[string]string {
 		"boarding_exit_delay":          d.BoardingExitDelay,
 		"boarding_descriptor_template": d.BoardingDescriptorTemplate,
 		"explorer_url":                 d.ExplorerURL,
+		"explorer_ws_url":              d.ExplorerWSURL,
 		"forfeit_address":              d.ForfeitAddress,
 		"with_transaction_feed":        d.WithTransactionFeed,
 		"market_hour_start_time":       d.MarketHourStartTime,

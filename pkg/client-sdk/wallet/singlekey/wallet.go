@@ -14,10 +14,11 @@ import (
 )
 
 type singlekeyWallet struct {
-	configStore types.ConfigStore
-	walletStore walletstore.WalletStore
-	privateKey  *secp256k1.PrivateKey
-	walletData  *walletstore.WalletData
+	configStore        types.ConfigStore
+	walletStore        walletstore.WalletStore
+	privateKey         *secp256k1.PrivateKey
+	walletData         *walletstore.WalletData
+	addressBroadcaster *utils.Broadcaster[string]
 }
 
 func (w *singlekeyWallet) GetType() string {

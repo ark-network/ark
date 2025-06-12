@@ -36,11 +36,31 @@ func NewBitcoinWallet(
 	}
 	return &bitcoinWallet{
 		&singlekeyWallet{
-			configStore: configStore,
-			walletStore: walletStore,
-			walletData:  walletData,
+			configStore:        configStore,
+			walletStore:        walletStore,
+			walletData:         walletData,
+			addressBroadcaster: utils.NewBroadcaster[string](10),
 		},
 	}, nil
+}
+
+func (w *bitcoinWallet) GetAddressSubscription(
+	ctx context.Context,
+) <-chan string {
+	ch := w.addressBroadcaster.Subscribe()
+
+	w.addressBroadcaster.PublishOnce(func() []string {
+		_, addresses, _, err := w.GetAddresses(ctx)
+		if err != nil {
+			return []string{}
+		}
+		boardingAddresses := make([]string, 0)
+		for _, addr := range addresses {
+			boardingAddresses = append(boardingAddresses, addr.Address)
+		}
+		return boardingAddresses
+	})
+	return ch
 }
 
 func (w *bitcoinWallet) GetAddresses(
@@ -105,6 +125,9 @@ func (w *bitcoinWallet) NewAddress(
 		return nil, nil, err
 	}
 
+	// Publish Boarding address
+	w.addressBroadcaster.Publish(boardingAddr.Address)
+
 	return &wallet.TapscriptsAddress{
 		Tapscripts: offchainAddr.Tapscripts,
 		Address:    encodedOffchainAddr,
@@ -118,6 +141,9 @@ func (w *bitcoinWallet) NewAddresses(
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// Publish Boarding address
+	w.addressBroadcaster.Publish(boardingAddr.Address)
 
 	offchainAddrs := make([]wallet.TapscriptsAddress, 0, num)
 	boardingAddrs := make([]wallet.TapscriptsAddress, 0, num)

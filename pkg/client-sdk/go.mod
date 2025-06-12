@@ -22,6 +22,7 @@ require (
 	github.com/go-openapi/swag v0.23.0
 	github.com/go-openapi/validate v0.24.0
 	github.com/golang-migrate/migrate/v4 v4.17.1
+	github.com/gorilla/websocket v1.5.3
 	github.com/lightningnetwork/lnd v0.18.2-beta
 	github.com/playwright-community/playwright-go v0.4802.0
 	github.com/shirou/gopsutil v3.21.11+incompatible

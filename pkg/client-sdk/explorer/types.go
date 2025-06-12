@@ -50,3 +50,37 @@ type utxo struct {
 func (e utxo) ToUtxo(delay common.RelativeLocktime, tapscripts []string) types.Utxo {
 	return newUtxo(e, delay, tapscripts)
 }
+
+type WSFetchTransactions struct {
+	BlockTransactions   []RawTx `json:"block-transactions,omitempty"`
+	MempoolTransactions []RawTx `json:"address-transactions,omitempty"`
+}
+
+type RbfTxId struct {
+	TxId string `json:"txid"`
+}
+
+type RawTx struct {
+	Txid string      `json:"txid"`
+	Vout []VoutEntry `json:"vout"`
+}
+
+type VoutEntry struct {
+	ScriptPubKey     string `json:"scriptpubkey"`
+	ScriptPubKeyAsm  string `json:"scriptpubkey_asm"`
+	ScriptPubKeyType string `json:"scriptpubkey_type"`
+	ScriptPubKeyAddr string `json:"scriptpubkey_address"`
+	Value            uint64 `json:"value"`
+}
+
+type WSUtxo struct {
+	Txid             string
+	VoutIndex        int
+	ScriptPubAddress string
+	Value            uint64
+}
+
+type RBFTxn struct {
+	TxId       string
+	ReplacedBy string
+}
