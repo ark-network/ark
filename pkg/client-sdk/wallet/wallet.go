@@ -41,6 +41,6 @@ type WalletService interface {
 	) (signature string, err error)
 	Dump(ctx context.Context) (seed string, err error)
 	NewVtxoTreeSigner(ctx context.Context, derivationPath string) (tree.SignerSession, error)
-	SubscribeAddressEvent(
+	GetAddressSubscription(
 		ctx context.Context) <-chan string
 }

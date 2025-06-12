@@ -44,7 +44,7 @@ func NewBitcoinWallet(
 	}, nil
 }
 
-func (w *bitcoinWallet) SubscribeAddressEvent(
+func (w *bitcoinWallet) GetAddressSubscription(
 	ctx context.Context,
 ) <-chan string {
 	ch := w.addressBroadcaster.Subscribe()

@@ -206,10 +206,10 @@ func LoadArkClient(sdkStore types.Store) (ArkClient, error) {
 		},
 	}
 
-	// subscribe to boarding address events
-	explorerSvc.SubscribeToAddressEvent(walletSvc.SubscribeAddressEvent(context.TODO()))
-
 	if cfgData.WithTransactionFeed {
+		// subscribe to boarding address events
+		explorerSvc.SubscribeToAddressEvent(walletSvc.GetAddressSubscription(context.TODO()))
+
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		covenantlessClient.txStreamCtxCancel = txStreamCtxCancel
 		if err := covenantlessClient.refreshDb(context.Background()); err != nil {
@@ -255,9 +255,6 @@ func LoadArkClientWithWallet(
 		return nil, fmt.Errorf("failed to setup explorer: %s", err)
 	}
 
-	// subscribe to boarding address events
-	explorerSvc.SubscribeToAddressEvent(walletSvc.SubscribeAddressEvent(context.TODO()))
-
 	indexerSvc, err := getIndexer(cfgData.ClientType, cfgData.ServerUrl)
 	if err != nil {
 		return nil, fmt.Errorf("failed to setup indexer: %s", err)
@@ -275,6 +272,9 @@ func LoadArkClientWithWallet(
 	}
 
 	if cfgData.WithTransactionFeed {
+		// subscribe to boarding address events
+		explorerSvc.SubscribeToAddressEvent(walletSvc.GetAddressSubscription(context.TODO()))
+
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		covenantlessClient.txStreamCtxCancel = txStreamCtxCancel
 		if err := covenantlessClient.refreshDb(context.Background()); err != nil {
@@ -295,6 +295,9 @@ func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
 	}
 
 	if args.WithTransactionFeed {
+		// subscribe to boarding address events
+		a.explorer.SubscribeToAddressEvent(a.wallet.GetAddressSubscription(ctx))
+
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		a.txStreamCtxCancel = txStreamCtxCancel
 		if err := a.refreshDb(context.Background()); err != nil {
