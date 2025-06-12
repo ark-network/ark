@@ -398,6 +398,11 @@ func (a *arkClient) init(
 		return err
 	}
 
+	if args.WithTransactionFeed {
+		// subscribe to boarding address events
+		explorerSvc.SubscribeToAddressEvent(walletSvc.GetAddressSubscription(ctx))
+	}
+
 	a.Config = &cfgData
 	a.wallet = walletSvc
 	a.explorer = explorerSvc

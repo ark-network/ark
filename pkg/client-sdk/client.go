@@ -295,9 +295,6 @@ func (a *covenantlessArkClient) Init(ctx context.Context, args InitArgs) error {
 	}
 
 	if args.WithTransactionFeed {
-		// subscribe to boarding address events
-		a.explorer.SubscribeToAddressEvent(a.wallet.GetAddressSubscription(ctx))
-
 		txStreamCtx, txStreamCtxCancel := context.WithCancel(context.Background())
 		a.txStreamCtxCancel = txStreamCtxCancel
 		if err := a.refreshDb(context.Background()); err != nil {

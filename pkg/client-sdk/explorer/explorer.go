@@ -570,13 +570,11 @@ func NewAddrTracker(
 	return t, nil
 }
 
-// AddAddress subscribes to a new address if it wasn’t already tracked.
 func (t *AddrTracker) TrackAddress(addr string) error {
 	t.subscribedMu.Lock()
 	defer t.subscribedMu.Unlock()
 
 	if _, already := t.subscribedMap[addr]; already {
-		// Already subscribed—no need to send again.
 		return nil
 	}
 
