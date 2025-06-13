@@ -502,8 +502,12 @@ func (d *CLTVMultisigClosure) Decode(script []byte) (bool, error) {
 	// read uint32 from bytes
 	if len(locktime) > 3 {
 		locktimeValue = binary.LittleEndian.Uint32(locktime)
-	} else {
+	} else if len(locktime) == 2 {
 		locktimeValue = uint32(binary.LittleEndian.Uint16(locktime))
+	} else if len(locktime) == 1 {
+		locktimeValue = uint32(locktime[0])
+	} else {
+		return false, fmt.Errorf("invalid locktime length: expected 1, 2 or 4 bytes, got %d", len(locktime))
 	}
 
 	multisigClosure := &MultisigClosure{}
