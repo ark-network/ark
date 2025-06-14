@@ -37,8 +37,9 @@ services:
       - ARK_WALLET_ADDR=arkd-wallet:6060
       - ARK_ESPLORA_URL=http://chopsticks:3000
       - ARK_VTXO_MIN_AMOUNT=1
-      - ARK_LIVE_STORE_TYPE=redis
+      - ARK_LIVE_STORE_TYPE=inmemory
       - ARK_EVENT_DB_TYPE=badger
+      - ARK_DB_TYPE=sqlite
     volumes:
       - type: tmpfs
         target: /app/data
