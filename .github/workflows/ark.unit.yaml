@@ -63,10 +63,14 @@ jobs:
         run: go work sync
       - name: create pg db
         run: make pgtest
+      - name: create redis db
+        run: make redis-up
       - name: unit testing
         run: make test
       - name: drop pg db
         run: make droppgtest
+      - name: drop redis db
+        run: make redis-down
 
   test-sdk:
     name: sdk unit tests

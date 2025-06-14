@@ -40,14 +40,8 @@ type Service interface {
 		ctx context.Context, userPubkey *secp256k1.PublicKey,
 	) (address string, scripts []string, err error)
 	// Tree signing methods
-	RegisterCosignerNonces(
-		ctx context.Context, roundID string,
-		pubkey *secp256k1.PublicKey, nonces string,
-	) error
-	RegisterCosignerSignatures(
-		ctx context.Context, roundID string,
-		pubkey *secp256k1.PublicKey, signatures string,
-	) error
+	RegisterCosignerNonces(ctx context.Context, roundId, pubkey string, nonces tree.TreeNonces) error
+	RegisterCosignerSignatures(ctx context.Context, roundId, pubkey string, signatures tree.TreePartialSigs) error
 	GetTransactionEventsChannel(ctx context.Context) <-chan TransactionEvent
 	GetMarketHourConfig(ctx context.Context) (*domain.MarketHour, error)
 	UpdateMarketHourConfig(ctx context.Context, marketHourStartTime, marketHourEndTime time.Time, period, roundInterval time.Duration) error
