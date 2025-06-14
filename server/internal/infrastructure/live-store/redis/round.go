@@ -148,12 +148,18 @@ func (s *currentRoundStore) Get() *domain.Round {
 func (s *currentRoundStore) Fail(err error) []domain.Event {
 	var events []domain.Event
 	if err := s.Upsert(func(m *domain.Round) *domain.Round {
-		events = m.Fail(err)
+		m.Fail(err)
 		return m
 	}); err != nil {
 		log.Warnf("fail: failed to upsert round: %s", err)
 		return nil
 	}
+
+	round := s.Get()
+	if round == nil {
+		return nil
+	}
+	events = append(events, round.Events()...)
 
 	return events
 }

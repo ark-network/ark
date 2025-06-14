@@ -39,7 +39,6 @@ const (
 type confirmationSessionsStore struct {
 	rdb               *redis.Client
 	sessionCompleteCh chan struct{}
-	chOnce            sync.Once
 	numOfRetries      int
 }
 
@@ -140,7 +139,6 @@ func (s *confirmationSessionsStore) Reset() {
 	_, _ = pipe.Exec(ctx)
 
 	s.sessionCompleteCh = make(chan struct{})
-	s.chOnce = sync.Once{}
 	go s.watchSessionCompletion()
 }
 
@@ -156,11 +154,12 @@ func (s *confirmationSessionsStore) SessionCompleted() <-chan struct{} {
 
 func (s *confirmationSessionsStore) watchSessionCompletion() {
 	ctx := context.Background()
+	var chOnce sync.Once
 	for {
 		numIntents, _ := s.rdb.Get(ctx, confirmationNumIntentsKey).Int()
 		numConfirmed, _ := s.rdb.Get(ctx, confirmationNumConfirmedKey).Int()
 		if numIntents > 0 && numConfirmed == numIntents {
-			s.chOnce.Do(func() { close(s.sessionCompleteCh) })
+			chOnce.Do(func() { close(s.sessionCompleteCh) })
 			return
 		}
 	}
