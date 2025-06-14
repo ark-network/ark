@@ -1,22 +1,4 @@
 services:
-  redis:
-    image: redis:7
-    container_name: ark-live-store
-    restart: unless-stopped
-    ports:
-      - "6379:6379"
-
-  ark-db-pg:
-    container_name: ark-db-pg
-    image: postgres
-    restart: unless-stopped
-    ports:
-      - "5432:5432"
-    environment:
-      POSTGRES_USER: root
-      POSTGRES_PASSWORD: secret
-      POSTGRES_DB: ark-db
-
   arkd-wallet:
     build:
       context: .
@@ -58,7 +40,6 @@ services:
       - ARK_DB_URL=postgresql://root:secret@ark-db-pg:5432/ark-db?sslmode=disable
       - ARK_VTXO_MIN_AMOUNT=1
       - ARK_LIVE_STORE_TYPE=redis
-      - ARK_REDIS_URL=redis://ark-live-store:6379/0
       - ARK_EVENT_DB_TYPE=badger
     volumes:
       - type: tmpfs
