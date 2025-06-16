@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
+	inmemory "github.com/ark-network/ark/server/internal/infrastructure/live-store/inmemory"
 	redislivestore "github.com/ark-network/ark/server/internal/infrastructure/live-store/redis"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/redis/go-redis/v9"
@@ -68,7 +69,7 @@ func TestLiveStoreImplementations(t *testing.T) {
 		name  string
 		store ports.LiveStore
 	}{
-		//{"inmemory", inmemory.NewLiveStore(txBuilder)},
+		{"inmemory", inmemory.NewLiveStore(txBuilder)},
 		{"redis", redislivestore.NewLiveStore(rdb, txBuilder, 5)},
 	}
 
