@@ -118,8 +118,7 @@ message TxRequestInfo {
   repeated Output receivers = 3;
   repeated RequestInput inputs = 4;
   repeated RequestInput boarding_inputs = 5;
-  string signing_type = 6;
-  repeated string cosigners_public_keys = 7;
+  repeated string cosigners_public_keys = 6;
 }
 
 message RequestInput {

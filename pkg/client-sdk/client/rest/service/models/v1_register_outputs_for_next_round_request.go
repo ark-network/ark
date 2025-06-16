@@ -19,8 +19,8 @@ import (
 // swagger:model v1RegisterOutputsForNextRoundRequest
 type V1RegisterOutputsForNextRoundRequest struct {
 
-	// musig2
-	Musig2 *V1Musig2 `json:"musig2,omitempty"`
+	// set only if offchain outputs
+	CosignersPublicKeys []string `json:"cosignersPublicKeys"`
 
 	// List of receivers for to convert to leaves in the next VTXO tree.
 	Outputs []*V1Output `json:"outputs"`
@@ -33,10 +33,6 @@ type V1RegisterOutputsForNextRoundRequest struct {
 func (m *V1RegisterOutputsForNextRoundRequest) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateMusig2(formats); err != nil {
-		res = append(res, err)
-	}
-
 	if err := m.validateOutputs(formats); err != nil {
 		res = append(res, err)
 	}
@@ -44,25 +40,6 @@ func (m *V1RegisterOutputsForNextRoundRequest) Validate(formats strfmt.Registry)
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
-	return nil
-}
-
-func (m *V1RegisterOutputsForNextRoundRequest) validateMusig2(formats strfmt.Registry) error {
-	if swag.IsZero(m.Musig2) { // not required
-		return nil
-	}
-
-	if m.Musig2 != nil {
-		if err := m.Musig2.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("musig2")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("musig2")
-			}
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -96,10 +73,6 @@ func (m *V1RegisterOutputsForNextRoundRequest) validateOutputs(formats strfmt.Re
 func (m *V1RegisterOutputsForNextRoundRequest) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateMusig2(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
 	if err := m.contextValidateOutputs(ctx, formats); err != nil {
 		res = append(res, err)
 	}
@@ -107,27 +80,6 @@ func (m *V1RegisterOutputsForNextRoundRequest) ContextValidate(ctx context.Conte
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
-	return nil
-}
-
-func (m *V1RegisterOutputsForNextRoundRequest) contextValidateMusig2(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.Musig2 != nil {
-
-		if swag.IsZero(m.Musig2) { // not required
-			return nil
-		}
-
-		if err := m.Musig2.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("musig2")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("musig2")
-			}
-			return err
-		}
-	}
-
 	return nil
 }
 

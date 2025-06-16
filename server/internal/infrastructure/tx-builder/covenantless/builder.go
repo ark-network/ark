@@ -472,12 +472,12 @@ func (b *txBuilder) BuildRoundTx(
 	requests domain.TxRequests,
 	boardingInputs []ports.BoardingInput,
 	connectorAddresses []string,
-	musig2Data []*tree.Musig2,
+	cosignersPublicKeys [][]string,
 ) (string, tree.TxTree, string, tree.TxTree, error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
-	receivers, err := getOutputVtxosLeaves(requests, musig2Data)
+	receivers, err := getOutputVtxosLeaves(requests, cosignersPublicKeys)
 	if err != nil {
 		return "", nil, "", nil, err
 	}
@@ -547,12 +547,9 @@ func (b *txBuilder) BuildRoundTx(
 
 		for i := 0; i < nbOfConnectors; i++ {
 			connectorsTreeLeaves = append(connectorsTreeLeaves, tree.Leaf{
-				Amount: uint64(dustAmount),
-				Script: hex.EncodeToString(connectorPkScript),
-				Musig2Data: &tree.Musig2{
-					CosignersPublicKeys: cosigners,
-					SigningType:         tree.SignBranch,
-				},
+				Amount:              uint64(dustAmount),
+				Script:              hex.EncodeToString(connectorPkScript),
+				CosignersPublicKeys: cosigners,
 			})
 		}
 

@@ -762,20 +762,6 @@
         }
       }
     },
-    "v1Musig2": {
-      "type": "object",
-      "properties": {
-        "cosignersPublicKeys": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "signingAll": {
-          "type": "boolean"
-        }
-      }
-    },
     "v1Node": {
       "type": "object",
       "properties": {
@@ -903,8 +889,12 @@
           },
           "description": "List of receivers for to convert to leaves in the next VTXO tree."
         },
-        "musig2": {
-          "$ref": "#/definitions/v1Musig2"
+        "cosignersPublicKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "title": "set only if offchain outputs"
         }
       }
     },

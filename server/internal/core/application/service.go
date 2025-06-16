@@ -1023,13 +1023,13 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 		}
 
 		if hasOffChainReceiver {
-			if message.Musig2Data == nil {
+			if len(message.CosignersPublicKeys) == 0 {
 				return "", fmt.Errorf("musig2 data is required for offchain receivers")
 			}
 
 			// check if the server pubkey has been set as cosigner
 			serverPubKeyHex := hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed())
-			for _, pubkey := range message.Musig2Data.CosignersPublicKeys {
+			for _, pubkey := range message.CosignersPublicKeys {
 				if pubkey == serverPubKeyHex {
 					return "", fmt.Errorf("server pubkey already in musig2 data")
 				}
@@ -1041,7 +1041,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 		}
 	}
 
-	if err := s.txRequests.push(*request, boardingInputs, message.Musig2Data); err != nil {
+	if err := s.txRequests.push(*request, boardingInputs, message.CosignersPublicKeys); err != nil {
 		return "", err
 	}
 
@@ -1190,7 +1190,7 @@ func (s *covenantlessService) ConfirmRegistration(ctx context.Context, intentId 
 	return s.confirmationSession.confirm(intentId)
 }
 
-func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error {
+func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, cosignersPublicKeys []string) error {
 	// Check credentials
 	request, ok := s.txRequests.view(creds)
 	if !ok {
@@ -1216,29 +1216,25 @@ func (s *covenantlessService) ClaimVtxos(ctx context.Context, creds string, rece
 		}
 	}
 
-	var data *tree.Musig2
-
 	if hasOffChainReceiver {
-		if musig2Data == nil {
+		if len(cosignersPublicKeys) == 0 {
 			return fmt.Errorf("musig2 data is required for offchain receivers")
 		}
 
 		// check if the server pubkey has been set as cosigner
 		serverPubKeyHex := hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed())
-		for _, pubkey := range musig2Data.CosignersPublicKeys {
+		for _, pubkey := range cosignersPublicKeys {
 			if pubkey == serverPubKeyHex {
 				return fmt.Errorf("server pubkey already in musig2 data")
 			}
 		}
-
-		data = musig2Data
 	}
 
 	if err := request.AddReceivers(receivers); err != nil {
 		return err
 	}
 
-	return s.txRequests.update(*request, data)
+	return s.txRequests.update(*request, cosignersPublicKeys)
 }
 
 func (s *covenantlessService) SignVtxos(ctx context.Context, forfeitTxs []string) error {
@@ -1381,14 +1377,7 @@ func (s *covenantlessService) GetTxRequestQueue(
 
 	txReqsInfo := make([]TxRequestInfo, 0, len(requests))
 	for _, request := range requests {
-		signingType := "branch"
-		cosigners := make([]string, 0)
-		if request.musig2Data != nil {
-			if request.musig2Data.SigningType == tree.SignAll {
-				signingType = "all"
-			}
-			cosigners = request.musig2Data.CosignersPublicKeys
-		}
+		cosigners := request.cosignersPublicKeys
 
 		receivers := make([]struct {
 			Address string
@@ -1442,7 +1431,6 @@ func (s *covenantlessService) GetTxRequestQueue(
 			Receivers:      receivers,
 			Inputs:         request.Inputs,
 			BoardingInputs: request.boardingInputs,
-			SigningType:    signingType,
 			Cosigners:      cosigners,
 		})
 	}
@@ -1815,7 +1803,7 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 
 	if len(repushToQueue) > 0 {
 		for _, req := range repushToQueue {
-			if err := s.txRequests.push(req.TxRequest, req.boardingInputs, req.musig2Data); err != nil {
+			if err := s.txRequests.push(req.TxRequest, req.boardingInputs, req.cosignersPublicKeys); err != nil {
 				log.WithError(err).Warn("failed to re-push requests to the queue")
 				continue
 			}
@@ -1864,31 +1852,28 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		return
 	}
 
+	serverPubKeyHex := hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed())
+
 	txRequests := make([]domain.TxRequest, 0, len(requests))
 	boardingInputs := make([]ports.BoardingInput, 0)
-	musig2data := make([]*tree.Musig2, 0)
+	cosignersPublicKeys := make([][]string, 0)
 	for _, req := range requests {
 		txRequests = append(txRequests, req.TxRequest)
 		boardingInputs = append(boardingInputs, req.boardingInputs...)
-		musig2data = append(musig2data, req.musig2Data)
+		cosignersPublicKeys = append(cosignersPublicKeys, append(req.cosignersPublicKeys, serverPubKeyHex))
 	}
 
 	// add server pubkey in musig2data and count the number of unique keys
 	uniqueSignerPubkeys := make(map[string]struct{})
-	serverPubKeyHex := hex.EncodeToString(s.serverSigningPubKey.SerializeCompressed())
 
-	for _, data := range musig2data {
-		if data == nil {
-			continue
-		}
-		for _, pubkey := range data.CosignersPublicKeys {
+	for _, cosigners := range cosignersPublicKeys {
+		for _, pubkey := range cosigners {
 			uniqueSignerPubkeys[pubkey] = struct{}{}
 		}
-		data.CosignersPublicKeys = append(data.CosignersPublicKeys, serverPubKeyHex)
 	}
 	log.Debugf("building tx for round %s", round.Id)
 	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
-		s.pubkey, txRequests, boardingInputs, connectorAddresses, musig2data,
+		s.pubkey, txRequests, boardingInputs, connectorAddresses, cosignersPublicKeys,
 	)
 	if err != nil {
 		round.Fail(fmt.Errorf("failed to create round tx: %s", err))

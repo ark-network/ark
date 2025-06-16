@@ -199,82 +199,38 @@ type testCase struct {
 func makeTestVectors() ([]testCase, error) {
 	vectors := make([]testCase, 0, len(receiverCounts))
 	for _, count := range receiverCounts {
-		receivers, privKeys, err := generateMockedReceivers(count)
+		testCase, err := generateMockedReceivers(count)
 		if err != nil {
 			return nil, err
 		}
-
-		// add mixed types test case if count is between 2 and 32
-		if count > 1 && count < 32 {
-			vectors = append(vectors, testCase{
-				name:      fmt.Sprintf("%d receivers Mixed Signing Types", len(receivers)),
-				receivers: withMixedSigningTypes(receivers),
-				privKeys:  privKeys,
-			})
-		}
-
-		// add SignAll test case if count is less than 32
-		if count < 32 {
-			vectors = append(vectors, testCase{
-				name:      fmt.Sprintf("%d receivers SignAll", len(receivers)),
-				receivers: withSigningType(tree.SignAll, receivers),
-				privKeys:  privKeys,
-			})
-		}
-
-		// always add SignBranch test case
-		vectors = append(vectors, testCase{
-			name:      fmt.Sprintf("%d receivers SignBranch", len(receivers)),
-			receivers: withSigningType(tree.SignBranch, receivers),
-			privKeys:  privKeys,
-		})
+		vectors = append(vectors, testCase)
 	}
 	return vectors, nil
 }
 
-func generateMockedReceivers(num int) ([]tree.Leaf, []*btcec.PrivateKey, error) {
+func generateMockedReceivers(num int) (testCase, error) {
 	receivers := make([]tree.Leaf, 0, num)
 	privKeys := make([]*btcec.PrivateKey, 0, num)
 	for i := 0; i < num; i++ {
 		prvkey, err := btcec.NewPrivateKey()
 		if err != nil {
-			return nil, nil, err
+			return testCase{}, err
 		}
 		receivers = append(receivers, tree.Leaf{
 			Script: "0000000000000000000000000000000000000000000000000000000000000002",
 			Amount: uint64((i + 1) * 1000),
-			Musig2Data: &tree.Musig2{
-				CosignersPublicKeys: []string{
-					hex.EncodeToString(prvkey.PubKey().SerializeCompressed()),
-					hex.EncodeToString(serverPrivKey.PubKey().SerializeCompressed()),
-				},
-				SigningType: tree.SignAll,
+			CosignersPublicKeys: []string{
+				hex.EncodeToString(prvkey.PubKey().SerializeCompressed()),
+				hex.EncodeToString(serverPrivKey.PubKey().SerializeCompressed()),
 			},
 		})
 		privKeys = append(privKeys, prvkey)
 	}
-	return receivers, privKeys, nil
-}
-
-func withSigningType(signingType tree.SigningType, receivers []tree.Leaf) []tree.Leaf {
-	newReceivers := make([]tree.Leaf, 0, len(receivers))
-	for _, receiver := range receivers {
-		newReceivers = append(newReceivers, tree.Leaf{
-			Script: receiver.Script,
-			Amount: receiver.Amount,
-			Musig2Data: &tree.Musig2{
-				CosignersPublicKeys: receiver.Musig2Data.CosignersPublicKeys,
-				SigningType:         signingType,
-			},
-		})
-	}
-	return newReceivers
-}
-
-func withMixedSigningTypes(receivers []tree.Leaf) []tree.Leaf {
-	first := withSigningType(tree.SignAll, receivers[:len(receivers)/2])
-	second := withSigningType(tree.SignBranch, receivers[len(receivers)/2:])
-	return append(first, second...)
+	return testCase{
+		name:      fmt.Sprintf("%d receivers", num),
+		receivers: receivers,
+		privKeys:  privKeys,
+	}, nil
 }
 
 func keyToStr(key *btcec.PrivateKey) string {
