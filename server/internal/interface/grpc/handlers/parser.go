@@ -252,7 +252,6 @@ func (i txReqsInfo) toProto() []*arkv1.TxRequestInfo {
 			Receivers:           receivers,
 			Inputs:              inputs,
 			BoardingInputs:      boardingInputs,
-			SigningType:         req.SigningType,
 			CosignersPublicKeys: req.Cosigners,
 		})
 	}

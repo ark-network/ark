@@ -163,17 +163,14 @@ func (a *grpcClient) ConfirmRegistration(ctx context.Context, intentID string) e
 }
 
 func (a *grpcClient) RegisterOutputsForNextRound(
-	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
+	ctx context.Context, requestID string, outputs []client.Output, cosignersPublicKeys []string,
 ) error {
 	req := &arkv1.RegisterOutputsForNextRoundRequest{
 		RequestId: requestID,
 		Outputs:   outs(outputs).toProto(),
 	}
-	if musig2 != nil {
-		req.Musig2 = &arkv1.Musig2{
-			CosignersPublicKeys: musig2.CosignersPublicKeys,
-			SigningAll:          musig2.SigningType == tree.SignAll,
-		}
+	if len(cosignersPublicKeys) > 0 {
+		req.CosignersPublicKeys = cosignersPublicKeys
 	}
 	_, err := a.svc.RegisterOutputsForNextRound(ctx, req)
 	return err

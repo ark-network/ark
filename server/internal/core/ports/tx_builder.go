@@ -36,7 +36,7 @@ type TxBuilder interface {
 	BuildRoundTx(
 		serverPubkey *secp256k1.PublicKey, txRequests domain.TxRequests,
 		boardingInputs []BoardingInput, connectorAddresses []string,
-		musig2Data []*tree.Musig2, // only for covenantless
+		cosigners [][]string,
 	) (
 		roundTx string,
 		vtxoTree tree.TxTree,

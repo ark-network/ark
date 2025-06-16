@@ -49,7 +49,6 @@ var (
 // it allows to customize the vtxo signing process
 type SettleOptions struct {
 	ExtraSignerSessions    []tree.SignerSession
-	SigningType            *tree.SigningType
 	WalletSignerDisabled   bool
 	SelectRecoverableVtxos bool
 
@@ -90,18 +89,6 @@ func WithoutWalletSigner(o interface{}) error {
 	}
 
 	opts.WalletSignerDisabled = true
-	return nil
-}
-
-// WithSignAll sets the signing type to ALL instead of the default BRANCH
-func WithSignAll(o interface{}) error {
-	opts, err := checkSettleOptionsType(o)
-	if err != nil {
-		return err
-	}
-
-	t := tree.SignAll
-	opts.SigningType = &t
 	return nil
 }
 
@@ -1065,7 +1052,7 @@ func (a *covenantlessArkClient) RegisterIntent(
 	boardingUtxos []types.Utxo,
 	notes []string,
 	outputs []client.Output,
-	musig2Data *tree.Musig2,
+	cosignersPublicKeys []string,
 ) (string, error) {
 	vtxosWithTapscripts, err := a.populateVtxosWithTapscripts(ctx, vtxos)
 	if err != nil {
@@ -1079,7 +1066,7 @@ func (a *covenantlessArkClient) RegisterIntent(
 
 	bip322Signature, bip322Message, err := a.makeRegisterIntentBIP322Signature(
 		inputs, exitLeaves, tapscripts,
-		outputs, musig2Data, notesWitnesses,
+		outputs, cosignersPublicKeys, notesWitnesses,
 	)
 	if err != nil {
 		return "", err
@@ -1778,10 +1765,10 @@ func (a *covenantlessArkClient) makeRegisterIntentBIP322Signature(
 	leafProofs []*common.TaprootMerkleProof,
 	tapscripts map[string][]string,
 	outputs []client.Output,
-	musig2Data *tree.Musig2,
+	cosignersPublicKeys []string,
 	notesWitnesses map[int][]byte,
 ) (string, string, error) {
-	message, outputsTxOut, err := registerIntentMessage(inputs, outputs, tapscripts, musig2Data)
+	message, outputsTxOut, err := registerIntentMessage(inputs, outputs, tapscripts, cosignersPublicKeys)
 	if err != nil {
 		return "", "", err
 	}
@@ -1991,19 +1978,14 @@ func (a *covenantlessArkClient) joinRoundWithRetry(
 		return "", err
 	}
 
-	signerSessions, signerPubKeys, signingType, err := a.handleOptions(options, inputs, notes)
+	signerSessions, signerPubKeys, err := a.handleOptions(options, inputs, notes)
 	if err != nil {
 		return "", err
 	}
 
-	musig2Data := &tree.Musig2{
-		CosignersPublicKeys: signerPubKeys,
-		SigningType:         signingType,
-	}
-
 	bip322Signature, bip322Message, err := a.makeRegisterIntentBIP322Signature(
 		inputs, exitLeaves, tapscripts,
-		outputs, musig2Data, notesWitnesses,
+		outputs, signerPubKeys, notesWitnesses,
 	)
 	if err != nil {
 		return "", err
@@ -3404,14 +3386,7 @@ func (a *covenantlessArkClient) handleRedeemTx(
 
 func (a *covenantlessArkClient) handleOptions(
 	options SettleOptions, inputs []bip322.Input, notesInputs []string,
-) ([]tree.SignerSession, []string, tree.SigningType, error) {
-	var signingType tree.SigningType
-	if options.SigningType != nil {
-		signingType = *options.SigningType
-	} else {
-		signingType = tree.SignBranch
-	}
-
+) ([]tree.SignerSession, []string, error) {
 	sessions := make([]tree.SignerSession, 0)
 	sessions = append(sessions, options.ExtraSignerSessions...)
 
@@ -3429,13 +3404,13 @@ func (a *covenantlessArkClient) handleOptions(
 			inputsToDerivationPath(outpoints, notesInputs),
 		)
 		if err != nil {
-			return nil, nil, signingType, err
+			return nil, nil, err
 		}
 		sessions = append(sessions, signerSession)
 	}
 
 	if len(sessions) == 0 {
-		return nil, nil, signingType, fmt.Errorf("no signer sessions")
+		return nil, nil, fmt.Errorf("no signer sessions")
 	}
 
 	signerPubKeys := make([]string, 0)
@@ -3443,7 +3418,7 @@ func (a *covenantlessArkClient) handleOptions(
 		signerPubKeys = append(signerPubKeys, session.GetPublicKey())
 	}
 
-	return sessions, signerPubKeys, signingType, nil
+	return sessions, signerPubKeys, nil
 }
 
 func findVtxosSpent(vtxos []client.Vtxo, id string) []client.Vtxo {
@@ -4137,7 +4112,7 @@ func registerIntentMessage(
 	inputs []bip322.Input,
 	outputs []client.Output,
 	tapscripts map[string][]string,
-	musig2Data *tree.Musig2,
+	cosignersPublicKeys []string,
 ) (string, []*wire.TxOut, error) {
 	validAt := time.Now()
 	expireAt := validAt.Add(2 * time.Minute).Unix()
@@ -4181,7 +4156,7 @@ func registerIntentMessage(
 		OnchainOutputIndexes: onchainOutputsIndexes,
 		ExpireAt:             expireAt,
 		ValidAt:              validAt.Unix(),
-		Musig2Data:           musig2Data,
+		CosignersPublicKeys:  cosignersPublicKeys,
 	}.Encode()
 	if err != nil {
 		return "", nil, err

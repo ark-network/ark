@@ -561,9 +561,6 @@
             "$ref": "#/definitions/v1RequestInput"
           }
         },
-        "signingType": {
-          "type": "string"
-        },
         "cosignersPublicKeys": {
           "type": "array",
           "items": {

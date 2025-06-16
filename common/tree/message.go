@@ -31,9 +31,10 @@ type IntentMessage struct {
 	// ExpireAt is the timestamp (in seconds) at which the proof should be considered invalid
 	// if set to 0, the proof will be considered valid indefinitely
 	ExpireAt int64 `json:"expire_at"`
-	// Musig2Data contains the related information about the vtxo tree signing
+	// CosignersPublicKeys contains the public keys of the cosigners
 	// if the outputs are not registered in the proof or all the outputs are onchain, this field is not required
-	Musig2Data *Musig2 `json:"musig2_data"`
+	// it is required only if one of the outputs is offchain
+	CosignersPublicKeys []string `json:"cosigners_public_keys"`
 }
 
 func (m IntentMessage) Encode() (string, error) {

@@ -234,7 +234,7 @@ func (a *restClient) ConfirmRegistration(ctx context.Context, intentID string) e
 }
 
 func (a *restClient) RegisterOutputsForNextRound(
-	ctx context.Context, requestID string, outputs []client.Output, musig2 *tree.Musig2,
+	ctx context.Context, requestID string, outputs []client.Output, cosignersPublicKeys []string,
 ) error {
 	outs := make([]*models.V1Output, 0, len(outputs))
 	for _, o := range outputs {
@@ -247,11 +247,8 @@ func (a *restClient) RegisterOutputsForNextRound(
 		RequestID: requestID,
 		Outputs:   outs,
 	}
-	if musig2 != nil {
-		body.Musig2 = &models.V1Musig2{
-			CosignersPublicKeys: musig2.CosignersPublicKeys,
-			SigningAll:          musig2.SigningType == tree.SignAll,
-		}
+	if len(cosignersPublicKeys) > 0 {
+		body.CosignersPublicKeys = cosignersPublicKeys
 	}
 	_, err := a.svc.ArkServiceRegisterOutputsForNextRound(
 		ark_service.NewArkServiceRegisterOutputsForNextRoundParams().WithBody(&body),

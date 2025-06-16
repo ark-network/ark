@@ -28,6 +28,6 @@ func newMusigSigningSession(cosigners map[string]struct{}) *musigSigningSession 
 		sigDoneC:    make(chan struct{}),
 		lock:        sync.Mutex{},
 		cosigners:   cosigners,
-		nbCosigners: len(cosigners) + 1, // the server
+		nbCosigners: len(cosigners) + 1, // add the server
 	}
 }

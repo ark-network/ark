@@ -24,9 +24,9 @@ import (
 
 type timedTxRequest struct {
 	domain.TxRequest
-	boardingInputs []ports.BoardingInput
-	timestamp      time.Time
-	musig2Data     *tree.Musig2
+	boardingInputs      []ports.BoardingInput
+	timestamp           time.Time
+	cosignersPublicKeys []string
 }
 
 func (t timedTxRequest) hashID() [32]byte {
@@ -64,7 +64,7 @@ func (m *txRequestsQueue) len() int64 {
 func (m *txRequestsQueue) push(
 	request domain.TxRequest,
 	boardingInputs []ports.BoardingInput,
-	musig2Data *tree.Musig2,
+	cosignersPublicKeys []string,
 ) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
@@ -94,7 +94,7 @@ func (m *txRequestsQueue) push(
 	}
 
 	now := time.Now()
-	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, now, musig2Data}
+	m.requests[request.Id] = &timedTxRequest{request, boardingInputs, now, cosignersPublicKeys}
 	for _, vtxo := range request.Inputs {
 		if vtxo.IsNote() {
 			continue
@@ -138,7 +138,7 @@ func (m *txRequestsQueue) pop(num int64) []timedTxRequest {
 	return result
 }
 
-func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musig2) error {
+func (m *txRequestsQueue) update(request domain.TxRequest, cosignersPublicKeys []string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -169,8 +169,8 @@ func (m *txRequestsQueue) update(request domain.TxRequest, musig2Data *tree.Musi
 
 	r.TxRequest = request
 
-	if musig2Data != nil {
-		r.musig2Data = musig2Data
+	if len(cosignersPublicKeys) > 0 {
+		r.cosignersPublicKeys = cosignersPublicKeys
 	}
 	return nil
 }

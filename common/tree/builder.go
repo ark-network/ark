@@ -157,10 +157,9 @@ type node interface {
 }
 
 type leaf struct {
-	amount     int64
-	pkScript   []byte
-	cosigners  []*secp256k1.PublicKey
-	signerType SigningType
+	amount    int64
+	pkScript  []byte
+	cosigners []*secp256k1.PublicKey
 }
 
 type branch struct {
@@ -300,37 +299,6 @@ func createTxTree(
 		return nil, fmt.Errorf("no receivers provided")
 	}
 
-	cosignersALL := make([]*secp256k1.PublicKey, 0)
-	for _, r := range receivers {
-		if r.Musig2Data == nil {
-			return nil, fmt.Errorf("missing musig2 data for receiver %s", r.Script)
-		}
-
-		if r.Musig2Data.SigningType != SignAll {
-			continue
-		}
-
-		if len(r.Musig2Data.CosignersPublicKeys) == 0 {
-			return nil, fmt.Errorf("missing cosigners public keys for receiver %s", r.Script)
-		}
-
-		for _, cosigner := range r.Musig2Data.CosignersPublicKeys {
-			pubkeyBytes, err := hex.DecodeString(cosigner)
-			if err != nil {
-				return nil, err
-			}
-
-			pubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
-			if err != nil {
-				return nil, fmt.Errorf("failed to parse cosigner pubkey: %w", err)
-			}
-
-			cosignersALL = append(cosignersALL, pubkey)
-		}
-	}
-
-	cosignersALL = uniqueCosigners(cosignersALL)
-
 	nodes := make([]node, 0, len(receivers))
 	for _, r := range receivers {
 		pkScript, err := hex.DecodeString(r.Script)
@@ -340,35 +308,29 @@ func createTxTree(
 
 		cosigners := make([]*secp256k1.PublicKey, 0)
 
-		switch r.Musig2Data.SigningType {
-		case SignBranch:
-			for _, cosigner := range r.Musig2Data.CosignersPublicKeys {
-				pubkeyBytes, err := hex.DecodeString(cosigner)
-				if err != nil {
-					return nil, fmt.Errorf("failed to decode cosigner pubkey: %w", err)
-				}
-
-				pubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
-				if err != nil {
-					return nil, fmt.Errorf("failed to parse cosigner pubkey: %w", err)
-				}
-
-				cosigners = append(cosigners, pubkey)
+		for _, cosigner := range r.CosignersPublicKeys {
+			pubkeyBytes, err := hex.DecodeString(cosigner)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode cosigner pubkey: %w", err)
 			}
-			cosigners = uniqueCosigners(cosigners)
-		case SignAll:
-			cosigners = cosignersALL
+
+			pubkey, err := secp256k1.ParsePubKey(pubkeyBytes)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse cosigner pubkey: %w", err)
+			}
+
+			cosigners = append(cosigners, pubkey)
 		}
+		cosigners = uniqueCosigners(cosigners)
 
 		if len(cosigners) == 0 {
 			return nil, fmt.Errorf("no cosigners for %s", r.Script)
 		}
 
 		leafNode := &leaf{
-			amount:     int64(r.Amount),
-			pkScript:   pkScript,
-			cosigners:  cosigners,
-			signerType: r.Musig2Data.SigningType,
+			amount:    int64(r.Amount),
+			pkScript:  pkScript,
+			cosigners: cosigners,
 		}
 		nodes = append(nodes, leafNode)
 	}
