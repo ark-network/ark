@@ -239,20 +239,7 @@ func (h *handler) RegisterOutputsForNextRound(
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	musig2Data := req.GetMusig2()
-	var musig2 *tree.Musig2
-	if musig2Data != nil {
-		signingType := tree.SignBranch
-		if musig2Data.SigningAll {
-			signingType = tree.SignAll
-		}
-		musig2 = &tree.Musig2{
-			CosignersPublicKeys: musig2Data.GetCosignersPublicKeys(),
-			SigningType:         signingType,
-		}
-	}
-
-	if err := h.svc.ClaimVtxos(ctx, req.GetRequestId(), receivers, musig2); err != nil {
+	if err := h.svc.ClaimVtxos(ctx, req.GetRequestId(), receivers, req.GetCosignersPublicKeys()); err != nil {
 		return nil, err
 	}
 

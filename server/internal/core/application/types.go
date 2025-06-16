@@ -17,7 +17,7 @@ type Service interface {
 	RegisterIntent(ctx context.Context, bip322signature bip322.Signature, message tree.IntentMessage) (string, error)
 	SpendVtxos(ctx context.Context, inputs []ports.Input) (string, error)
 	ConfirmRegistration(ctx context.Context, intentId string) error
-	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, musig2Data *tree.Musig2) error
+	ClaimVtxos(ctx context.Context, creds string, receivers []domain.Receiver, cosignersPublicKeys []string) error
 	SignVtxos(ctx context.Context, forfeitTxs []string) error
 	SignRoundTx(ctx context.Context, roundTx string) error
 	GetRoundByTxid(ctx context.Context, roundTxid string) (*domain.Round, error)
@@ -164,7 +164,6 @@ type TxRequestInfo struct {
 	}
 	Inputs         []domain.Vtxo
 	BoardingInputs []ports.BoardingInput
-	SigningType    string
 	Cosigners      []string
 }
 

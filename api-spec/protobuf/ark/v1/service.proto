@@ -155,16 +155,13 @@ message ConfirmRegistrationResponse {
   string blinded_creds = 1;
 }
 
-message Musig2 {
-  repeated string cosigners_public_keys = 1;
-  bool signing_all = 2;
-}
 
 message RegisterOutputsForNextRoundRequest {
   string request_id = 1;
   // List of receivers for to convert to leaves in the next VTXO tree.
   repeated Output outputs = 2;
-  optional Musig2 musig2 = 3;
+  // set only if offchain outputs
+  repeated string cosigners_public_keys = 3;
 }
 message RegisterOutputsForNextRoundResponse {}
 

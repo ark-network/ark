@@ -21,9 +21,9 @@ type LiveStore interface {
 
 type TxRequestsStore interface {
 	Len() int64
-	Push(request domain.TxRequest, boardingInputs []BoardingInput, musig2Data *tree.Musig2) error
+	Push(request domain.TxRequest, boardingInputs []BoardingInput, cosignersPublicKeys []string) error
 	Pop(num int64) []TimedTxRequest
-	Update(request domain.TxRequest, musig2Data *tree.Musig2) error
+	Update(request domain.TxRequest, cosignersPublicKeys []string) error
 	Delete(ids []string) error
 	DeleteAll() error
 	DeleteVtxos()
@@ -81,9 +81,9 @@ type BoardingInputsStore interface {
 
 type TimedTxRequest struct {
 	domain.TxRequest
-	BoardingInputs []BoardingInput
-	Timestamp      time.Time
-	Musig2Data     *tree.Musig2
+	BoardingInputs      []BoardingInput
+	Timestamp           time.Time
+	CosignersPublicKeys []string
 }
 
 func (t TimedTxRequest) HashID() [32]byte {

@@ -4,13 +4,13 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/ark-network/ark/common/tree"
+	"sort"
+	"time"
+
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/redis/go-redis/v9"
 	log "github.com/sirupsen/logrus"
-	"sort"
-	"time"
 )
 
 const (
@@ -56,7 +56,7 @@ func (s *txRequestsStore) Len() int64 {
 	return count
 }
 
-func (s *txRequestsStore) Push(request domain.TxRequest, boardingInputs []ports.BoardingInput, musig2Data *tree.Musig2) error {
+func (s *txRequestsStore) Push(request domain.TxRequest, boardingInputs []ports.BoardingInput, cosignerPubkeys []string) error {
 	ctx := context.Background()
 	for attempt := 0; attempt < s.numOfRetries; attempt++ {
 		err := s.rdb.Watch(ctx, func(tx *redis.Tx) error {
@@ -110,10 +110,10 @@ func (s *txRequestsStore) Push(request domain.TxRequest, boardingInputs []ports.
 
 			now := time.Now()
 			timedReq := &ports.TimedTxRequest{
-				TxRequest:      request,
-				BoardingInputs: boardingInputs,
-				Timestamp:      now,
-				Musig2Data:     musig2Data,
+				TxRequest:           request,
+				BoardingInputs:      boardingInputs,
+				Timestamp:           now,
+				CosignersPublicKeys: cosignerPubkeys,
 			}
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				if err := s.requests.SetPipe(ctx, pipe, request.Id, timedReq); err != nil {
@@ -236,7 +236,7 @@ func (s *txRequestsStore) ViewAll(ids []string) ([]ports.TimedTxRequest, error) 
 	return result, nil
 }
 
-func (s *txRequestsStore) Update(request domain.TxRequest, musig2Data *tree.Musig2) error {
+func (s *txRequestsStore) Update(request domain.TxRequest, cosignerPubkeys []string) error {
 	ctx := context.Background()
 	req, err := s.requests.Get(ctx, request.Id)
 	if err != nil || req == nil {
@@ -263,8 +263,8 @@ func (s *txRequestsStore) Update(request domain.TxRequest, musig2Data *tree.Musi
 	}
 
 	req.TxRequest = request
-	if musig2Data != nil {
-		req.Musig2Data = musig2Data
+	if len(cosignerPubkeys) > 0 {
+		req.CosignersPublicKeys = cosignerPubkeys
 	}
 
 	return s.requests.Set(ctx, request.Id, req)

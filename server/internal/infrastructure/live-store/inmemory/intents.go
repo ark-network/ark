@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 )
@@ -42,7 +41,7 @@ func (m *txRequestStore) Len() int64 {
 	return count
 }
 
-func (m *txRequestStore) Push(request domain.TxRequest, boardingInputs []ports.BoardingInput, musig2Data *tree.Musig2) error {
+func (m *txRequestStore) Push(request domain.TxRequest, boardingInputs []ports.BoardingInput, cosignersPubkeys []string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -72,10 +71,10 @@ func (m *txRequestStore) Push(request domain.TxRequest, boardingInputs []ports.B
 
 	now := time.Now()
 	m.requests[request.Id] = &ports.TimedTxRequest{
-		TxRequest:      request,
-		BoardingInputs: boardingInputs,
-		Timestamp:      now,
-		Musig2Data:     musig2Data,
+		TxRequest:           request,
+		BoardingInputs:      boardingInputs,
+		Timestamp:           now,
+		CosignersPublicKeys: cosignersPubkeys,
 	}
 	for _, vtxo := range request.Inputs {
 		if vtxo.IsNote() {
@@ -120,7 +119,7 @@ func (m *txRequestStore) Pop(num int64) []ports.TimedTxRequest {
 	return result
 }
 
-func (m *txRequestStore) Update(request domain.TxRequest, musig2Data *tree.Musig2) error {
+func (m *txRequestStore) Update(request domain.TxRequest, cosignersPubkeys []string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
@@ -151,8 +150,8 @@ func (m *txRequestStore) Update(request domain.TxRequest, musig2Data *tree.Musig
 
 	r.TxRequest = request
 
-	if musig2Data != nil {
-		r.Musig2Data = musig2Data
+	if len(cosignersPubkeys) > 0 {
+		r.CosignersPublicKeys = cosignersPubkeys
 	}
 	return nil
 }

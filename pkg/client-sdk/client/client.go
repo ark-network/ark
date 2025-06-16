@@ -39,7 +39,7 @@ type TransportClient interface {
 	DeleteIntent(ctx context.Context, requestID, signature, message string) error
 	ConfirmRegistration(ctx context.Context, intentID string) error
 	RegisterOutputsForNextRound(
-		ctx context.Context, requestID string, outputs []Output, musig2 *tree.Musig2,
+		ctx context.Context, requestID string, outputs []Output, cosignersPublicKeys []string,
 	) error
 	SubmitTreeNonces(
 		ctx context.Context, roundID, cosignerPubkey string, nonces tree.TreeNonces,

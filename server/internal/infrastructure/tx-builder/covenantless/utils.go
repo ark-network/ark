@@ -44,10 +44,10 @@ func getOnchainOutputs(
 
 func getOutputVtxosLeaves(
 	requests []domain.TxRequest,
-	musig2Data []*tree.Musig2,
+	cosignersPublicKeys [][]string,
 ) ([]tree.Leaf, error) {
-	if len(musig2Data) != len(requests) {
-		return nil, fmt.Errorf("musig2 data length %d does not match requests length %d", len(musig2Data), len(requests))
+	if len(cosignersPublicKeys) != len(requests) {
+		return nil, fmt.Errorf("cosigners public keys length %d does not match requests length %d", len(cosignersPublicKeys), len(requests))
 	}
 
 	leaves := make([]tree.Leaf, 0)
@@ -70,9 +70,9 @@ func getOutputVtxosLeaves(
 				}
 
 				leaves = append(leaves, tree.Leaf{
-					Script:     hex.EncodeToString(script),
-					Amount:     receiver.Amount,
-					Musig2Data: musig2Data[i],
+					Script:              hex.EncodeToString(script),
+					Amount:              receiver.Amount,
+					CosignersPublicKeys: cosignersPublicKeys[i],
 				})
 			}
 		}

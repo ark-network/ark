@@ -66,22 +66,19 @@ func TestBuildRoundTx(t *testing.T) {
 	if len(fixtures.Valid) > 0 {
 		t.Run("valid", func(t *testing.T) {
 			for _, f := range fixtures.Valid {
-				musig2Data := make([]*tree.Musig2, 0)
+				cosignersPublicKeys := make([][]string, 0)
 
 				for range f.Requests {
 					randKey, err := secp256k1.GeneratePrivateKey()
 					require.NoError(t, err)
 
-					musig2Data = append(musig2Data, &tree.Musig2{
-						CosignersPublicKeys: []string{
-							hex.EncodeToString(randKey.PubKey().SerializeCompressed()),
-						},
-						SigningType: 0,
+					cosignersPublicKeys = append(cosignersPublicKeys, []string{
+						hex.EncodeToString(randKey.PubKey().SerializeCompressed()),
 					})
 				}
 
 				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, f.Requests, []ports.BoardingInput{}, []string{}, musig2Data,
+					pubkey, f.Requests, []ports.BoardingInput{}, []string{}, cosignersPublicKeys,
 				)
 				require.NoError(t, err)
 				require.NotEmpty(t, roundTx)
@@ -101,19 +98,16 @@ func TestBuildRoundTx(t *testing.T) {
 	if len(fixtures.Invalid) > 0 {
 		t.Run("invalid", func(t *testing.T) {
 			for _, f := range fixtures.Invalid {
-				musig2Data := make([]*tree.Musig2, 0)
+				cosignersPublicKeys := make([][]string, 0)
 
 				for range f.Requests {
-					musig2Data = append(musig2Data, &tree.Musig2{
-						CosignersPublicKeys: []string{
-							hex.EncodeToString(pubkey.SerializeCompressed()),
-						},
-						SigningType: 0,
+					cosignersPublicKeys = append(cosignersPublicKeys, []string{
+						hex.EncodeToString(pubkey.SerializeCompressed()),
 					})
 				}
 
 				roundTx, vtxoTree, connAddr, _, err := builder.BuildRoundTx(
-					pubkey, f.Requests, []ports.BoardingInput{}, []string{}, musig2Data,
+					pubkey, f.Requests, []ports.BoardingInput{}, []string{}, cosignersPublicKeys,
 				)
 				require.EqualError(t, err, f.ExpectedErr)
 				require.Empty(t, roundTx)
