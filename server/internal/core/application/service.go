@@ -37,6 +37,7 @@ type covenantlessService struct {
 	roundInterval       time.Duration
 	unilateralExitDelay common.RelativeLocktime
 	boardingExitDelay   common.RelativeLocktime
+	allowCSVBlockType   bool
 
 	wallet      ports.WalletService
 	repoManager ports.RepoManager
@@ -92,6 +93,7 @@ func NewService(
 	utxoMinAmount int64,
 	vtxoMaxAmount int64,
 	vtxoMinAmount int64,
+	allowCSVBlockType bool,
 ) (Service, error) {
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
@@ -137,6 +139,7 @@ func NewService(
 		vtxoTreeExpiry:            vtxoTreeExpiry,
 		roundInterval:             time.Duration(roundInterval) * time.Second,
 		unilateralExitDelay:       unilateralExitDelay,
+		allowCSVBlockType:         allowCSVBlockType,
 		wallet:                    walletSvc,
 		repoManager:               repoManager,
 		builder:                   builder,
@@ -448,7 +451,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 		}
 
 		// validate the vtxo script
-		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay, s.allowCSVBlockType); err != nil {
 			return nil, "", "", fmt.Errorf("invalid vtxo script: %s", err)
 		}
 
@@ -811,6 +814,18 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			return "", fmt.Errorf("vtxo %s is currently being spent", vtxoKey.String())
 		}
 
+		vtxoScript, err := tree.ParseVtxoScript(tapscripts)
+		if err != nil {
+			return "", fmt.Errorf("failed to parse vtxo taproot tree: %s", err)
+		}
+
+		exitDelay, err := vtxoScript.SmallestExitDelay()
+		if err != nil {
+			return "", fmt.Errorf("failed to get exit delay: %s", err)
+		}
+
+		locktime, disabled := common.BIP68DecodeSequence(bip322signature.TxIn[i+1].Sequence)
+
 		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{vtxoKey})
 		if err != nil || len(vtxosResult) == 0 {
 			// vtxo not found in db, check if it exists on-chain
@@ -835,27 +850,27 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 					return "", fmt.Errorf("tx %s not confirmed", vtxoKey.Txid)
 				}
 
-				vtxoScript, err := tree.ParseVtxoScript(tapscripts)
-				if err != nil {
-					return "", fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
-				}
-
 				// validate the vtxo script
 				if err := vtxoScript.Validate(s.pubkey, common.RelativeLocktime{
 					Type:  s.boardingExitDelay.Type,
 					Value: s.boardingExitDelay.Value,
-				}); err != nil {
+				}, s.allowCSVBlockType); err != nil {
 					return "", fmt.Errorf("invalid vtxo script: %s", err)
-				}
-
-				exitDelay, err := vtxoScript.SmallestExitDelay()
-				if err != nil {
-					return "", fmt.Errorf("failed to get exit delay: %s", err)
 				}
 
 				// if the exit path is available, forbid registering the boarding utxo
 				if time.Unix(blocktime, 0).Add(time.Duration(exitDelay.Seconds()) * time.Second).Before(time.Now()) {
 					return "", fmt.Errorf("tx %s expired", vtxoKey.Txid)
+				}
+
+				// If the intent is registered using a exit path that contains CSV delay, we want to verify it
+				// by shifitng the current "now" in the future of the duration of the smallest exit delay.
+				// This way, any exit order guaranteed by the exit path is maintained at intent registration
+				if !disabled {
+					delta := time.Now().Add(time.Duration(exitDelay.Seconds())*time.Second).Unix() - blocktime
+					if diff := locktime.Seconds() - delta; diff > 0 {
+						return "", fmt.Errorf("vtxo script can be used for intent registration in %d seconds", diff)
+					}
 				}
 
 				if s.utxoMaxAmount >= 0 {
@@ -877,7 +892,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 				VtxoKey:    vtxoKey,
 				Tapscripts: tapscripts,
 			}
-			boardingInput, err := newBoardingInput(tx, input, s.pubkey, s.boardingExitDelay)
+			boardingInput, err := newBoardingInput(tx, input, s.pubkey, s.boardingExitDelay, s.allowCSVBlockType)
 			if err != nil {
 				return "", err
 			}
@@ -916,17 +931,22 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			PkScript: pkScript,
 		}
 
+		// If the intent is registered using a exit path that contains CSV delay, we want to verify it
+		// by shifitng the current "now" in the future of the duration of the smallest exit delay.
+		// This way, any exit order guaranteed by the exit path is maintained at intent registration
+		if !disabled {
+			delta := time.Now().Add(time.Duration(exitDelay.Seconds())*time.Second).Unix() - vtxo.CreatedAt
+			if diff := locktime.Seconds() - delta; diff > 0 {
+				return "", fmt.Errorf("vtxo script can be used for intent registration in %d seconds", diff)
+			}
+		}
+
 		// We want to validate the taproot tree of an input vtxo only if it requires
 		// to be forfeited. Note and swept vtxos can't go onchain, so there's no reason to
 		// check if the user is trying to trick us.
 		if vtxo.RequiresForfeit() {
-			vtxoScript, err := tree.ParseVtxoScript(tapscripts)
-			if err != nil {
-				return "", fmt.Errorf("failed to parse vtxo taproot tree: %s", err)
-			}
-
 			// validate the vtxo script
-			if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+			if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay, s.allowCSVBlockType); err != nil {
 				return "", fmt.Errorf("invalid vtxo script: %s", err)
 			}
 
@@ -1091,7 +1111,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 				}
 
 				// validate the vtxo script
-				if err := vtxoScript.Validate(s.pubkey, s.boardingExitDelay); err != nil {
+				if err := vtxoScript.Validate(s.pubkey, s.boardingExitDelay, s.allowCSVBlockType); err != nil {
 					return "", fmt.Errorf("invalid vtxo script: %s", err)
 				}
 
@@ -1118,7 +1138,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 			}
 
 			tx := boardingTxs[input.Txid]
-			boardingInput, err := newBoardingInput(tx, input, s.pubkey, s.boardingExitDelay)
+			boardingInput, err := newBoardingInput(tx, input, s.pubkey, s.boardingExitDelay, s.allowCSVBlockType)
 			if err != nil {
 				return "", err
 			}
@@ -1146,7 +1166,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		}
 
 		// validate the vtxo script
-		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay, s.allowCSVBlockType); err != nil {
 			return "", fmt.Errorf("invalid vtxo script: %s", err)
 		}
 

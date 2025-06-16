@@ -5,6 +5,7 @@ import (
 
 	"github.com/btcsuite/btcd/blockchain"
 	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 )
 
 const (
@@ -84,7 +85,7 @@ func BIP68Sequence(locktime RelativeLocktime) (uint32, error) {
 	return blockchain.LockTimeToSequence(isSeconds, value), nil
 }
 
-func BIP68DecodeSequence(sequence []byte) (*RelativeLocktime, error) {
+func BIP68DecodeSequenceFromBytes(sequence []byte) (*RelativeLocktime, error) {
 	scriptNumber, err := txscript.MakeScriptNum(sequence, true, len(sequence))
 	if err != nil {
 		return nil, err
@@ -105,4 +106,24 @@ func BIP68DecodeSequence(sequence []byte) (*RelativeLocktime, error) {
 	}
 
 	return &RelativeLocktime{Type: LocktimeTypeBlock, Value: uint32(asNumber)}, nil
+}
+
+func BIP68DecodeSequence(sequenceNum uint32) (*RelativeLocktime, bool) {
+	relativeLock := int64(sequenceNum & wire.SequenceLockTimeMask)
+
+	switch {
+	case sequenceNum&wire.SequenceLockTimeDisabled == wire.SequenceLockTimeDisabled:
+		return nil, true
+	case sequenceNum&wire.SequenceLockTimeIsSeconds == wire.SequenceLockTimeIsSeconds:
+		timeLockSeconds := (relativeLock << wire.SequenceLockTimeGranularity) - 1
+		return &RelativeLocktime{
+			Type:  LocktimeTypeSecond,
+			Value: uint32(timeLockSeconds),
+		}, false
+	default:
+		return &RelativeLocktime{
+			Type:  LocktimeTypeBlock,
+			Value: uint32(relativeLock),
+		}, false
+	}
 }

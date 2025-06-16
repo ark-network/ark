@@ -73,6 +73,7 @@ type Config struct {
 	UnilateralExitDelay common.RelativeLocktime
 	BoardingExitDelay   common.RelativeLocktime
 	NoteUriPrefix       string
+	AllowCSVBlockType   bool
 
 	MarketHourStartTime     time.Time
 	MarketHourEndTime       time.Time
@@ -147,6 +148,7 @@ var (
 	VtxoMaxAmount             = "VTXO_MAX_AMOUNT"
 	UtxoMinAmount             = "UTXO_MIN_AMOUNT"
 	VtxoMinAmount             = "VTXO_MIN_AMOUNT"
+	AllowCSVBlockType         = "ALLOW_CSV_BLOCK_TYPE"
 
 	defaultDatadir             = common.AppDataDir("arkd", false)
 	defaultRoundInterval       = 30
@@ -170,6 +172,7 @@ var (
 	defaultUtxoMinAmount       = -1 // -1 means native dust limit (default)
 	defaultVtxoMinAmount       = -1 // -1 means native dust limit (default)
 	defaultVtxoMaxAmount       = -1 // -1 means no limit (default)
+	defaultAllowCSVBlockType   = false
 
 	defaultRoundMaxParticipantsCount = 128
 	defaultRoundMinParticipantsCount = 1
@@ -203,6 +206,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(UtxoMinAmount, defaultUtxoMinAmount)
 	viper.SetDefault(VtxoMaxAmount, defaultVtxoMaxAmount)
 	viper.SetDefault(VtxoMinAmount, defaultVtxoMinAmount)
+	viper.SetDefault(AllowCSVBlockType, defaultAllowCSVBlockType)
 
 	if err := initDatadir(); err != nil {
 		return nil, fmt.Errorf("error while creating datadir: %s", err)
@@ -224,6 +228,11 @@ func LoadConfig() (*Config, error) {
 		if dbUrl == "" {
 			return nil, fmt.Errorf("DB_URL not provided")
 		}
+	}
+
+	allowCSVBlockType := viper.GetBool(AllowCSVBlockType)
+	if viper.GetString(SchedulerType) == "block" {
+		allowCSVBlockType = true
 	}
 
 	return &Config{
@@ -263,6 +272,7 @@ func LoadConfig() (*Config, error) {
 		UtxoMinAmount:             viper.GetInt64(UtxoMinAmount),
 		VtxoMaxAmount:             viper.GetInt64(VtxoMaxAmount),
 		VtxoMinAmount:             viper.GetInt64(VtxoMinAmount),
+		AllowCSVBlockType:         allowCSVBlockType,
 	}, nil
 }
 
@@ -308,6 +318,9 @@ func (c *Config) Validate() error {
 	if c.VtxoTreeExpiry.Type == common.LocktimeTypeBlock {
 		if c.SchedulerType != "block" {
 			return fmt.Errorf("scheduler type must be block if vtxo tree expiry is expressed in blocks")
+		}
+		if !c.AllowCSVBlockType {
+			return fmt.Errorf("CSV block type must be allowed if vtxo tree expiry is expressed in blocks")
 		}
 	} else { // seconds
 		if c.SchedulerType != "gocron" {
@@ -522,7 +535,7 @@ func (c *Config) appService() error {
 		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
 		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 		c.RoundMinParticipantsCount, c.RoundMaxParticipantsCount,
-		c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount,
+		c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount, c.AllowCSVBlockType,
 	)
 	if err != nil {
 		return err
