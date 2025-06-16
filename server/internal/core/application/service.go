@@ -1857,20 +1857,18 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 	txRequests := make([]domain.TxRequest, 0, len(requests))
 	boardingInputs := make([]ports.BoardingInput, 0)
 	cosignersPublicKeys := make([][]string, 0)
+	uniqueSignerPubkeys := make(map[string]struct{})
+
 	for _, req := range requests {
 		txRequests = append(txRequests, req.TxRequest)
 		boardingInputs = append(boardingInputs, req.boardingInputs...)
+		for _, pubkey := range req.cosignersPublicKeys {
+			uniqueSignerPubkeys[pubkey] = struct{}{}
+		}
+
 		cosignersPublicKeys = append(cosignersPublicKeys, append(req.cosignersPublicKeys, serverPubKeyHex))
 	}
 
-	// add server pubkey in musig2data and count the number of unique keys
-	uniqueSignerPubkeys := make(map[string]struct{})
-
-	for _, cosigners := range cosignersPublicKeys {
-		for _, pubkey := range cosigners {
-			uniqueSignerPubkeys[pubkey] = struct{}{}
-		}
-	}
 	log.Debugf("building tx for round %s", round.Id)
 	unsignedRoundTx, vtxoTree, connectorAddress, connectors, err := s.builder.BuildRoundTx(
 		s.pubkey, txRequests, boardingInputs, connectorAddresses, cosignersPublicKeys,
