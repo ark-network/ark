@@ -608,7 +608,6 @@ func (h *handler) listenToEvents() {
 							Id:             e.Id,
 							IntentIdHashes: hashes,
 							BatchExpiry:    int64(e.BatchExpiry),
-							ForfeitAddress: e.ForfeitAddress,
 						},
 					},
 				})

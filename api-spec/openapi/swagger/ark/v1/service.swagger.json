@@ -497,9 +497,6 @@
         "batchExpiry": {
           "type": "string",
           "format": "int64"
-        },
-        "forfeitAddress": {
-          "type": "string"
         }
       }
     },

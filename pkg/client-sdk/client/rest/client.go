@@ -389,7 +389,6 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEve
 						ID:             e.ID,
 						IntentIdHashes: e.IntentIDHashes,
 						BatchExpiry:    int64(batchExpiry),
-						ForfeitAddress: e.ForfeitAddress,
 					}
 				case resp.Result.RoundFinalization != nil:
 					e := resp.Result.RoundFinalization

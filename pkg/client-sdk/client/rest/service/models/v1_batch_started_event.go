@@ -20,9 +20,6 @@ type V1BatchStartedEvent struct {
 	// batch expiry
 	BatchExpiry string `json:"batchExpiry,omitempty"`
 
-	// forfeit address
-	ForfeitAddress string `json:"forfeitAddress,omitempty"`
-
 	// id
 	ID string `json:"id,omitempty"`
 

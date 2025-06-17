@@ -1733,13 +1733,6 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 		return
 	}
 
-	forfeitAddress, err := s.wallet.GetForfeitAddress(ctx)
-	if err != nil {
-		round.Fail(fmt.Errorf("failed to get forfeit address: %s", err))
-		log.WithError(err).Warn("failed to get forfeit address")
-		return
-	}
-
 	// TODO take into account available liquidity
 	requests := s.txRequests.pop(num)
 
@@ -1754,7 +1747,7 @@ func (s *covenantlessService) startConfirmation(roundTiming roundTiming) {
 		return
 	}
 
-	s.propagateBatchStartedEvent(requests, forfeitAddress)
+	s.propagateBatchStartedEvent(requests)
 
 	confirmedRequests := make([]timedTxRequest, 0)
 	notConfirmedRequests := make([]timedTxRequest, 0)
@@ -2253,7 +2246,7 @@ func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	s.eventsCh <- events
 }
 
-func (s *covenantlessService) propagateBatchStartedEvent(requests []timedTxRequest, forfeitAddr string) {
+func (s *covenantlessService) propagateBatchStartedEvent(requests []timedTxRequest) {
 	intentIdsHashes := make([][32]byte, 0, len(requests))
 	for _, req := range requests {
 		intentIdsHashes = append(intentIdsHashes, req.hashID())
@@ -2268,7 +2261,6 @@ func (s *covenantlessService) propagateBatchStartedEvent(requests []timedTxReque
 		},
 		IntentIdsHashes: intentIdsHashes,
 		BatchExpiry:     s.vtxoTreeExpiry.Value,
-		ForfeitAddress:  forfeitAddr,
 	}
 	s.eventsCh <- []domain.Event{ev}
 }
