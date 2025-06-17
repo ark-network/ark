@@ -288,25 +288,51 @@ func TestUnilateralExit(t *testing.T) {
 }
 
 func TestCollaborativeExit(t *testing.T) {
-	var receive utils.ArkReceive
-	receiveStr, err := runArkCommand("receive")
-	require.NoError(t, err)
+	t.Run("with vtxo change", func(t *testing.T) {
+		var receive utils.ArkReceive
+		receiveStr, err := runArkCommand("receive")
+		require.NoError(t, err)
 
-	err = json.Unmarshal([]byte(receiveStr), &receive)
-	require.NoError(t, err)
+		err = json.Unmarshal([]byte(receiveStr), &receive)
+		require.NoError(t, err)
 
-	_, err = utils.RunCommand("nigiri", "faucet", receive.Boarding)
-	require.NoError(t, err)
+		_, err = utils.RunCommand("nigiri", "faucet", receive.Boarding, "0.00010000")
+		require.NoError(t, err)
 
-	time.Sleep(5 * time.Second)
+		time.Sleep(5 * time.Second)
 
-	_, err = runArkCommand("settle", "--password", utils.Password)
-	require.NoError(t, err)
+		_, err = runArkCommand("settle", "--password", utils.Password)
+		require.NoError(t, err)
 
-	time.Sleep(3 * time.Second)
+		time.Sleep(3 * time.Second)
 
-	_, err = runArkCommand("redeem", "--amount", "1000", "--address", redeemAddress, "--password", utils.Password)
-	require.NoError(t, err)
+		// Redeem 1000 satoshis onchain, keep 9000 satoshis offchain
+		_, err = runArkCommand("redeem", "--amount", "1000", "--address", redeemAddress, "--password", utils.Password)
+		require.NoError(t, err)
+	})
+
+	t.Run("without vtxo change", func(t *testing.T) {
+		var receive utils.ArkReceive
+		receiveStr, err := runArkCommand("receive")
+		require.NoError(t, err)
+
+		err = json.Unmarshal([]byte(receiveStr), &receive)
+		require.NoError(t, err)
+
+		_, err = utils.RunCommand("nigiri", "faucet", receive.Boarding, "0.00010000")
+		require.NoError(t, err)
+
+		time.Sleep(5 * time.Second)
+
+		_, err = runArkCommand("settle", "--password", utils.Password)
+		require.NoError(t, err)
+
+		time.Sleep(3 * time.Second)
+
+		// Redeem 10000 satoshis onchain
+		_, err = runArkCommand("redeem", "--amount", "10000", "--address", redeemAddress, "--password", utils.Password)
+		require.NoError(t, err)
+	})
 }
 
 func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {

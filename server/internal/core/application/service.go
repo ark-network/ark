@@ -1830,6 +1830,24 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		return
 	}
 
+	unsignedPsbt, err := psbt.NewFromRawBytes(strings.NewReader(unsignedRoundTx), true)
+	if err != nil {
+		s.liveStore.CurrentRound().Fail(fmt.Errorf("failed to parse round tx: %s", err))
+		log.WithError(err).Warn("failed to parse round tx")
+		return
+	}
+
+	if err := s.liveStore.CurrentRound().Upsert(func(r *domain.Round) *domain.Round {
+		ur := *r
+		ur.Txid = unsignedPsbt.UnsignedTx.TxHash().String()
+		ur.CommitmentTx = unsignedRoundTx
+		return &ur
+	}); err != nil {
+		s.liveStore.CurrentRound().Fail(fmt.Errorf("failed to update round: %s", err))
+		log.WithError(err).Warn("failed to update round")
+		return
+	}
+
 	if len(vtxoTree) > 0 {
 		sweepClosure := tree.CSVMultisigClosure{
 			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{s.pubkey}},
@@ -1838,13 +1856,6 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 
 		sweepScript, err := sweepClosure.Script()
 		if err != nil {
-			return
-		}
-
-		unsignedPsbt, err := psbt.NewFromRawBytes(strings.NewReader(unsignedRoundTx), true)
-		if err != nil {
-			s.liveStore.CurrentRound().Fail(fmt.Errorf("failed to parse round tx: %s", err))
-			log.WithError(err).Warn("failed to parse round tx")
 			return
 		}
 
@@ -1879,17 +1890,6 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		s.liveStore.TreeSigingSessions().New(roundId, uniqueSignerPubkeys)
 
 		log.Debugf("signing session created for round %s with %d signers", roundId, len(uniqueSignerPubkeys))
-
-		if err := s.liveStore.CurrentRound().Upsert(func(r *domain.Round) *domain.Round {
-			ur := *r
-			ur.Txid = unsignedPsbt.UnsignedTx.TxHash().String()
-			ur.CommitmentTx = unsignedRoundTx
-			return &ur
-		}); err != nil {
-			s.liveStore.CurrentRound().Fail(fmt.Errorf("failed to update round: %s", err))
-			log.WithError(err).Warn("failed to update round")
-			return
-		}
 
 		// send back the unsigned tree & all cosigners pubkeys
 		listOfCosignersPubkeys := make([]string, 0, len(uniqueSignerPubkeys))
