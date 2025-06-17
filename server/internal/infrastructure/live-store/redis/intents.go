@@ -133,11 +133,10 @@ func (s *txRequestsStore) Push(request domain.TxRequest, boardingInputs []ports.
 
 			return err
 		}, txReqStoreReqIdsKey)
-		if errors.Is(err, redis.TxFailedErr) {
-			continue
+		if err == nil {
+			return nil
 		}
-
-		return err
+		time.Sleep(10 * time.Millisecond)
 	}
 	return fmt.Errorf("push failed after %v retries", s.numOfRetries)
 }
