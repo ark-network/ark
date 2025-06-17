@@ -53,14 +53,14 @@ type Round struct {
 	Version            uint
 	Swept              bool // true if all the vtxos are vtxo.Swept or vtxo.Redeemed
 	VtxoTreeExpiration int64
-	changes            []Event
+	Changes            []Event
 }
 
 func NewRound() *Round {
 	return &Round{
 		Id:         uuid.New().String(),
 		TxRequests: make(map[string]TxRequest),
-		changes:    make([]Event, 0),
+		Changes:    make([]Event, 0),
 	}
 }
 
@@ -71,13 +71,13 @@ func NewRoundFromEvents(events []Event) *Round {
 		r.on(event, true)
 	}
 
-	r.changes = append([]Event{}, events...)
+	r.Changes = append([]Event{}, events...)
 
 	return r
 }
 
 func (r *Round) Events() []Event {
-	return r.changes
+	return r.Changes
 }
 
 func (r *Round) StartRegistration() ([]Event, error) {
@@ -282,9 +282,9 @@ func (r *Round) on(event Event, replayed bool) {
 }
 
 func (r *Round) raise(event Event) {
-	if r.changes == nil {
-		r.changes = make([]Event, 0)
+	if r.Changes == nil {
+		r.Changes = make([]Event, 0)
 	}
-	r.changes = append(r.changes, event)
+	r.Changes = append(r.Changes, event)
 	r.on(event, false)
 }
