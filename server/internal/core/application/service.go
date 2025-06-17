@@ -1886,6 +1886,16 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		return
 	}
 
+	unsignedPsbt, err := psbt.NewFromRawBytes(strings.NewReader(unsignedRoundTx), true)
+	if err != nil {
+		round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
+		log.WithError(err).Warn("failed to parse round tx")
+		return
+	}
+
+	s.currentRound.Txid = unsignedPsbt.UnsignedTx.TxHash().String()
+	s.currentRound.CommitmentTx = unsignedRoundTx
+
 	if len(vtxoTree) > 0 {
 		sweepClosure := tree.CSVMultisigClosure{
 			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{s.pubkey}},
@@ -1894,13 +1904,6 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 
 		sweepScript, err := sweepClosure.Script()
 		if err != nil {
-			return
-		}
-
-		unsignedPsbt, err := psbt.NewFromRawBytes(strings.NewReader(unsignedRoundTx), true)
-		if err != nil {
-			round.Fail(fmt.Errorf("failed to parse round tx: %s", err))
-			log.WithError(err).Warn("failed to parse round tx")
 			return
 		}
 
@@ -1937,9 +1940,6 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		s.treeSigningSessions[round.Id] = signingSession
 
 		log.Debugf("signing session created for round %s with %d signers", round.Id, len(uniqueSignerPubkeys))
-
-		s.currentRound.Txid = unsignedPsbt.UnsignedTx.TxHash().String()
-		s.currentRound.CommitmentTx = unsignedRoundTx
 
 		// send back the unsigned tree & all cosigners pubkeys
 		listOfCosignersPubkeys := make([]string, 0, len(uniqueSignerPubkeys))
