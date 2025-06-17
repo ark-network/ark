@@ -9,6 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
+	inmemorylivestore "github.com/ark-network/ark/server/internal/infrastructure/live-store/inmemory"
+	redislivestore "github.com/ark-network/ark/server/internal/infrastructure/live-store/redis"
+
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -47,6 +52,10 @@ var (
 		"env":  {},
 		"file": {},
 	}
+	supportedLiveStores = supportedType{
+		"inmemory": {},
+		"redis":    {},
+	}
 )
 
 type Config struct {
@@ -68,6 +77,9 @@ type Config struct {
 	RoundInterval       int64
 	SchedulerType       string
 	TxBuilderType       string
+	LiveStoreType       string
+	RedisUrl            string
+	RedisTxNumOfRetries int
 	WalletAddr          string
 	VtxoTreeExpiry      common.RelativeLocktime
 	UnilateralExitDelay common.RelativeLocktime
@@ -102,6 +114,7 @@ type Config struct {
 	scanner   ports.BlockchainScanner
 	scheduler ports.SchedulerService
 	unlocker  ports.Unlocker
+	liveStore ports.LiveStore
 	network   *common.Network
 }
 
@@ -124,6 +137,9 @@ var (
 	EventDbUrl                = "EVENT_DB_URL"
 	SchedulerType             = "SCHEDULER_TYPE"
 	TxBuilderType             = "TX_BUILDER_TYPE"
+	LiveStoreType             = "LIVE_STORE_TYPE"
+	RedisUrl                  = "REDIS_URL"
+	RedisTxNumOfRetries       = "REDIS_NUM_OF_RETRIES"
 	LogLevel                  = "LOG_LEVEL"
 	VtxoTreeExpiry            = "VTXO_TREE_EXPIRY"
 	UnilateralExitDelay       = "UNILATERAL_EXIT_DELAY"
@@ -157,6 +173,8 @@ var (
 	defaultEventDbType         = "postgres"
 	defaultSchedulerType       = "gocron"
 	defaultTxBuilderType       = "covenantless"
+	defaultLiveStoreType       = "redis"
+	defaultRedisTxNumOfRetries = 10
 	defaultEsploraURL          = "https://blockstream.info/api"
 	defaultLogLevel            = 4
 	defaultVtxoTreeExpiry      = 604672  // 7 days
@@ -206,6 +224,8 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(UtxoMinAmount, defaultUtxoMinAmount)
 	viper.SetDefault(VtxoMaxAmount, defaultVtxoMaxAmount)
 	viper.SetDefault(VtxoMinAmount, defaultVtxoMinAmount)
+	viper.SetDefault(LiveStoreType, defaultLiveStoreType)
+	viper.SetDefault(RedisTxNumOfRetries, defaultRedisTxNumOfRetries)
 	viper.SetDefault(AllowCSVBlockType, defaultAllowCSVBlockType)
 
 	if err := initDatadir(); err != nil {
@@ -230,6 +250,14 @@ func LoadConfig() (*Config, error) {
 		}
 	}
 
+	var redisUrl string
+	if viper.GetString(LiveStoreType) == "redis" {
+		redisUrl = viper.GetString(RedisUrl)
+		if redisUrl == "" {
+			return nil, fmt.Errorf("REDIS_URL not provided")
+		}
+	}
+
 	allowCSVBlockType := viper.GetBool(AllowCSVBlockType)
 	if viper.GetString(SchedulerType) == "block" {
 		allowCSVBlockType = true
@@ -244,6 +272,9 @@ func LoadConfig() (*Config, error) {
 		DbType:                    viper.GetString(DbType),
 		SchedulerType:             viper.GetString(SchedulerType),
 		TxBuilderType:             viper.GetString(TxBuilderType),
+		LiveStoreType:             viper.GetString(LiveStoreType),
+		RedisUrl:                  redisUrl,
+		RedisTxNumOfRetries:       viper.GetInt(RedisTxNumOfRetries),
 		NoTLS:                     viper.GetBool(NoTLS),
 		DbDir:                     dbPath,
 		DbUrl:                     dbUrl,
@@ -311,6 +342,9 @@ func (c *Config) Validate() error {
 	}
 	if len(c.UnlockerType) > 0 && !supportedUnlockers.supports(c.UnlockerType) {
 		return fmt.Errorf("unlocker type not supported, please select one of: %s", supportedUnlockers)
+	}
+	if len(c.LiveStoreType) > 0 && !supportedLiveStores.supports(c.LiveStoreType) {
+		return fmt.Errorf("live store type not supported, please select one of: %s", supportedLiveStores)
 	}
 	if c.RoundInterval < 2 {
 		return fmt.Errorf("invalid round interval, must be at least 2 seconds")
@@ -383,6 +417,9 @@ func (c *Config) Validate() error {
 		return err
 	}
 	if err := c.scannerService(); err != nil {
+		return err
+	}
+	if err := c.liveStoreService(); err != nil {
 		return err
 	}
 	if err := c.schedulerService(); err != nil {
@@ -510,6 +547,35 @@ func (c *Config) scannerService() error {
 	return nil
 }
 
+func (c *Config) liveStoreService() error {
+	if c.txBuilder == nil {
+		return fmt.Errorf("tx builder not set")
+	}
+
+	var liveStoreSvc ports.LiveStore
+	var err error
+	switch c.LiveStoreType {
+	case "inmemory":
+		liveStoreSvc = inmemorylivestore.NewLiveStore(c.txBuilder)
+	case "redis":
+		redisOpts, err := redis.ParseURL(c.RedisUrl)
+		if err != nil {
+			return fmt.Errorf("invalid REDIS_URL: %w", err)
+		}
+		rdb := redis.NewClient(redisOpts)
+		liveStoreSvc = redislivestore.NewLiveStore(rdb, c.txBuilder, c.RedisTxNumOfRetries)
+	default:
+		err = fmt.Errorf("unknown liveStore type")
+	}
+
+	if err != nil {
+		return err
+	}
+
+	c.liveStore = liveStoreSvc
+	return nil
+}
+
 func (c *Config) schedulerService() error {
 	var svc ports.SchedulerService
 	var err error
@@ -532,7 +598,7 @@ func (c *Config) schedulerService() error {
 func (c *Config) appService() error {
 	svc, err := application.NewService(
 		*c.network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay,
-		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
+		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.liveStore, c.NoteUriPrefix,
 		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 		c.RoundMinParticipantsCount, c.RoundMaxParticipantsCount,
 		c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount, c.AllowCSVBlockType,
