@@ -59,7 +59,6 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 			ID:             ee.GetId(),
 			IntentIdHashes: ee.GetIntentIdHashes(),
 			BatchExpiry:    ee.GetBatchExpiry(),
-			ForfeitAddress: ee.GetForfeitAddress(),
 		}, nil
 	}
 

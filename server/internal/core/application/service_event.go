@@ -18,7 +18,6 @@ type BatchStarted struct {
 	domain.RoundEvent
 	IntentIdsHashes [][32]byte
 	BatchExpiry     uint32
-	ForfeitAddress  string
 }
 
 // signer should react to this event by generating a musig2 nonce for each transaction in the tree

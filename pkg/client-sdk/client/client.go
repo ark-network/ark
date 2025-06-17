@@ -288,7 +288,6 @@ type BatchStartedEvent struct {
 	ID             string
 	IntentIdHashes []string
 	BatchExpiry    int64
-	ForfeitAddress string
 }
 
 func (e BatchStartedEvent) isRoundEvent() {}
