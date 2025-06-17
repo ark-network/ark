@@ -92,3 +92,14 @@ pgmigrate:
 # pgsqlc: generate sql code for postgres
 pgsqlc:
 	@docker run --rm -v $(PWD)/internal/infrastructure/db/postgres:/src -w /src sqlc/sqlc generate
+
+
+#### Redis database ####
+# redis-up: starts redis db inside docker container
+redis-up:
+	@docker run --name ark-redis -d -p 6379:6379 redis:7-alpine
+
+# redis-down: stop and remove redis container
+redis-down:
+	@docker stop ark-redis || true
+	@docker rm ark-redis || true

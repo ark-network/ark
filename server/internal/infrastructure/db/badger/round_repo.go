@@ -212,15 +212,31 @@ func (r *roundRepository) findRound(
 func (r *roundRepository) addOrUpdateRound(
 	ctx context.Context, round domain.Round,
 ) error {
+	rnd := domain.Round{
+		Id:                 round.Id,
+		StartingTimestamp:  round.StartingTimestamp,
+		EndingTimestamp:    round.EndingTimestamp,
+		Stage:              round.Stage,
+		TxRequests:         round.TxRequests,
+		Txid:               round.Txid,
+		CommitmentTx:       round.CommitmentTx,
+		ForfeitTxs:         round.ForfeitTxs,
+		VtxoTree:           round.VtxoTree,
+		Connectors:         round.Connectors,
+		ConnectorAddress:   round.ConnectorAddress,
+		Version:            round.Version,
+		Swept:              round.Swept,
+		VtxoTreeExpiration: round.VtxoTreeExpiration,
+	}
 	var upsertFn func() error
 	if ctx.Value("tx") != nil {
 		tx := ctx.Value("tx").(*badger.Txn)
 		upsertFn = func() error {
-			return r.store.TxUpsert(tx, round.Id, round)
+			return r.store.TxUpsert(tx, round.Id, rnd)
 		}
 	} else {
 		upsertFn = func() error {
-			return r.store.Upsert(round.Id, round)
+			return r.store.Upsert(round.Id, rnd)
 		}
 	}
 	if err := upsertFn(); err != nil {
