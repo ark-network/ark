@@ -21,9 +21,10 @@ import (
 	"crypto/sha256"
 	"errors"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"sync"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/redis/go-redis/v9"
@@ -159,7 +160,7 @@ func (s *confirmationSessionsStore) watchSessionCompletion() {
 		numIntents, _ := s.rdb.Get(ctx, confirmationNumIntentsKey).Int()
 		numConfirmed, _ := s.rdb.Get(ctx, confirmationNumConfirmedKey).Int()
 		if numIntents > 0 && numConfirmed == numIntents {
-			chOnce.Do(func() { close(s.sessionCompleteCh) })
+			chOnce.Do(func() { s.sessionCompleteCh <- struct{}{} })
 			return
 		}
 	}
