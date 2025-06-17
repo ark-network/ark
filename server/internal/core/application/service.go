@@ -811,6 +811,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			return "", fmt.Errorf("failed to get exit delay: %s", err)
 		}
 
+		now := time.Now()
 		locktime, disabled := common.BIP68DecodeSequence(bip322signature.TxIn[i+1].Sequence)
 
 		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{vtxoKey})
@@ -854,7 +855,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 				// by shifitng the current "now" in the future of the duration of the smallest exit delay.
 				// This way, any exit order guaranteed by the exit path is maintained at intent registration
 				if !disabled {
-					delta := time.Now().Add(time.Duration(exitDelay.Seconds())*time.Second).Unix() - blocktime
+					delta := now.Add(time.Duration(exitDelay.Seconds())*time.Second).Unix() - blocktime
 					if diff := locktime.Seconds() - delta; diff > 0 {
 						return "", fmt.Errorf("vtxo script can be used for intent registration in %d seconds", diff)
 					}
@@ -922,7 +923,7 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 		// by shifitng the current "now" in the future of the duration of the smallest exit delay.
 		// This way, any exit order guaranteed by the exit path is maintained at intent registration
 		if !disabled {
-			delta := time.Now().Add(time.Duration(exitDelay.Seconds())*time.Second).Unix() - vtxo.CreatedAt
+			delta := now.Add(time.Duration(exitDelay.Seconds())*time.Second).Unix() - vtxo.CreatedAt
 			if diff := locktime.Seconds() - delta; diff > 0 {
 				return "", fmt.Errorf("vtxo script can be used for intent registration in %d seconds", diff)
 			}
