@@ -130,10 +130,11 @@ func TestTxGraphSubGraph(t *testing.T) {
 
 				// Verify the subgraph contains the root and the leaf
 				allTxids := make([]string, 0)
-				subGraph.Apply(func(tx *tree.TxGraph) (bool, error) {
+				err = subGraph.Apply(func(tx *tree.TxGraph) (bool, error) {
 					allTxids = append(allTxids, tx.Root.UnsignedTx.TxID())
 					return true, nil
 				})
+				require.NoError(t, err)
 
 				require.Contains(t, allTxids, rootTxid)
 				require.Contains(t, allTxids, leafTxid)
@@ -182,10 +183,11 @@ func TestTxGraphSubGraph(t *testing.T) {
 
 				// Verify the subgraph contains all target txids
 				allTxids := make([]string, 0)
-				subGraph.Apply(func(tx *tree.TxGraph) (bool, error) {
+				err = subGraph.Apply(func(tx *tree.TxGraph) (bool, error) {
 					allTxids = append(allTxids, tx.Root.UnsignedTx.TxID())
 					return true, nil
 				})
+				require.NoError(t, err)
 
 				for _, targetTxid := range testLeafTxids {
 					require.Contains(t, allTxids, targetTxid)

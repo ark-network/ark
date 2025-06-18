@@ -99,7 +99,7 @@ func ValidateVtxoTxGraph(
 	}
 
 	// iterates over all the nodes of the graph to verify that cosigners public keys are corresponding to the parent output
-	graph.Apply(func(g *TxGraph) (bool, error) {
+	if err := graph.Apply(func(g *TxGraph) (bool, error) {
 		for childIndex, child := range g.Children {
 			parentOutput := g.Root.UnsignedTx.TxOut[childIndex]
 			previousScriptKey := parentOutput.PkScript[2:]
@@ -126,7 +126,9 @@ func ValidateVtxoTxGraph(
 			}
 		}
 		return true, nil
-	})
+	}); err != nil {
+		return err
+	}
 
 	return nil
 }

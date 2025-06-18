@@ -190,7 +190,7 @@ func (s *covenantlessService) broadcastConnectorBranch(ctx context.Context, conn
 		return fmt.Errorf("failed to get branch of connector: %s", err)
 	}
 
-	branch.Apply(func(g *tree.TxGraph) (bool, error) {
+	return branch.Apply(func(g *tree.TxGraph) (bool, error) {
 		txid := g.Root.UnsignedTx.TxID()
 		_, err := s.wallet.GetTransaction(ctx, txid)
 		// if err, it means the tx is offchain, must be broadcasted
@@ -231,8 +231,6 @@ func (s *covenantlessService) broadcastConnectorBranch(ctx context.Context, conn
 
 		return true, nil
 	})
-
-	return nil
 }
 
 // bumpAnchorTx is crafting and signing a transaction bumping the fees for a given tx with P2A output
