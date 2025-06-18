@@ -1002,19 +1002,15 @@
     "v1IndexerNode": {
       "type": "object",
       "properties": {
-        "txid": {
+        "tx": {
           "type": "string"
         },
-        "parentTxid": {
-          "type": "string"
-        },
-        "level": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "levelIndex": {
-          "type": "integer",
-          "format": "int32"
+        "children": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "vout -\u003e txid"
         }
       }
     },

@@ -1,9 +1,7 @@
 package grpcclient
 
 import (
-	"encoding/hex"
 	"fmt"
-	"strings"
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
@@ -88,8 +86,9 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 	}
 
 	if ee := e.GetRoundSigningNoncesGenerated(); ee != nil {
-		nonces, err := tree.DecodeNonces(hex.NewDecoder(strings.NewReader(ee.GetTreeNonces())))
-		if err != nil {
+		nonces := make(tree.TreeNonces)
+
+		if err := nonces.UnmarshalJSON([]byte(ee.GetTreeNonces())); err != nil {
 			return nil, err
 		}
 		return client.RoundSigningNoncesGeneratedEvent{
@@ -99,19 +98,13 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 	}
 
 	if ee := e.GetBatchTree(); ee != nil {
-		treeTx := ee.GetTreeTx()
-
 		return client.BatchTreeEvent{
 			ID:         ee.GetId(),
 			Topic:      ee.GetTopic(),
 			BatchIndex: ee.GetBatchIndex(),
-			Node: tree.Node{
-				Txid:       treeTx.GetTxid(),
-				Tx:         treeTx.GetTx(),
-				ParentTxid: treeTx.GetParentTxid(),
-				Level:      treeTx.GetLevel(),
-				LevelIndex: treeTx.GetLevelIndex(),
-				Leaf:       treeTx.GetLeaf(),
+			TxGraphChunk: tree.TxGraphChunk{
+				Tx:       ee.GetTx(),
+				Children: ee.GetChildren(),
 			},
 		}, nil
 	}
@@ -121,8 +114,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 			ID:         ee.GetId(),
 			Topic:      ee.GetTopic(),
 			BatchIndex: ee.GetBatchIndex(),
-			Level:      ee.GetLevel(),
-			LevelIndex: ee.GetLevelIndex(),
+			Txid:       ee.GetTxid(),
 			Signature:  ee.GetSignature(),
 		}, nil
 	}
@@ -183,33 +175,6 @@ func (i ins) toProto() []*arkv1.Input {
 		list = append(list, toProtoInput(ii))
 	}
 	return list
-}
-
-type treeFromProto struct {
-	*arkv1.Tree
-}
-
-func (t treeFromProto) parse() tree.TxTree {
-	levels := make(tree.TxTree, 0, len(t.GetLevels()))
-
-	for _, level := range t.GetLevels() {
-		nodes := make([]tree.Node, 0, len(level.Nodes))
-
-		for _, node := range level.Nodes {
-			nodes = append(nodes, tree.Node{
-				Txid:       node.GetTxid(),
-				Tx:         node.GetTx(),
-				ParentTxid: node.GetParentTxid(),
-				Leaf:       node.GetLeaf(),
-				Level:      node.GetLevel(),
-				LevelIndex: node.GetLevelIndex(),
-			})
-		}
-
-		levels = append(levels, nodes)
-	}
-
-	return levels
 }
 
 type connectorsIndexFromProto struct {

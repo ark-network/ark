@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common/note"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 )
@@ -141,8 +142,13 @@ func (a *adminService) GetScheduledSweeps(ctx context.Context) ([]ScheduledSweep
 			return nil, err
 		}
 
+		vtxoTree, err := tree.NewTxGraph(round.VtxoTree)
+		if err != nil {
+			return nil, err
+		}
+
 		sweepable, err := findSweepableOutputs(
-			ctx, a.walletSvc, a.txBuilder, a.sweeperTimeUnit, round.VtxoTree,
+			ctx, a.walletSvc, a.txBuilder, a.sweeperTimeUnit, vtxoTree,
 		)
 		if err != nil {
 			return nil, err

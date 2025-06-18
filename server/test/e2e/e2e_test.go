@@ -391,7 +391,10 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 
 	expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
 
-	branch, err := redemption.NewRedeemBranch(expl, round.Tree, vtxo)
+	graph, err := tree.NewTxGraph(round.Tree)
+	require.NoError(t, err)
+
+	branch, err := redemption.NewRedeemBranch(expl, graph, vtxo)
 	require.NoError(t, err)
 
 	txs, err := branch.RedeemPath()
@@ -497,7 +500,10 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 
 		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
 
-		branch, err := redemption.NewRedeemBranch(expl, round.Tree, vtxo)
+		graph, err := tree.NewTxGraph(round.Tree)
+		require.NoError(t, err)
+
+		branch, err := redemption.NewRedeemBranch(expl, graph, vtxo)
 		require.NoError(t, err)
 
 		txs, err := branch.RedeemPath()
@@ -783,7 +789,10 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		round, err := grpcTransportClient.GetRound(ctx, initialTreeVtxo.RoundTxid)
 		require.NoError(t, err)
 
-		branch, err := redemption.NewRedeemBranch(explorer, round.Tree, initialTreeVtxo)
+		graph, err := tree.NewTxGraph(round.Tree)
+		require.NoError(t, err)
+
+		branch, err := redemption.NewRedeemBranch(explorer, graph, initialTreeVtxo)
 		require.NoError(t, err)
 
 		txs, err := branch.RedeemPath()
@@ -907,7 +916,7 @@ func TestSubDustVtxoTransaction(t *testing.T) {
 	// resend some funds to bob so he can settle
 	_, err = runArkCommand("send", "--amount", "1000", "--to", bobAddr, "--password", utils.Password)
 	require.NoError(t, err)
-	
+
 	// now that bob has enough funds (greater than dust), he should be able to settle
 	_, err = bob.Settle(ctx, arksdk.WithSubDustVtxos)
 	require.NoError(t, err)

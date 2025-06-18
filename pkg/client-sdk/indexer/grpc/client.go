@@ -8,9 +8,7 @@ import (
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
-	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/indexer"
-	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -19,9 +17,8 @@ import (
 )
 
 type grpcClient struct {
-	conn      *grpc.ClientConn
-	svc       arkv1.IndexerServiceClient
-	treeCache *utils.Cache[tree.TxTree]
+	conn *grpc.ClientConn
+	svc  arkv1.IndexerServiceClient
 }
 
 func NewClient(serverUrl string) (indexer.Indexer, error) {
@@ -46,9 +43,8 @@ func NewClient(serverUrl string) (indexer.Indexer, error) {
 	}
 
 	svc := arkv1.NewIndexerServiceClient(conn)
-	treeCache := utils.NewCache[tree.TxTree]()
 
-	return &grpcClient{conn, svc, treeCache}, nil
+	return &grpcClient{conn, svc}, nil
 }
 
 func (a *grpcClient) GetCommitmentTx(ctx context.Context, txid string) (*indexer.CommitmentTx, error) {
@@ -145,10 +141,8 @@ func (a *grpcClient) GetVtxoTree(
 	nodes := make([]indexer.TxNode, 0, len(resp.GetVtxoTree()))
 	for _, node := range resp.GetVtxoTree() {
 		nodes = append(nodes, indexer.TxNode{
-			Txid:       node.GetTxid(),
-			ParentTxid: node.GetParentTxid(),
-			Level:      node.GetLevel(),
-			LevelIndex: node.GetLevelIndex(),
+			Tx:       node.GetTx(),
+			Children: node.GetChildren(),
 		})
 	}
 
@@ -250,10 +244,8 @@ func (a *grpcClient) GetConnectors(
 	connectors := make([]indexer.TxNode, 0, len(resp.GetConnectors()))
 	for _, connector := range resp.GetConnectors() {
 		connectors = append(connectors, indexer.TxNode{
-			Txid:       connector.GetTxid(),
-			ParentTxid: connector.GetParentTxid(),
-			Level:      connector.GetLevel(),
-			LevelIndex: connector.GetLevelIndex(),
+			Tx:       connector.GetTx(),
+			Children: connector.GetChildren(),
 		})
 	}
 

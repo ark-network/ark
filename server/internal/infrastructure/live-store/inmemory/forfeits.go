@@ -14,7 +14,7 @@ type forfeitTxsStore struct {
 	lock            sync.RWMutex
 	builder         ports.TxBuilder
 	forfeitTxs      map[domain.VtxoKey]string
-	connectors      tree.TxTree
+	connectors      *tree.TxGraph
 	connectorsIndex map[string]domain.Outpoint
 	vtxos           []domain.Vtxo
 }
@@ -26,7 +26,7 @@ func NewForfeitTxsStore(txBuilder ports.TxBuilder) ports.ForfeitTxsStore {
 	}
 }
 
-func (m *forfeitTxsStore) Init(connectors tree.TxTree, requests []domain.TxRequest) error {
+func (m *forfeitTxsStore) Init(connectors *tree.TxGraph, requests []domain.TxRequest) error {
 	vtxosToSign := make([]domain.Vtxo, 0)
 	for _, request := range requests {
 		for _, vtxo := range request.Inputs {
@@ -60,9 +60,9 @@ func (m *forfeitTxsStore) Init(connectors tree.TxTree, requests []domain.TxReque
 			return fmt.Errorf("no connectors found")
 		}
 
-		for _, n := range leaves {
+		for _, leaf := range leaves {
 			connectorsOutpoints = append(connectorsOutpoints, domain.Outpoint{
-				Txid: n.Txid,
+				Txid: leaf.UnsignedTx.TxID(),
 				VOut: 0,
 			})
 		}
@@ -94,7 +94,7 @@ func (m *forfeitTxsStore) Sign(txs []string) error {
 	m.lock.Lock()
 	defer m.lock.Unlock()
 
-	if len(m.vtxos) == 0 || len(m.connectors) == 0 {
+	if len(m.vtxos) == 0 || m.connectors == nil {
 		return fmt.Errorf("forfeit txs map not initialized")
 	}
 

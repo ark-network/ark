@@ -7,6 +7,7 @@ package models
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
@@ -19,7 +20,7 @@ import (
 type V1Round struct {
 
 	// connectors
-	Connectors *V1Tree `json:"connectors,omitempty"`
+	Connectors []*V1TxGraphChunk `json:"connectors"`
 
 	// end
 	End string `json:"end,omitempty"`
@@ -40,7 +41,7 @@ type V1Round struct {
 	Start string `json:"start,omitempty"`
 
 	// vtxo tree
-	VtxoTree *V1Tree `json:"vtxoTree,omitempty"`
+	VtxoTree []*V1TxGraphChunk `json:"vtxoTree"`
 }
 
 // Validate validates this v1 round
@@ -70,15 +71,22 @@ func (m *V1Round) validateConnectors(formats strfmt.Registry) error {
 		return nil
 	}
 
-	if m.Connectors != nil {
-		if err := m.Connectors.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("connectors")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("connectors")
-			}
-			return err
+	for i := 0; i < len(m.Connectors); i++ {
+		if swag.IsZero(m.Connectors[i]) { // not required
+			continue
 		}
+
+		if m.Connectors[i] != nil {
+			if err := m.Connectors[i].Validate(formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("connectors" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("connectors" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
+		}
+
 	}
 
 	return nil
@@ -108,15 +116,22 @@ func (m *V1Round) validateVtxoTree(formats strfmt.Registry) error {
 		return nil
 	}
 
-	if m.VtxoTree != nil {
-		if err := m.VtxoTree.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("vtxoTree")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("vtxoTree")
-			}
-			return err
+	for i := 0; i < len(m.VtxoTree); i++ {
+		if swag.IsZero(m.VtxoTree[i]) { // not required
+			continue
 		}
+
+		if m.VtxoTree[i] != nil {
+			if err := m.VtxoTree[i].Validate(formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("vtxoTree" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("vtxoTree" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
+		}
+
 	}
 
 	return nil
@@ -146,20 +161,24 @@ func (m *V1Round) ContextValidate(ctx context.Context, formats strfmt.Registry) 
 
 func (m *V1Round) contextValidateConnectors(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.Connectors != nil {
+	for i := 0; i < len(m.Connectors); i++ {
 
-		if swag.IsZero(m.Connectors) { // not required
-			return nil
-		}
+		if m.Connectors[i] != nil {
 
-		if err := m.Connectors.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("connectors")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("connectors")
+			if swag.IsZero(m.Connectors[i]) { // not required
+				return nil
 			}
-			return err
+
+			if err := m.Connectors[i].ContextValidate(ctx, formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("connectors" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("connectors" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
 		}
+
 	}
 
 	return nil
@@ -188,20 +207,24 @@ func (m *V1Round) contextValidateStage(ctx context.Context, formats strfmt.Regis
 
 func (m *V1Round) contextValidateVtxoTree(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.VtxoTree != nil {
+	for i := 0; i < len(m.VtxoTree); i++ {
 
-		if swag.IsZero(m.VtxoTree) { // not required
-			return nil
-		}
+		if m.VtxoTree[i] != nil {
 
-		if err := m.VtxoTree.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("vtxoTree")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("vtxoTree")
+			if swag.IsZero(m.VtxoTree[i]) { // not required
+				return nil
 			}
-			return err
+
+			if err := m.VtxoTree[i].ContextValidate(ctx, formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("vtxoTree" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("vtxoTree" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
 		}
+
 	}
 
 	return nil

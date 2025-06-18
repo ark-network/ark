@@ -7,7 +7,6 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -51,13 +50,13 @@ func BuildVtxoTree(
 	receivers []Leaf,
 	sweepTapTreeRoot []byte,
 	vtxoTreeExpiry common.RelativeLocktime,
-) (TxTree, error) {
+) (*TxGraph, error) {
 	root, err := createTxTree(receivers, sweepTapTreeRoot, vtxoTreeRadix)
 	if err != nil {
 		return nil, err
 	}
 
-	return toTxTree(root, initialInput, &vtxoTreeExpiry)
+	return nodeToGraph(root, initialInput, &vtxoTreeExpiry)
 }
 
 // CraftConnectorsOutput returns the taproot script and the amount of the root shared output of a connectors tree
@@ -90,63 +89,40 @@ func CraftConnectorsOutput(
 func BuildConnectorsTree(
 	initialInput *wire.OutPoint,
 	receivers []Leaf,
-) (TxTree, error) {
+) (*TxGraph, error) {
 	root, err := createTxTree(receivers, nil, connectorsTreeRadix)
 	if err != nil {
 		return nil, err
 	}
 
-	return toTxTree(root, initialInput, nil)
+	return nodeToGraph(root, initialInput, nil)
 }
 
-// toTxTree converts a node root to VtxoTree matrix
-func toTxTree(root node, initialInput *wire.OutPoint, expiry *common.RelativeLocktime) (TxTree, error) {
-	vtxoTree := make(TxTree, 0)
-
-	ins := []*wire.OutPoint{initialInput}
-	nodes := []node{root}
-
-	level := int32(0)
-
-	for len(nodes) > 0 {
-		nextNodes := make([]node, 0)
-		nextInputsArgs := make([]*wire.OutPoint, 0)
-
-		treeLevel := make([]Node, 0)
-
-		for i, node := range nodes {
-			treeNode, err := getTreeNode(node, ins[i], expiry, level, int32(i))
-			if err != nil {
-				return nil, err
-			}
-
-			nodeTxHash, err := chainhash.NewHashFromStr(treeNode.Txid)
-			if err != nil {
-				return nil, err
-			}
-
-			treeLevel = append(treeLevel, treeNode)
-
-			children := node.getChildren()
-
-			for i, child := range children {
-				nextNodes = append(nextNodes, child)
-
-				nextInputsArgs = append(nextInputsArgs, &wire.OutPoint{
-					Hash:  *nodeTxHash,
-					Index: uint32(i),
-				})
-			}
-		}
-
-		level++
-
-		vtxoTree = append(vtxoTree, treeLevel)
-		nodes = append([]node{}, nextNodes...)
-		ins = append([]*wire.OutPoint{}, nextInputsArgs...)
+func nodeToGraph(n node, initialInput *wire.OutPoint, expiry *common.RelativeLocktime) (*TxGraph, error) {
+	tx, err := getTx(n, initialInput, expiry)
+	if err != nil {
+		return nil, err
 	}
 
-	return vtxoTree, nil
+	graph := &TxGraph{
+		Root:     tx,
+		Children: make(map[uint32]*TxGraph),
+	}
+
+	children := n.getChildren()
+	for i, child := range children {
+		childGraph, err := nodeToGraph(child, &wire.OutPoint{
+			Hash:  tx.UnsignedTx.TxHash(),
+			Index: uint32(i),
+		}, expiry)
+		if err != nil {
+			return nil, err
+		}
+
+		graph.Children[uint32(i)] = childGraph
+	}
+
+	return graph, nil
 }
 
 type node interface {
@@ -219,34 +195,6 @@ func (b *branch) getOutputs() ([]*wire.TxOut, error) {
 	}
 
 	return append(outputs, AnchorOutput()), nil
-}
-
-func getTreeNode(
-	n node,
-	input *wire.OutPoint,
-	expiry *common.RelativeLocktime,
-	level, levelIndex int32,
-) (Node, error) {
-	partialTx, err := getTx(n, input, expiry)
-	if err != nil {
-		return Node{}, err
-	}
-
-	txid := partialTx.UnsignedTx.TxHash().String()
-
-	tx, err := partialTx.B64Encode()
-	if err != nil {
-		return Node{}, err
-	}
-
-	return Node{
-		Txid:       txid,
-		Tx:         tx,
-		ParentTxid: input.Hash.String(),
-		Level:      level,
-		LevelIndex: levelIndex,
-		Leaf:       len(n.getChildren()) == 0,
-	}, nil
 }
 
 func getTx(

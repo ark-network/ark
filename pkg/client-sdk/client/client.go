@@ -221,9 +221,9 @@ type Round struct {
 	StartedAt  *time.Time
 	EndedAt    *time.Time
 	Tx         string
-	Tree       tree.TxTree
+	Tree       []tree.TxGraphChunk
 	ForfeitTxs []string
-	Connectors tree.TxTree
+	Connectors []tree.TxGraphChunk
 	Stage      RoundStage
 }
 
@@ -265,10 +265,10 @@ type RoundSigningNoncesGeneratedEvent struct {
 func (e RoundSigningNoncesGeneratedEvent) isRoundEvent() {}
 
 type BatchTreeEvent struct {
-	ID         string
-	Topic      []string
-	BatchIndex int32
-	Node       tree.Node
+	ID           string
+	Topic        []string
+	BatchIndex   int32
+	TxGraphChunk tree.TxGraphChunk
 }
 
 func (e BatchTreeEvent) isRoundEvent() {}
@@ -277,8 +277,7 @@ type BatchTreeSignatureEvent struct {
 	ID         string
 	Topic      []string
 	BatchIndex int32
-	Level      int32
-	LevelIndex int32
+	Txid       string
 	Signature  string
 }
 

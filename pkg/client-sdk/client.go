@@ -2066,8 +2066,12 @@ func (a *covenantlessArkClient) handleRoundStream(
 		}
 	}
 
-	vtxoTree := make(tree.TxTree, 0)
-	connectorsTree := make(tree.TxTree, 0)
+	// the graph chunks are received one after the other via BatchTreeEvent
+	// we collect them and then build the graphs when necessary
+	vtxoGraphChunks := make([]tree.TxGraphChunk, 0)
+	connectorsGraphChunks := make([]tree.TxGraphChunk, 0)
+
+	var vtxoGraph, connectorsGraph *tree.TxGraph
 
 	if !hasOffchainOutput {
 		// if none of the outputs are offchain, we should skip the vtxo tree signing steps
@@ -2144,14 +2148,24 @@ func (a *covenantlessArkClient) handleRoundStream(
 				if step != batchStarted && step != roundSigningNoncesGenerated {
 					continue
 				}
-				vtxoTree, connectorsTree = handleBatchTree(event.(client.BatchTreeEvent), vtxoTree, connectorsTree)
+
+				batchTreeEvent := event.(client.BatchTreeEvent)
+
+				if batchTreeEvent.BatchIndex == 0 {
+					vtxoGraphChunks = append(vtxoGraphChunks, batchTreeEvent.TxGraphChunk)
+				} else {
+					connectorsGraphChunks = append(connectorsGraphChunks, batchTreeEvent.TxGraphChunk)
+				}
 				continue
 			case client.BatchTreeSignatureEvent:
 				if step != roundSigningNoncesGenerated {
 					continue
 				}
-				vtxoTree, err = handleBatchTreeSignature(event.(client.BatchTreeSignatureEvent), vtxoTree)
-				if err != nil {
+				if vtxoGraph == nil {
+					return "", fmt.Errorf("vtxo graph not initialized")
+				}
+
+				if err := handleBatchTreeSignature(event.(client.BatchTreeSignatureEvent), vtxoGraph); err != nil {
 					return "", err
 				}
 				continue
@@ -2161,8 +2175,14 @@ func (a *covenantlessArkClient) handleRoundStream(
 					continue
 				}
 				log.Info("a round signing started")
+
+				vtxoGraph, err = tree.NewTxGraph(vtxoGraphChunks)
+				if err != nil {
+					return "", err
+				}
+
 				skipped, err := a.handleRoundSigningStarted(
-					ctx, signerSessions, event.(client.RoundSigningStartedEvent), vtxoTree,
+					ctx, signerSessions, event.(client.RoundSigningStartedEvent), vtxoGraph,
 				)
 				if err != nil {
 					return "", err
@@ -2192,10 +2212,25 @@ func (a *covenantlessArkClient) handleRoundStream(
 				}
 				log.Info("a round finalization started")
 
+				if vtxoGraph == nil {
+					return "", fmt.Errorf("vtxo graph not initialized")
+				}
+
+				if len(connectorsGraphChunks) > 0 {
+					connectorsGraph, err = tree.NewTxGraph(connectorsGraphChunks)
+					if err != nil {
+						return "", err
+					}
+				}
+
+				if len(vtxosToSign) > 0 && connectorsGraph == nil {
+					return "", fmt.Errorf("connectors graph not sent")
+				}
+
 				signedForfeitTxs, signedRoundTx, err := a.handleRoundFinalization(
 					ctx, event.(client.RoundFinalizationEvent),
 					vtxosToSign, boardingUtxos, receivers,
-					vtxoTree, connectorsTree,
+					vtxoGraph, connectorsGraph,
 				)
 				if err != nil {
 					return "", err
@@ -2240,7 +2275,7 @@ func (a *covenantlessArkClient) handleBatchStarted(
 
 func (a *covenantlessArkClient) handleRoundSigningStarted(
 	ctx context.Context, signerSessions []tree.SignerSession,
-	event client.RoundSigningStartedEvent, vtxoTree tree.TxTree,
+	event client.RoundSigningStartedEvent, vtxoGraph *tree.TxGraph,
 ) (bool, error) {
 	foundPubkeys := make([]string, 0, len(signerSessions))
 	for _, session := range signerSessions {
@@ -2284,7 +2319,7 @@ func (a *covenantlessArkClient) handleRoundSigningStarted(
 	root := sweepTapTree.RootNode.TapHash()
 
 	generateAndSendNonces := func(session tree.SignerSession) error {
-		if err := session.Init(root.CloneBytes(), sharedOutputValue, vtxoTree); err != nil {
+		if err := session.Init(root.CloneBytes(), sharedOutputValue, vtxoGraph); err != nil {
 			return err
 		}
 
@@ -2378,9 +2413,9 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 	vtxos []client.TapscriptsVtxo,
 	boardingUtxos []types.Utxo,
 	receivers []client.Output,
-	vtxoTree, connectorsTree tree.TxTree,
+	vtxoGraph, connectorsGraph *tree.TxGraph,
 ) ([]string, string, error) {
-	if err := a.validateVtxoTree(event, vtxoTree, connectorsTree, receivers, vtxos); err != nil {
+	if err := a.validateVtxoTree(event, vtxoGraph, connectorsGraph, receivers, vtxos); err != nil {
 		return nil, "", fmt.Errorf("failed to verify vtxo tree: %s", err)
 	}
 
@@ -2389,7 +2424,7 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 	if len(vtxos) > 0 {
 		signedForfeits, err := a.createAndSignForfeits(
 			ctx,
-			vtxos, connectorsTree.Leaves(),
+			vtxos, connectorsGraph.Leaves(),
 			event.ConnectorsIndex,
 		)
 		if err != nil {
@@ -2470,49 +2505,44 @@ func (a *covenantlessArkClient) handleRoundFinalization(
 
 func (a *covenantlessArkClient) validateVtxoTree(
 	event client.RoundFinalizationEvent,
-	vtxoTree, connectorsTree tree.TxTree,
+	vtxoGraph, connectorsGraph *tree.TxGraph,
 	receivers []client.Output, vtxosInput []client.TapscriptsVtxo,
 ) error {
 	roundTx := event.Tx
-	ptx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
+	roundPtx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
 	if err != nil {
 		return err
 	}
 
+	// validate the vtxo tree is well formed
 	if !utils.IsOnchainOnly(receivers) {
-		if err := tree.ValidateVtxoTree(
-			vtxoTree, roundTx, a.ServerPubKey, a.VtxoTreeExpiry,
+		if err := tree.ValidateVtxoTxGraph(
+			vtxoGraph, roundPtx, a.ServerPubKey, a.VtxoTreeExpiry,
 		); err != nil {
 			return err
 		}
 	}
 
+	// validate it contains our outputs
 	if err := a.validateReceivers(
-		ptx, receivers, vtxoTree,
+		roundPtx, receivers, vtxoGraph,
 	); err != nil {
 		return err
 	}
 
 	if len(vtxosInput) > 0 {
-		root, err := connectorsTree.Root()
-		if err != nil {
-			return err
+		rootParentTxid := vtxoGraph.Root.UnsignedTx.TxIn[0].PreviousOutPoint.Hash.String()
+		rootParentVout := vtxoGraph.Root.UnsignedTx.TxIn[0].PreviousOutPoint.Index
+
+		if rootParentTxid != roundPtx.UnsignedTx.TxID() {
+			return fmt.Errorf("root's parent txid is not the same as the round txid: %s != %s", rootParentTxid, roundPtx.UnsignedTx.TxID())
 		}
 
-		getTxID := func(b64 string) string {
-			tx, err := psbt.NewFromRawBytes(strings.NewReader(b64), true)
-			if err != nil {
-				return ""
-			}
-
-			return tx.UnsignedTx.TxID()
+		if rootParentVout != 0 {
+			return fmt.Errorf("root's parent vout is not the same as the shared output index: %d != %d", rootParentVout, 0)
 		}
 
-		if root.ParentTxid != getTxID(roundTx) {
-			return fmt.Errorf("root's parent txid is not the same as the round txid: %s != %s", root.ParentTxid, getTxID(roundTx))
-		}
-
-		if err := connectorsTree.Validate(getTxID); err != nil {
+		if err := connectorsGraph.Validate(); err != nil {
 			return err
 		}
 
@@ -2533,7 +2563,7 @@ func (a *covenantlessArkClient) validateVtxoTree(
 func (a *covenantlessArkClient) validateReceivers(
 	ptx *psbt.Packet,
 	receivers []client.Output,
-	vtxoTree tree.TxTree,
+	vtxoGraph *tree.TxGraph,
 ) error {
 	netParams := utils.ToBitcoinNetwork(a.Network)
 	for _, receiver := range receivers {
@@ -2550,7 +2580,7 @@ func (a *covenantlessArkClient) validateReceivers(
 			}
 		} else {
 			if err := a.validateOffChainReceiver(
-				vtxoTree, receiver,
+				vtxoGraph, receiver,
 			); err != nil {
 				return err
 			}
@@ -2584,7 +2614,7 @@ func (a *covenantlessArkClient) validateOnChainReceiver(
 }
 
 func (a *covenantlessArkClient) validateOffChainReceiver(
-	vtxoTree tree.TxTree,
+	vtxoGraph *tree.TxGraph,
 	receiver client.Output,
 ) error {
 	found := false
@@ -2596,14 +2626,9 @@ func (a *covenantlessArkClient) validateOffChainReceiver(
 
 	vtxoTapKey := schnorr.SerializePubKey(rcvAddr.VtxoTapKey)
 
-	leaves := vtxoTree.Leaves()
+	leaves := vtxoGraph.Leaves()
 	for _, leaf := range leaves {
-		tx, err := psbt.NewFromRawBytes(strings.NewReader(leaf.Tx), true)
-		if err != nil {
-			return err
-		}
-
-		for _, output := range tx.UnsignedTx.TxOut {
+		for _, output := range leaf.UnsignedTx.TxOut {
 			if len(output.PkScript) == 0 {
 				continue
 			}
@@ -2635,7 +2660,7 @@ func (a *covenantlessArkClient) validateOffChainReceiver(
 func (a *covenantlessArkClient) createAndSignForfeits(
 	ctx context.Context,
 	vtxosToSign []client.TapscriptsVtxo,
-	connectorsTxs []tree.Node,
+	connectorsTxs []*psbt.Packet,
 	connectorsIndex map[string]client.Outpoint,
 ) ([]string, error) {
 	parsedForfeitAddr, err := btcutil.DecodeAddress(a.ForfeitAddress, nil)
@@ -2654,16 +2679,12 @@ func (a *covenantlessArkClient) createAndSignForfeits(
 		connectorOutpoint := connectorsIndex[vtxo.String()]
 
 		var connector *wire.TxOut
-		for _, node := range connectorsTxs {
-			if node.Txid == connectorOutpoint.Txid {
-				tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
-				if err != nil {
-					return nil, err
+		for _, connectorTx := range connectorsTxs {
+			if connectorTx.UnsignedTx.TxID() == connectorOutpoint.Txid {
+				if connectorOutpoint.VOut >= uint32(len(connectorTx.UnsignedTx.TxOut)) {
+					return nil, fmt.Errorf("connector index out of bounds: %d >= %d", connectorOutpoint.VOut, len(connectorTx.UnsignedTx.TxOut))
 				}
-				if connectorOutpoint.VOut >= uint32(len(tx.UnsignedTx.TxOut)) {
-					return nil, fmt.Errorf("connector index out of bounds: %d >= %d", connectorOutpoint.VOut, len(tx.UnsignedTx.TxOut))
-				}
-				connector = tx.UnsignedTx.TxOut[connectorOutpoint.VOut]
+				connector = connectorTx.UnsignedTx.TxOut[connectorOutpoint.VOut]
 				break
 			}
 		}
@@ -2797,7 +2818,7 @@ func (a *covenantlessArkClient) getMatureUtxos(
 func (a *covenantlessArkClient) getRedeemBranches(
 	ctx context.Context, vtxos []client.Vtxo,
 ) (map[string]*redemption.CovenantlessRedeemBranch, error) {
-	vtxoTrees := make(map[string]tree.TxTree, 0)
+	vtxoTrees := make(map[string]*tree.TxGraph, 0)
 	redeemBranches := make(map[string]*redemption.CovenantlessRedeemBranch, 0)
 
 	for i := range vtxos {
@@ -2814,7 +2835,12 @@ func (a *covenantlessArkClient) getRedeemBranches(
 				return nil, err
 			}
 
-			vtxoTrees[vtxo.RoundTxid] = round.Tree
+			graph, err := tree.NewTxGraph(round.Tree)
+			if err != nil {
+				return nil, err
+			}
+
+			vtxoTrees[vtxo.RoundTxid] = graph
 		}
 
 		redeemBranch, err := redemption.NewRedeemBranch(
@@ -4024,79 +4050,30 @@ func finalizeWithNotes(notesWitnesses map[int][]byte) func(ptx *psbt.Packet) err
 	}
 }
 
-func extendArray[T any](arr []T, position int) []T {
-	if arr == nil {
-		return make([]T, position+1)
-	}
-
-	if len(arr) <= position {
-		return append(arr, make([]T, position-len(arr)+1)...)
-	}
-
-	return arr
-}
-
-func handleBatchTree(
-	event client.BatchTreeEvent,
-	vtxoTree, connectorsTree tree.TxTree,
-) (tree.TxTree, tree.TxTree) {
-	if event.BatchIndex == 0 {
-		vtxoTree = handleBatchTreeNode(event.Node, vtxoTree)
-	} else {
-		connectorsTree = handleBatchTreeNode(event.Node, connectorsTree)
-	}
-	return vtxoTree, connectorsTree
-}
-
-func handleBatchTreeNode(node tree.Node, tree tree.TxTree) tree.TxTree {
-	level := int(node.Level)
-	index := int(node.LevelIndex)
-	tree = extendArray(tree, level)
-	tree[level] = extendArray(tree[level], index)
-	tree[level][index] = node
-	return tree
-}
-
-func handleBatchTreeSignature(event client.BatchTreeSignatureEvent, vtxoTree tree.TxTree) (tree.TxTree, error) {
+func handleBatchTreeSignature(event client.BatchTreeSignatureEvent, graph *tree.TxGraph) error {
 	if event.BatchIndex != 0 {
-		return nil, fmt.Errorf("batch index %d is not 0", event.BatchIndex)
+		return fmt.Errorf("batch index %d is not 0", event.BatchIndex)
 	}
 
 	decodedSig, err := hex.DecodeString(event.Signature)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode signature: %s", err)
+		return fmt.Errorf("failed to decode signature: %s", err)
 	}
 
 	sig, err := schnorr.ParseSignature(decodedSig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse signature: %s", err)
+		return fmt.Errorf("failed to parse signature: %s", err)
 	}
 
-	level := int(event.Level)
-	levelIndex := int(event.LevelIndex)
+	return graph.Apply(func(g *tree.TxGraph) (bool, error) {
+		if g.Root.UnsignedTx.TxID() != event.Txid {
+			// skip
+			return true, nil
+		}
 
-	if len(vtxoTree) <= level {
-		return nil, fmt.Errorf("level %d not found in vtxo tree", level)
-	}
-
-	if len(vtxoTree[level]) <= levelIndex {
-		return nil, fmt.Errorf("level %d index %d not found in vtxo tree", level, levelIndex)
-	}
-
-	ptx, err := psbt.NewFromRawBytes(strings.NewReader(vtxoTree[level][levelIndex].Tx), true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ptx: %s", err)
-	}
-
-	ptx.Inputs[0].TaprootKeySpendSig = sig.Serialize()
-
-	encodedTx, err := ptx.B64Encode()
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode tx: %s", err)
-	}
-
-	vtxoTree[level][levelIndex].Tx = encodedTx
-	return vtxoTree, nil
+		g.Root.Inputs[0].TaprootKeySpendSig = sig.Serialize()
+		return false, nil
+	})
 }
 
 func checkSettleOptionsType(o interface{}) (*SettleOptions, error) {

@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strings"
 
@@ -275,8 +276,9 @@ func (h *handler) SubmitTreeNonces(
 	if _, err := secp256k1.ParsePubKey(pubkeyBytes); err != nil {
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid cosigner public key %s", err))
 	}
-	nonces, err := tree.DecodeNonces(hex.NewDecoder(strings.NewReader(encodedNonces)))
-	if err != nil {
+
+	nonces := make(tree.TreeNonces)
+	if err := json.Unmarshal([]byte(encodedNonces), &nonces); err != nil {
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid tree nonces %s", err))
 	}
 
@@ -317,8 +319,8 @@ func (h *handler) SubmitTreeSignatures(
 		return nil, status.Error(codes.InvalidArgument, "invalid cosigner public key length, expected 33 bytes")
 	}
 
-	signatures, err := tree.DecodeSignatures(hex.NewDecoder(strings.NewReader(encodedSignatures)))
-	if err != nil {
+	signatures := make(tree.TreePartialSigs)
+	if err := json.Unmarshal([]byte(encodedSignatures), &signatures); err != nil {
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("invalid tree signatures %s", err))
 	}
 
@@ -432,9 +434,9 @@ func (h *handler) GetRound(
 				Start:      round.StartingTimestamp,
 				End:        round.EndingTimestamp,
 				RoundTx:    round.CommitmentTx,
-				VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
+				VtxoTree:   txGraphChunks(round.VtxoTree).toProto(),
 				ForfeitTxs: forfeitTxs(round.ForfeitTxs).toProto(),
-				Connectors: vtxoTree(round.Connectors).toProto(),
+				Connectors: txGraphChunks(round.Connectors).toProto(),
 				Stage:      stage(round.Stage).toProto(),
 			},
 		}, nil
@@ -451,9 +453,9 @@ func (h *handler) GetRound(
 			Start:      round.StartingTimestamp,
 			End:        round.EndingTimestamp,
 			RoundTx:    round.CommitmentTx,
-			VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
+			VtxoTree:   txGraphChunks(round.VtxoTree).toProto(),
 			ForfeitTxs: forfeitTxs(round.ForfeitTxs).toProto(),
-			Connectors: vtxoTree(round.Connectors).toProto(),
+			Connectors: txGraphChunks(round.Connectors).toProto(),
 			Stage:      stage(round.Stage).toProto(),
 		},
 	}, nil
@@ -478,9 +480,9 @@ func (h *handler) GetRoundById(
 			Start:      round.StartingTimestamp,
 			End:        round.EndingTimestamp,
 			RoundTx:    round.CommitmentTx,
-			VtxoTree:   vtxoTree(round.VtxoTree).toProto(),
+			VtxoTree:   txGraphChunks(round.VtxoTree).toProto(),
 			ForfeitTxs: forfeitTxs(round.ForfeitTxs).toProto(),
-			Connectors: vtxoTree(round.Connectors).toProto(),
+			Connectors: txGraphChunks(round.Connectors).toProto(),
 			Stage:      stage(round.Stage).toProto(),
 		},
 	}, nil
@@ -650,14 +652,8 @@ func (h *handler) listenToEvents() {
 							Id:         e.Id,
 							Topic:      e.Topic,
 							BatchIndex: e.BatchIndex,
-							TreeTx: &arkv1.Node{
-								Txid:       e.Node.Txid,
-								Tx:         e.Node.Tx,
-								ParentTxid: e.Node.ParentTxid,
-								Level:      e.Node.Level,
-								LevelIndex: e.Node.LevelIndex,
-								Leaf:       e.Node.Leaf,
-							},
+							Tx:         e.Chunk.Tx,
+							Children:   e.Chunk.Children,
 						},
 					},
 				})
@@ -668,8 +664,7 @@ func (h *handler) listenToEvents() {
 							Id:         e.Id,
 							Topic:      e.Topic,
 							BatchIndex: e.BatchIndex,
-							Level:      e.Level,
-							LevelIndex: e.LevelIndex,
+							Txid:       e.Txid,
 							Signature:  e.Signature,
 						},
 					},

@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcutil/psbt"
@@ -105,7 +104,7 @@ func (i *indexerService) GetVtxoTree(ctx context.Context, batchOutpoint Outpoint
 		return nil, err
 	}
 
-	nodes, pageResp := paginate(flattenNodes(vtxoTree), page, maxPageSizeVtxoTree)
+	nodes, pageResp := paginate(vtxoTree, page, maxPageSizeVtxoTree)
 
 	return &VtxoTreeResp{
 		Nodes: nodes,
@@ -153,10 +152,10 @@ func (i *indexerService) GetConnectors(ctx context.Context, txid string, page *P
 		return nil, err
 	}
 
-	nodes, pageResp := paginate(flattenNodes(connectorTree), page, maxPageSizeVtxoTree)
+	chunks, pageResp := paginate(connectorTree, page, maxPageSizeVtxoTree)
 
 	return &ConnectorResp{
-		Connectors: nodes,
+		Connectors: chunks,
 		Page:       pageResp,
 	}, nil
 }
@@ -439,22 +438,6 @@ func paginate[T any](items []T, params *Page, maxSize int32) ([]T, PageResp) {
 	}
 
 	return items[startIndex:endIndex], resp
-}
-
-func flattenNodes(t [][]tree.Node) []Node {
-	var result []Node
-	for level, nodes := range t {
-		for idx, node := range nodes {
-			result = append(result, Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
-				Level:      int32(level),
-				LevelIndex: int32(idx),
-			})
-		}
-	}
-	return result
 }
 
 func (i *indexerService) vtxosToTxs(

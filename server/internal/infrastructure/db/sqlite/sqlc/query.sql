@@ -1,16 +1,14 @@
 -- name: UpsertTransaction :exec
 INSERT INTO tx (
-    tx, round_id, type, position, txid, tree_level, parent_txid, is_leaf
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    tx, round_id, type, position, txid, children
+) VALUES (?, ?, ?, ?, ?, ?)
 ON CONFLICT(txid) DO UPDATE SET
     tx = EXCLUDED.tx,
     round_id = EXCLUDED.round_id,
     type = EXCLUDED.type,
     position = EXCLUDED.position,
     txid = EXCLUDED.txid,
-    tree_level = EXCLUDED.tree_level,
-    parent_txid = EXCLUDED.parent_txid,
-    is_leaf = EXCLUDED.is_leaf;
+    children = EXCLUDED.children;
 
 -- name: UpsertRound :exec
 INSERT INTO round (

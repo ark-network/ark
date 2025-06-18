@@ -1832,7 +1832,7 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 
 	if err := s.liveStore.CurrentRound().Upsert(func(r *domain.Round) *domain.Round {
 		ur := *r
-		ur.Txid = unsignedPsbt.UnsignedTx.TxHash().String()
+		ur.Txid = unsignedPsbt.UnsignedTx.TxID()
 		ur.CommitmentTx = unsignedRoundTx
 		return &ur
 	}); err != nil {
@@ -1841,7 +1841,9 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		return
 	}
 
-	if len(vtxoTree) > 0 {
+	vtxoTreeChunks := make([]tree.TxGraphChunk, 0)
+
+	if vtxoTree != nil {
 		sweepClosure := tree.CSVMultisigClosure{
 			MultisigClosure: tree.MultisigClosure{PubKeys: []*secp256k1.PublicKey{s.pubkey}},
 			Locktime:        s.vtxoTreeExpiry,
@@ -1890,7 +1892,14 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 			listOfCosignersPubkeys = append(listOfCosignersPubkeys, pubkey)
 		}
 
-		s.propagateRoundSigningStartedEvent(vtxoTree, listOfCosignersPubkeys)
+		vtxoTreeChunks, err = vtxoTree.Serialize()
+		if err != nil {
+			s.liveStore.CurrentRound().Fail(fmt.Errorf("failed to serialize vtxo tree: %s", err))
+			log.WithError(err).Warn("failed to serialize vtxo tree")
+			return
+		}
+
+		s.propagateRoundSigningStartedEvent(vtxoTreeChunks, listOfCosignersPubkeys)
 
 		select {
 		case <-time.After(thirdOfRemainingDuration):
@@ -1971,11 +1980,24 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		log.Debugf("vtxo tree signed for round %s", roundId)
 
 		vtxoTree = signedTree
+		vtxoTreeChunks, err = vtxoTree.Serialize()
+		if err != nil {
+			s.liveStore.CurrentRound().Fail(fmt.Errorf("failed to serialize vtxo tree: %s", err))
+			log.WithError(err).Warn("failed to serialize vtxo tree")
+			return
+		}
+	}
+
+	connectorsChunks, err := connectors.Serialize()
+	if err != nil {
+		s.liveStore.CurrentRound().Fail(fmt.Errorf("failed to serialize connectors: %s", err))
+		log.WithError(err).Warn("failed to serialize connectors")
+		return
 	}
 
 	round := s.liveStore.CurrentRound().Get()
 	_, err = round.StartFinalization(
-		connectorAddress, connectors, vtxoTree, round.Txid, round.CommitmentTx,
+		connectorAddress, connectorsChunks, vtxoTreeChunks, round.Txid, round.CommitmentTx,
 		s.liveStore.ForfeitTxs().GetConnectorsIndexes(), s.vtxoTreeExpiry.Seconds(),
 	)
 	if err != nil {
@@ -1987,8 +2009,6 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 		log.Errorf("failed to upsert round: %s", err)
 		return
 	}
-
-	log.Debugf("started finalization stage for round: %s", roundId)
 }
 
 func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
@@ -2038,6 +2058,7 @@ func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 			log.Debug("all forfeit txs and boarding inputs signatures have been sent")
 		case <-time.After(remainingTime):
 			log.Debug("timeout waiting for forfeit txs and boarding inputs signatures")
+			// TODO: should fail here and not continue
 		}
 
 		roundTx, err := psbt.NewFromRawBytes(strings.NewReader(s.liveStore.CurrentRound().Get().CommitmentTx), true)
@@ -2088,7 +2109,7 @@ func (s *covenantlessService) finalizeRound(roundTiming roundTiming) {
 		for _, tx := range forfeitTxList {
 			// nolint:all
 			ptx, _ := psbt.NewFromRawBytes(strings.NewReader(tx), true)
-			forfeitTxid := ptx.UnsignedTx.TxHash().String()
+			forfeitTxid := ptx.UnsignedTx.TxID()
 			forfeitTxs = append(forfeitTxs, domain.ForfeitTx{
 				Txid: forfeitTxid,
 				Tx:   tx,
@@ -2200,9 +2221,14 @@ func (s *covenantlessService) propagateEvents(round *domain.Round) {
 	// because it contains the vtxoTree and connectorsTree
 	// and we need to propagate them in specific BatchTree events
 	case domain.RoundFinalizationStarted:
+		graph, err := tree.NewTxGraph(ev.VtxoTree)
+		if err != nil {
+			log.WithError(err).Warn("failed to create vtxo tree")
+			return
+		}
 		events = append(
 			events,
-			batchTreeSignatureEvents(ev.VtxoTree, 0, round.Id)...,
+			batchTreeSignatureEvents(graph, 0, round.Id)...,
 		)
 		events = append(
 			events,
@@ -2236,10 +2262,10 @@ func (s *covenantlessService) propagateBatchStartedEvent(requests []ports.TimedT
 	s.eventsCh <- []domain.Event{ev}
 }
 
-func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTree tree.TxTree, cosignersPubkeys []string) {
+func (s *covenantlessService) propagateRoundSigningStartedEvent(unsignedVtxoTreeChunks []tree.TxGraphChunk, cosignersPubkeys []string) {
 	round := s.liveStore.CurrentRound().Get()
 	events := append(
-		batchTreeEvents(unsignedVtxoTree, 0, round.Id),
+		batchTreeEvents(unsignedVtxoTreeChunks, 0, round.Id),
 		RoundSigningStarted{
 			RoundEvent: domain.RoundEvent{
 				Id:   round.Id,
@@ -2275,7 +2301,13 @@ func (s *covenantlessService) scheduleSweepVtxosForRound(round *domain.Round) {
 
 	log.Debugf("round %s sweeping scheduled at %s", round.Txid, fancyTime(expirationTimestamp, s.sweeper.scheduler.Unit()))
 
-	if err := s.sweeper.schedule(expirationTimestamp, round.Txid, round.VtxoTree); err != nil {
+	vtxoTree, err := tree.NewTxGraph(round.VtxoTree)
+	if err != nil {
+		log.WithError(err).Warn("failed to create vtxo tree")
+		return
+	}
+
+	if err := s.sweeper.schedule(expirationTimestamp, round.Txid, vtxoTree); err != nil {
 		log.WithError(err).Warn("failed to schedule sweep tx")
 	}
 }
@@ -2497,50 +2529,43 @@ func fancyTime(timestamp int64, unit ports.TimeUnit) (fancyTime string) {
 	return
 }
 
-func batchTreeEvents(txTree tree.TxTree, batchIndex int32, roundId string) []domain.Event {
+func batchTreeEvents(chunks []tree.TxGraphChunk, batchIndex int32, roundId string) []domain.Event {
 	events := make([]domain.Event, 0)
 
-	for _, lvl := range txTree {
-		for _, node := range lvl {
-			events = append(events, BatchTree{
-				RoundEvent: domain.RoundEvent{
-					Id:   roundId,
-					Type: domain.EventTypeUndefined,
-				},
-				BatchIndex: batchIndex,
-				Node:       node,
-			})
-		}
+	for _, chunk := range chunks {
+		events = append(events, BatchTree{
+			RoundEvent: domain.RoundEvent{
+				Id:   roundId,
+				Type: domain.EventTypeUndefined,
+			},
+			BatchIndex: batchIndex,
+			Topic:      []string{}, // TODO
+			Chunk:      chunk,
+		})
 	}
 
 	return events
 }
 
-func batchTreeSignatureEvents(txTree tree.TxTree, batchIndex int32, roundId string) []domain.Event {
+func batchTreeSignatureEvents(graph *tree.TxGraph, batchIndex int32, roundId string) []domain.Event {
 	events := make([]domain.Event, 0)
 
-	for level, lvl := range txTree {
-		for levelIndex, node := range lvl {
-			ptx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
-			if err != nil {
-				log.WithError(err).Warn("failed to parse tx")
-				continue
-			}
+	_ = graph.Apply(func(g *tree.TxGraph) (bool, error) {
+		sig := g.Root.Inputs[0].TaprootKeySpendSig
 
-			sig := ptx.Inputs[0].TaprootKeySpendSig
+		events = append(events, BatchTreeSignature{
+			RoundEvent: domain.RoundEvent{
+				Id:   roundId,
+				Type: domain.EventTypeUndefined,
+			},
+			Topic:      []string{},
+			BatchIndex: batchIndex,
+			Signature:  hex.EncodeToString(sig),
+			Txid:       g.Root.UnsignedTx.TxID(),
+		})
 
-			events = append(events, BatchTreeSignature{
-				RoundEvent: domain.RoundEvent{
-					Id:   roundId,
-					Type: domain.EventTypeUndefined,
-				},
-				Topic:      []string{},
-				BatchIndex: batchIndex,
-				Level:      int32(level),
-				LevelIndex: int32(levelIndex),
-				Signature:  hex.EncodeToString(sig),
-			})
-		}
-	}
+		return true, nil
+	})
+
 	return events
 }

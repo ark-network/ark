@@ -12,30 +12,30 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// V1IndexerNode v1 indexer node
+// V1TxGraphChunk v1 tx graph chunk
 //
-// swagger:model v1IndexerNode
-type V1IndexerNode struct {
+// swagger:model v1TxGraphChunk
+type V1TxGraphChunk struct {
 
-	// vout -> txid
+	// children
 	Children map[string]string `json:"children,omitempty"`
 
 	// tx
 	Tx string `json:"tx,omitempty"`
 }
 
-// Validate validates this v1 indexer node
-func (m *V1IndexerNode) Validate(formats strfmt.Registry) error {
+// Validate validates this v1 tx graph chunk
+func (m *V1TxGraphChunk) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-// ContextValidate validates this v1 indexer node based on context it is used
-func (m *V1IndexerNode) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+// ContextValidate validates this v1 tx graph chunk based on context it is used
+func (m *V1TxGraphChunk) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	return nil
 }
 
 // MarshalBinary interface implementation
-func (m *V1IndexerNode) MarshalBinary() ([]byte, error) {
+func (m *V1TxGraphChunk) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -43,8 +43,8 @@ func (m *V1IndexerNode) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *V1IndexerNode) UnmarshalBinary(b []byte) error {
-	var res V1IndexerNode
+func (m *V1TxGraphChunk) UnmarshalBinary(b []byte) error {
+	var res V1TxGraphChunk
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

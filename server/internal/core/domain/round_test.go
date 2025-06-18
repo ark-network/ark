@@ -70,73 +70,43 @@ var (
 	emptyPtx       = "cHNldP8BAgQCAAAAAQQBAAEFAQABBgEDAfsEAgAAAAA="
 	emptyTx        = "0200000000000000000000"
 	txid           = "0000000000000000000000000000000000000000000000000000000000000000"
-	txid2          = "0000000000000000000000000000000000000000000000000000000000000001"
 	emptyForfeitTx = domain.ForfeitTx{
 		Txid: txid,
 		Tx:   emptyPtx,
 	}
-	vtxoTree = tree.TxTree{
+	vtxoTree = []tree.TxGraphChunk{
 		{
-			{
-				Txid:       txid,
-				Tx:         emptyPtx,
-				ParentTxid: txid,
+			Tx: emptyPtx,
+			Children: map[uint32]string{
+				0: txid,
 			},
 		},
 		{
-			{
-				Txid:       txid,
-				Tx:         emptyPtx,
-				ParentTxid: txid,
-			},
-			{
-				Txid:       txid,
-				Tx:         emptyPtx,
-				ParentTxid: txid,
+			Tx: emptyPtx,
+			Children: map[uint32]string{
+				0: txid,
+				1: txid,
 			},
 		},
 		{
-			{
-				Txid:       txid,
-				Tx:         emptyPtx,
-				ParentTxid: txid,
-			},
-			{
-				Txid:       txid,
-				Tx:         emptyPtx,
-				ParentTxid: txid,
-			},
-			{
-				Txid:       txid,
-				Tx:         emptyPtx,
-				ParentTxid: txid,
-			},
-			{
-				Txid:       txid,
-				Tx:         emptyPtx,
-				ParentTxid: txid,
-			},
+			Tx:       emptyPtx,
+			Children: map[uint32]string{},
+		},
+		{
+			Tx:       emptyPtx,
+			Children: map[uint32]string{},
 		},
 	}
-	connectors = tree.TxTree{
+	connectors = []tree.TxGraphChunk{
 		{
-			{
-				Txid:       txid,
-				Tx:         emptyPtx,
-				ParentTxid: txid,
+			Tx: emptyPtx,
+			Children: map[uint32]string{
+				0: txid,
 			},
 		},
 		{
-			{
-				Txid:       txid,
-				Tx:         emptyPtx,
-				ParentTxid: txid,
-			},
-			{
-				Txid:       txid,
-				Tx:         emptyPtx,
-				ParentTxid: txid,
-			},
+			Tx:       emptyPtx,
+			Children: map[uint32]string{},
 		},
 	}
 	forfeitTxs = []domain.ForfeitTx{
@@ -325,14 +295,10 @@ func testStartFinalization(t *testing.T) {
 			require.NoError(t, err)
 			require.NotEmpty(t, events)
 
-			events, err = round.StartFinalization("", connectors, vtxoTree, "txid1", roundTx, map[string]domain.Outpoint{
+			events, err = round.StartFinalization("", connectors, vtxoTree, "txid", roundTx, map[string]domain.Outpoint{
 				txid: {
 					Txid: txid,
 					VOut: 0,
-				},
-				txid2: {
-					Txid: txid2,
-					VOut: 1,
 				},
 			}, expiration)
 			require.NoError(t, err)
@@ -357,8 +323,8 @@ func testStartFinalization(t *testing.T) {
 			}
 			fixtures := []struct {
 				round       *domain.Round
-				connectors  tree.TxTree
-				tree        tree.TxTree
+				connectors  []tree.TxGraphChunk
+				tree        []tree.TxGraphChunk
 				txid        string
 				roundTx     string
 				expiration  int64
@@ -452,7 +418,6 @@ func testStartFinalization(t *testing.T) {
 			}
 
 			for _, f := range fixtures {
-				// TODO fix this
 				events, err := f.round.StartFinalization("", f.connectors, f.tree, f.txid, f.roundTx, map[string]domain.Outpoint{
 					txid: {
 						Txid: txid,

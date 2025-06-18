@@ -4,11 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"sort"
+
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/redis/go-redis/v9"
-	"sort"
 )
 
 type forfeitTxsStore struct {
@@ -30,7 +31,7 @@ func NewForfeitTxsStore(rdb *redis.Client, builder ports.TxBuilder) ports.Forfei
 	}
 }
 
-func (s *forfeitTxsStore) Init(connectors tree.TxTree, requests []domain.TxRequest) error {
+func (s *forfeitTxsStore) Init(connectors *tree.TxGraph, requests []domain.TxRequest) error {
 	ctx := context.Background()
 	vtxosToSign := make([]domain.Vtxo, 0)
 	for _, request := range requests {
@@ -54,8 +55,8 @@ func (s *forfeitTxsStore) Init(connectors tree.TxTree, requests []domain.TxReque
 		if len(leaves) == 0 {
 			return fmt.Errorf("no connectors found")
 		}
-		for _, n := range leaves {
-			connectorsOutpoints = append(connectorsOutpoints, domain.Outpoint{Txid: n.Txid, VOut: 0})
+		for _, leaf := range leaves {
+			connectorsOutpoints = append(connectorsOutpoints, domain.Outpoint{Txid: leaf.UnsignedTx.TxID(), VOut: 0})
 		}
 		sort.Slice(vtxosToSign, func(i, j int) bool { return vtxosToSign[i].String() < vtxosToSign[j].String() })
 		if len(vtxosToSign) > len(connectorsOutpoints) {
@@ -97,7 +98,7 @@ func (s *forfeitTxsStore) Sign(txs []string) error {
 	if err != nil {
 		return err
 	}
-	var connectors tree.TxTree
+	var connectors *tree.TxGraph
 	if err := json.Unmarshal(connBytes, &connectors); err != nil {
 		return err
 	}

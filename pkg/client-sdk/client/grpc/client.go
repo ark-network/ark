@@ -1,9 +1,8 @@
 package grpcclient
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -12,7 +11,6 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
-	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -27,9 +25,8 @@ type service struct {
 }
 
 type grpcClient struct {
-	conn      *grpc.ClientConn
-	svc       service
-	treeCache *utils.Cache[tree.TxTree]
+	conn *grpc.ClientConn
+	svc  service
 }
 
 func NewClient(serverUrl string) (client.TransportClient, error) {
@@ -54,9 +51,8 @@ func NewClient(serverUrl string) (client.TransportClient, error) {
 	}
 
 	svc := service{arkv1.NewArkServiceClient(conn), arkv1.NewExplorerServiceClient(conn)}
-	treeCache := utils.NewCache[tree.TxTree]()
 
-	return &grpcClient{conn, svc, treeCache}, nil
+	return &grpcClient{conn, svc}, nil
 }
 
 func (a *grpcClient) GetInfo(ctx context.Context) (*client.Info, error) {
@@ -179,18 +175,15 @@ func (a *grpcClient) RegisterOutputsForNextRound(
 func (a *grpcClient) SubmitTreeNonces(
 	ctx context.Context, roundID, cosignerPubkey string, nonces tree.TreeNonces,
 ) error {
-	var nonceBuffer bytes.Buffer
-
-	if err := nonces.Encode(&nonceBuffer); err != nil {
+	sigsJSON, err := json.Marshal(nonces)
+	if err != nil {
 		return err
 	}
-
-	serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
 
 	req := &arkv1.SubmitTreeNoncesRequest{
 		RoundId:    roundID,
 		Pubkey:     cosignerPubkey,
-		TreeNonces: serializedNonces,
+		TreeNonces: string(sigsJSON),
 	}
 
 	if _, err := a.svc.SubmitTreeNonces(ctx, req); err != nil {
@@ -203,18 +196,15 @@ func (a *grpcClient) SubmitTreeNonces(
 func (a *grpcClient) SubmitTreeSignatures(
 	ctx context.Context, roundID, cosignerPubkey string, signatures tree.TreePartialSigs,
 ) error {
-	var sigsBuffer bytes.Buffer
-
-	if err := signatures.Encode(&sigsBuffer); err != nil {
+	sigsJSON, err := json.Marshal(signatures)
+	if err != nil {
 		return err
 	}
-
-	serializedSigs := hex.EncodeToString(sigsBuffer.Bytes())
 
 	req := &arkv1.SubmitTreeSignaturesRequest{
 		RoundId:        roundID,
 		Pubkey:         cosignerPubkey,
-		TreeSignatures: serializedSigs,
+		TreeSignatures: string(sigsJSON),
 	}
 
 	if _, err := a.svc.SubmitTreeSignatures(ctx, req); err != nil {
@@ -330,14 +320,32 @@ func (a *grpcClient) GetRound(
 		t := time.Unix(round.GetEnd(), 0)
 		endedAt = &t
 	}
+	chunksVtxoTree := make([]tree.TxGraphChunk, 0, len(round.GetVtxoTree()))
+	for _, chunk := range round.GetVtxoTree() {
+		children := make(map[uint32]string)
+		chunksVtxoTree = append(chunksVtxoTree, tree.TxGraphChunk{
+			Tx:       chunk.GetTx(),
+			Children: children,
+		})
+	}
+
+	chunksConnectors := make([]tree.TxGraphChunk, 0, len(round.GetConnectors()))
+	for _, chunk := range round.GetConnectors() {
+		children := make(map[uint32]string)
+		chunksConnectors = append(chunksConnectors, tree.TxGraphChunk{
+			Tx:       chunk.GetTx(),
+			Children: children,
+		})
+	}
+
 	return &client.Round{
 		ID:         round.GetId(),
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
 		Tx:         round.GetRoundTx(),
-		Tree:       treeFromProto{round.GetVtxoTree()}.parse(),
+		Tree:       chunksVtxoTree,
 		ForfeitTxs: round.GetForfeitTxs(),
-		Connectors: treeFromProto{round.GetConnectors()}.parse(),
+		Connectors: chunksConnectors,
 		Stage:      client.RoundStage(int(round.GetStage())),
 	}, nil
 }
@@ -357,15 +365,33 @@ func (a *grpcClient) GetRoundByID(
 		t := time.Unix(round.GetEnd(), 0)
 		endedAt = &t
 	}
-	tree := treeFromProto{round.GetVtxoTree()}.parse()
+
+	chunksVtxoTree := make([]tree.TxGraphChunk, 0, len(round.GetVtxoTree()))
+	for _, chunk := range round.GetVtxoTree() {
+		children := make(map[uint32]string)
+		chunksVtxoTree = append(chunksVtxoTree, tree.TxGraphChunk{
+			Tx:       chunk.GetTx(),
+			Children: children,
+		})
+	}
+
+	chunksConnectors := make([]tree.TxGraphChunk, 0, len(round.GetConnectors()))
+	for _, chunk := range round.GetConnectors() {
+		children := make(map[uint32]string)
+		chunksConnectors = append(chunksConnectors, tree.TxGraphChunk{
+			Tx:       chunk.GetTx(),
+			Children: children,
+		})
+	}
+
 	return &client.Round{
 		ID:         round.GetId(),
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
 		Tx:         round.GetRoundTx(),
-		Tree:       tree,
+		Tree:       chunksVtxoTree,
 		ForfeitTxs: round.GetForfeitTxs(),
-		Connectors: treeFromProto{round.GetConnectors()}.parse(),
+		Connectors: chunksConnectors,
 		Stage:      client.RoundStage(int(round.GetStage())),
 	}, nil
 }

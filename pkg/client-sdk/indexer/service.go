@@ -86,10 +86,8 @@ type PageResponse struct {
 }
 
 type TxNode struct {
-	Txid       string
-	ParentTxid string
-	Level      int32
-	LevelIndex int32
+	Tx       string
+	Children map[uint32]string
 }
 
 type Batch struct {

@@ -4,14 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
@@ -21,7 +19,6 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/explorerservice"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/explorerservice/explorer_service"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
-	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 )
@@ -32,7 +29,6 @@ type restClient struct {
 	svc            ark_service.ClientService
 	explorerSvc    explorer_service.ClientService
 	requestTimeout time.Duration
-	treeCache      *utils.Cache[tree.TxTree]
 }
 
 // NewClient creates a new REST client for the Ark service
@@ -50,9 +46,8 @@ func NewClient(serverURL string) (client.TransportClient, error) {
 	}
 	// TODO: use twice the round interval.
 	reqTimeout := 15 * time.Second
-	treeCache := utils.NewCache[tree.TxTree]()
 
-	return &restClient{serverURL, svc, explorerSvc, reqTimeout, treeCache}, nil
+	return &restClient{serverURL, svc, explorerSvc, reqTimeout}, nil
 }
 
 func (a *restClient) GetInfo(
@@ -260,18 +255,15 @@ func (a *restClient) SubmitTreeNonces(
 	ctx context.Context, roundID, cosignerPubkey string,
 	nonces tree.TreeNonces,
 ) error {
-	var nonceBuffer bytes.Buffer
-
-	if err := nonces.Encode(&nonceBuffer); err != nil {
+	sigsJSON, err := nonces.MarshalJSON()
+	if err != nil {
 		return err
 	}
-
-	serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
 
 	body := &models.V1SubmitTreeNoncesRequest{
 		RoundID:    roundID,
 		Pubkey:     cosignerPubkey,
-		TreeNonces: serializedNonces,
+		TreeNonces: string(sigsJSON),
 	}
 
 	if _, err := a.svc.ArkServiceSubmitTreeNonces(
@@ -287,18 +279,15 @@ func (a *restClient) SubmitTreeSignatures(
 	ctx context.Context, roundID, cosignerPubkey string,
 	signatures tree.TreePartialSigs,
 ) error {
-	var sigsBuffer bytes.Buffer
-
-	if err := signatures.Encode(&sigsBuffer); err != nil {
+	sigsJSON, err := signatures.MarshalJSON()
+	if err != nil {
 		return err
 	}
-
-	serializedSigs := hex.EncodeToString(sigsBuffer.Bytes())
 
 	body := &models.V1SubmitTreeSignaturesRequest{
 		RoundID:        roundID,
 		Pubkey:         cosignerPubkey,
-		TreeSignatures: serializedSigs,
+		TreeSignatures: string(sigsJSON),
 	}
 
 	if _, err := a.svc.ArkServiceSubmitTreeSignatures(
@@ -413,9 +402,8 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEve
 					}
 				case resp.Result.RoundSigningNoncesGenerated != nil:
 					e := resp.Result.RoundSigningNoncesGenerated
-					reader := hex.NewDecoder(strings.NewReader(e.TreeNonces))
-					nonces, err := tree.DecodeNonces(reader)
-					if err != nil {
+					nonces := make(tree.TreeNonces)
+					if err := nonces.UnmarshalJSON([]byte(e.TreeNonces)); err != nil {
 						_err = err
 						break
 					}
@@ -425,17 +413,23 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEve
 					}
 				case resp.Result.BatchTree != nil:
 					e := resp.Result.BatchTree
+
+					children := make(map[uint32]string)
+					for k, v := range e.Children {
+						kInt, err := strconv.ParseUint(k, 10, 32)
+						if err != nil {
+							_err = err
+							break
+						}
+						children[uint32(kInt)] = v
+					}
 					event = client.BatchTreeEvent{
 						ID:         e.ID,
 						Topic:      e.Topic,
 						BatchIndex: e.BatchIndex,
-						Node: tree.Node{
-							Txid:       e.TreeTx.Txid,
-							Tx:         e.TreeTx.Tx,
-							ParentTxid: e.TreeTx.ParentTxid,
-							Leaf:       e.TreeTx.Leaf,
-							Level:      e.TreeTx.Level,
-							LevelIndex: e.TreeTx.LevelIndex,
+						TxGraphChunk: tree.TxGraphChunk{
+							Tx:       e.Tx,
+							Children: children,
 						},
 					}
 				case resp.Result.BatchTreeSignature != nil:
@@ -444,8 +438,7 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEve
 						ID:         e.ID,
 						Topic:      e.Topic,
 						BatchIndex: e.BatchIndex,
-						Level:      e.Level,
-						LevelIndex: e.LevelIndex,
+						Txid:       e.Txid,
 						Signature:  e.Signature,
 					}
 				}
@@ -517,14 +510,46 @@ func (a *restClient) GetRound(
 		endedAt = &t
 	}
 
+	chunksVtxoTree := make([]tree.TxGraphChunk, 0, len(resp.Payload.Round.VtxoTree))
+	for _, chunk := range resp.Payload.Round.VtxoTree {
+		children := make(map[uint32]string)
+		for k, v := range chunk.Children {
+			vout, err := strconv.ParseUint(k, 10, 32)
+			if err != nil {
+				return nil, err
+			}
+			children[uint32(vout)] = v
+		}
+		chunksVtxoTree = append(chunksVtxoTree, tree.TxGraphChunk{
+			Tx:       chunk.Tx,
+			Children: children,
+		})
+	}
+
+	chunksConnectors := make([]tree.TxGraphChunk, 0, len(resp.Payload.Round.Connectors))
+	for _, chunk := range resp.Payload.Round.Connectors {
+		children := make(map[uint32]string)
+		for k, v := range chunk.Children {
+			vout, err := strconv.ParseUint(k, 10, 32)
+			if err != nil {
+				return nil, err
+			}
+			children[uint32(vout)] = v
+		}
+		chunksConnectors = append(chunksConnectors, tree.TxGraphChunk{
+			Tx:       chunk.Tx,
+			Children: children,
+		})
+	}
+
 	return &client.Round{
 		ID:         resp.Payload.Round.ID,
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
 		Tx:         resp.Payload.Round.RoundTx,
-		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
+		Tree:       chunksVtxoTree,
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
-		Connectors: treeFromProto{resp.Payload.Round.Connectors}.parse(),
+		Connectors: chunksConnectors,
 		Stage:      toRoundStage(*resp.Payload.Round.Stage),
 	}, nil
 }
@@ -556,14 +581,46 @@ func (a *restClient) GetRoundByID(
 		endedAt = &t
 	}
 
+	chunksVtxoTree := make([]tree.TxGraphChunk, 0, len(resp.Payload.Round.VtxoTree))
+	for _, chunk := range resp.Payload.Round.VtxoTree {
+		children := make(map[uint32]string)
+		for k, v := range chunk.Children {
+			vout, err := strconv.ParseUint(k, 10, 32)
+			if err != nil {
+				return nil, err
+			}
+			children[uint32(vout)] = v
+		}
+		chunksVtxoTree = append(chunksVtxoTree, tree.TxGraphChunk{
+			Tx:       chunk.Tx,
+			Children: children,
+		})
+	}
+
+	chunksConnectors := make([]tree.TxGraphChunk, 0, len(resp.Payload.Round.Connectors))
+	for _, chunk := range resp.Payload.Round.Connectors {
+		children := make(map[uint32]string)
+		for k, v := range chunk.Children {
+			vout, err := strconv.ParseUint(k, 10, 32)
+			if err != nil {
+				return nil, err
+			}
+			children[uint32(vout)] = v
+		}
+		chunksConnectors = append(chunksConnectors, tree.TxGraphChunk{
+			Tx:       chunk.Tx,
+			Children: children,
+		})
+	}
+
 	return &client.Round{
 		ID:         resp.Payload.Round.ID,
 		StartedAt:  &startedAt,
 		EndedAt:    endedAt,
 		Tx:         resp.Payload.Round.RoundTx,
-		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
+		Tree:       chunksVtxoTree,
 		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
-		Connectors: treeFromProto{resp.Payload.Round.Connectors}.parse(),
+		Connectors: chunksConnectors,
 		Stage:      toRoundStage(*resp.Payload.Round.Stage),
 	}, nil
 }
@@ -782,35 +839,6 @@ func toRoundStage(stage models.V1RoundStage) client.RoundStage {
 	default:
 		return client.RoundStageUndefined
 	}
-}
-
-// treeFromProto is a wrapper type for V1Tree
-type treeFromProto struct {
-	*models.V1Tree
-}
-
-func (t treeFromProto) parse() tree.TxTree {
-	if t.V1Tree == nil || t.Levels == nil {
-		return tree.TxTree{}
-	}
-
-	vtxoTree := make(tree.TxTree, 0, len(t.Levels))
-	for _, l := range t.Levels {
-		level := make([]tree.Node, 0, len(l.Nodes))
-		for _, n := range l.Nodes {
-			level = append(level, tree.Node{
-				Txid:       n.Txid,
-				Tx:         n.Tx,
-				ParentTxid: n.ParentTxid,
-				Leaf:       n.Leaf,
-				Level:      n.Level,
-				LevelIndex: n.LevelIndex,
-			})
-		}
-		vtxoTree = append(vtxoTree, level)
-	}
-
-	return vtxoTree
 }
 
 // connectorsIndexFromProto is a wrapper type for map[string]models.V1Outpoint

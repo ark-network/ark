@@ -136,31 +136,19 @@ func (c connectorsIndex) toProto() map[string]*arkv1.Outpoint {
 	return proto
 }
 
-type vtxoTree tree.TxTree
+type txGraphChunks []tree.TxGraphChunk
 
-func (t vtxoTree) toProto() *arkv1.Tree {
-	levels := make([]*arkv1.TreeLevel, 0, len(t))
-	for _, level := range t {
-		levelProto := &arkv1.TreeLevel{
-			Nodes: make([]*arkv1.Node, 0, len(level)),
+func (t txGraphChunks) toProto() []*arkv1.TxGraphChunk {
+	chunks := make([]*arkv1.TxGraphChunk, 0, len(t))
+	for _, chunk := range t {
+		chunkProto := &arkv1.TxGraphChunk{
+			Tx:       chunk.Tx,
+			Children: chunk.Children,
 		}
 
-		for _, node := range level {
-			levelProto.Nodes = append(levelProto.Nodes, &arkv1.Node{
-				Txid:       node.Txid,
-				Tx:         node.Tx,
-				ParentTxid: node.ParentTxid,
-				Level:      node.Level,
-				LevelIndex: node.LevelIndex,
-				Leaf:       node.Leaf,
-			})
-		}
-
-		levels = append(levels, levelProto)
+		chunks = append(chunks, chunkProto)
 	}
-	return &arkv1.Tree{
-		Levels: levels,
-	}
+	return chunks
 }
 
 type stage domain.Stage

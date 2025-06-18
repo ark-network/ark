@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/ark-network/ark/common"
@@ -12,6 +13,7 @@ import (
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	txbuilder "github.com/ark-network/ark/server/internal/infrastructure/tx-builder/covenantless"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -84,11 +86,13 @@ func TestBuildRoundTx(t *testing.T) {
 				require.NotEmpty(t, roundTx)
 				require.NotEmpty(t, vtxoTree)
 				require.Equal(t, connectorAddress, connAddr)
-				require.Equal(t, f.ExpectedNumOfNodes, vtxoTree.NumberOfNodes())
 				require.Len(t, vtxoTree.Leaves(), f.ExpectedNumOfLeaves)
 
-				err = tree.ValidateVtxoTree(
-					vtxoTree, roundTx, pubkey, vtxoTreeExpiry,
+				roundPtx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
+				require.NoError(t, err)
+
+				err = tree.ValidateVtxoTxGraph(
+					vtxoTree, roundPtx, pubkey, vtxoTreeExpiry,
 				)
 				require.NoError(t, err)
 			}
@@ -140,7 +144,6 @@ func randomHex(len int) string {
 type roundTxFixtures struct {
 	Valid []struct {
 		Requests            []domain.TxRequest
-		ExpectedNumOfNodes  int
 		ExpectedNumOfLeaves int
 	}
 	Invalid []struct {

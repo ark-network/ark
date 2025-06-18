@@ -516,8 +516,15 @@
           "type": "integer",
           "format": "int32"
         },
-        "treeTx": {
-          "$ref": "#/definitions/v1Node"
+        "tx": {
+          "type": "string"
+        },
+        "children": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "output index -\u003e child txid"
         }
       }
     },
@@ -537,13 +544,8 @@
           "type": "integer",
           "format": "int32"
         },
-        "level": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "levelIndex": {
-          "type": "integer",
-          "format": "int32"
+        "txid": {
+          "type": "string"
         },
         "signature": {
           "type": "string"
@@ -756,31 +758,6 @@
         "roundInterval": {
           "type": "string",
           "format": "int64"
-        }
-      }
-    },
-    "v1Node": {
-      "type": "object",
-      "properties": {
-        "txid": {
-          "type": "string"
-        },
-        "tx": {
-          "type": "string"
-        },
-        "parentTxid": {
-          "type": "string"
-        },
-        "level": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "levelIndex": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "leaf": {
-          "type": "boolean"
         }
       }
     },
