@@ -3,9 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
-
-	"google.golang.org/protobuf/types/known/durationpb"
-	"google.golang.org/protobuf/types/known/timestamppb"
+	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/server/internal/core/application"
@@ -39,11 +37,11 @@ func (a *adminHandler) GetRoundDetails(ctx context.Context, req *arkv1.GetRoundD
 
 	return &arkv1.GetRoundDetailsResponse{
 		RoundId:          details.RoundId,
-		Txid:             details.TxId,
+		CommitmentTxid:   details.TxId,
 		ForfeitedAmount:  convertSatsToBTCStr(details.ForfeitedAmount),
 		TotalVtxosAmount: convertSatsToBTCStr(details.TotalVtxosAmount),
 		TotalExitAmount:  convertSatsToBTCStr(details.TotalExitAmount),
-		FeesAmount:       convertSatsToBTCStr(details.FeesAmount),
+		TotalFeeAmount:   convertSatsToBTCStr(details.FeesAmount),
 		InputsVtxos:      details.InputsVtxos,
 		OutputsVtxos:     details.OutputsVtxos,
 		ExitAddresses:    details.ExitAddresses,
@@ -142,10 +140,10 @@ func (a *adminHandler) GetMarketHourConfig(
 
 	return &arkv1.GetMarketHourConfigResponse{
 		Config: &arkv1.MarketHourConfig{
-			StartTime:     timestamppb.New(config.StartTime),
-			EndTime:       timestamppb.New(config.EndTime),
-			Period:        durationpb.New(config.Period),
-			RoundInterval: durationpb.New(config.RoundInterval),
+			StartTime:     config.StartTime.Unix(),
+			EndTime:       config.EndTime.Unix(),
+			Period:        int64(config.Period.Seconds()),
+			RoundInterval: int64(config.RoundInterval.Seconds()),
 		},
 	}, nil
 }
@@ -156,10 +154,10 @@ func (a *adminHandler) UpdateMarketHourConfig(
 ) (*arkv1.UpdateMarketHourConfigResponse, error) {
 	if err := a.arkService.UpdateMarketHourConfig(
 		ctx,
-		req.GetConfig().GetStartTime().AsTime(),
-		req.GetConfig().GetEndTime().AsTime(),
-		req.GetConfig().GetPeriod().AsDuration(),
-		req.GetConfig().GetRoundInterval().AsDuration(),
+		time.Unix(req.GetConfig().GetStartTime(), 0),
+		time.Unix(req.GetConfig().GetEndTime(), 0),
+		time.Duration(req.GetConfig().GetPeriod())*time.Second,
+		time.Duration(req.GetConfig().GetRoundInterval())*time.Second,
 	); err != nil {
 		return nil, status.Error(codes.Internal, err.Error())
 	}
@@ -167,41 +165,23 @@ func (a *adminHandler) UpdateMarketHourConfig(
 	return &arkv1.UpdateMarketHourConfigResponse{}, nil
 }
 
-func (a *adminHandler) GetTxRequestQueue(
-	ctx context.Context, req *arkv1.GetTxRequestQueueRequest,
-) (*arkv1.GetTxRequestQueueResponse, error) {
-	requestIds := req.GetRequestIds()
-	requests, err := a.arkService.GetTxRequestQueue(ctx, requestIds...)
+func (a *adminHandler) ListIntents(
+	ctx context.Context, req *arkv1.ListIntentsRequest,
+) (*arkv1.ListIntentsResponse, error) {
+	requests, err := a.arkService.GetTxRequestQueue(ctx, req.GetIntentIds()...)
 	if err != nil {
 		return nil, err
 	}
 
-	return &arkv1.GetTxRequestQueueResponse{Requests: txReqsInfo(requests).toProto()}, nil
+	return &arkv1.ListIntentsResponse{Intents: intentsInfo(requests).toProto()}, nil
 }
 
-func (a *adminHandler) Withdraw(ctx context.Context, req *arkv1.WithdrawRequest) (*arkv1.WithdrawResponse, error) {
-	if req.GetAmount() <= 0 {
-		return nil, status.Error(codes.InvalidArgument, "amount must be greater than 0")
-	}
-
-	if req.GetAddress() == "" {
-		return nil, status.Error(codes.InvalidArgument, "address is required")
-	}
-
-	txid, err := a.adminService.Wallet().Withdraw(ctx, req.GetAddress(), req.GetAmount())
-	if err != nil {
-		return nil, err
-	}
-	return &arkv1.WithdrawResponse{Txid: txid}, nil
-}
-
-func (a *adminHandler) DeleteTxRequests(
-	ctx context.Context, req *arkv1.DeleteTxRequestsRequest,
-) (*arkv1.DeleteTxRequestsResponse, error) {
-	requestIds := req.GetRequestIds()
-	if err := a.arkService.DeleteTxRequests(ctx, requestIds...); err != nil {
+func (a *adminHandler) DeleteIntents(
+	ctx context.Context, req *arkv1.DeleteIntentsRequest,
+) (*arkv1.DeleteIntentsResponse, error) {
+	if err := a.arkService.DeleteTxRequests(ctx, req.GetIntentIds()...); err != nil {
 		return nil, err
 	}
 
-	return &arkv1.DeleteTxRequestsResponse{}, nil
+	return &arkv1.DeleteIntentsResponse{}, nil
 }

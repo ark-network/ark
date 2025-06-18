@@ -210,7 +210,6 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 		subscriptionTimeoutDuration := time.Minute // TODO let to be set via config
 		indexerHandler := handlers.NewIndexerService(indexerSvc, eventsCh, subscriptionTimeoutDuration)
 		arkv1.RegisterArkServiceServer(grpcServer, appHandler)
-		arkv1.RegisterExplorerServiceServer(grpcServer, appHandler)
 		arkv1.RegisterIndexerServiceServer(grpcServer, indexerHandler)
 		onInit = nil
 		onUnlock = nil
@@ -286,11 +285,6 @@ func (s *service) newServer(tlsConfig *tls.Config, withAppSvc bool) error {
 	}
 	if withAppSvc {
 		if err := arkv1.RegisterArkServiceHandler(
-			ctx, gwmux, conn,
-		); err != nil {
-			return err
-		}
-		if err := arkv1.RegisterExplorerServiceHandler(
 			ctx, gwmux, conn,
 		); err != nil {
 			return err
