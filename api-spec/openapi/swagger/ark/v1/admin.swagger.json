@@ -16,7 +16,73 @@
     "application/json"
   ],
   "paths": {
-    "/v1/admin/market-hour": {
+    "/v1/admin/intents": {
+      "get": {
+        "operationId": "AdminService_ListIntents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1ListIntentsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "intentIds",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/intents/delete": {
+      "post": {
+        "operationId": "AdminService_DeleteIntents",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1DeleteIntentsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "body",
+            "in": "body",
+            "required": true,
+            "schema": {
+              "$ref": "#/definitions/v1DeleteIntentsRequest"
+            }
+          }
+        ],
+        "tags": [
+          "AdminService"
+        ]
+      }
+    },
+    "/v1/admin/marketHour": {
       "get": {
         "operationId": "AdminService_GetMarketHourConfig",
         "responses": {
@@ -92,72 +158,6 @@
             "required": true,
             "schema": {
               "$ref": "#/definitions/v1CreateNoteRequest"
-            }
-          }
-        ],
-        "tags": [
-          "AdminService"
-        ]
-      }
-    },
-    "/v1/admin/queue": {
-      "get": {
-        "operationId": "AdminService_GetTxRequestQueue",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetTxRequestQueueResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "requestIds",
-            "in": "query",
-            "required": false,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "multi"
-          }
-        ],
-        "tags": [
-          "AdminService"
-        ]
-      }
-    },
-    "/v1/admin/queue/delete": {
-      "post": {
-        "operationId": "AdminService_DeleteTxRequests",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1DeleteTxRequestsResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1DeleteTxRequestsRequest"
             }
           }
         ],
@@ -249,38 +249,6 @@
           "AdminService"
         ]
       }
-    },
-    "/v1/admin/withdraw": {
-      "post": {
-        "operationId": "AdminService_Withdraw",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1WithdrawResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "body",
-            "in": "body",
-            "required": true,
-            "schema": {
-              "$ref": "#/definitions/v1WithdrawRequest"
-            }
-          }
-        ],
-        "tags": [
-          "AdminService"
-        ]
-      }
     }
   },
   "definitions": {
@@ -312,6 +280,17 @@
         }
       }
     },
+    "v1Bip322Signature": {
+      "type": "object",
+      "properties": {
+        "signature": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
     "v1CreateNoteRequest": {
       "type": "object",
       "properties": {
@@ -336,10 +315,10 @@
         }
       }
     },
-    "v1DeleteTxRequestsRequest": {
+    "v1DeleteIntentsRequest": {
       "type": "object",
       "properties": {
-        "requestIds": {
+        "intentIds": {
           "type": "array",
           "items": {
             "type": "string"
@@ -347,7 +326,7 @@
         }
       }
     },
-    "v1DeleteTxRequestsResponse": {
+    "v1DeleteIntentsResponse": {
       "type": "object"
     },
     "v1GetMarketHourConfigResponse": {
@@ -364,7 +343,7 @@
         "roundId": {
           "type": "string"
         },
-        "txid": {
+        "commitmentTxid": {
           "type": "string"
         },
         "forfeitedAmount": {
@@ -376,7 +355,7 @@
         "totalExitAmount": {
           "type": "string"
         },
-        "feesAmount": {
+        "totalFeeAmount": {
           "type": "string"
         },
         "inputsVtxos": {
@@ -435,14 +414,72 @@
         }
       }
     },
-    "v1GetTxRequestQueueResponse": {
+    "v1IntentInfo": {
       "type": "object",
       "properties": {
-        "requests": {
+        "id": {
+          "type": "string"
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "int64"
+        },
+        "receivers": {
           "type": "array",
           "items": {
             "type": "object",
-            "$ref": "#/definitions/v1TxRequestInfo"
+            "$ref": "#/definitions/v1Output"
+          }
+        },
+        "inputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IntentInput"
+          }
+        },
+        "boardingInputs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IntentInput"
+          }
+        },
+        "cosignersPublicKeys": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "proof": {
+          "$ref": "#/definitions/v1Bip322Signature"
+        }
+      }
+    },
+    "v1IntentInput": {
+      "type": "object",
+      "properties": {
+        "txid": {
+          "type": "string"
+        },
+        "vout": {
+          "type": "integer",
+          "format": "int64"
+        },
+        "amount": {
+          "type": "string",
+          "format": "uint64"
+        }
+      }
+    },
+    "v1ListIntentsResponse": {
+      "type": "object",
+      "properties": {
+        "intents": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "$ref": "#/definitions/v1IntentInfo"
           }
         }
       }
@@ -452,17 +489,19 @@
       "properties": {
         "startTime": {
           "type": "string",
-          "format": "date-time"
+          "format": "int64"
         },
         "endTime": {
           "type": "string",
-          "format": "date-time"
+          "format": "int64"
         },
         "period": {
-          "type": "string"
+          "type": "string",
+          "format": "int64"
         },
         "roundInterval": {
-          "type": "string"
+          "type": "string",
+          "format": "int64"
         }
       }
     },
@@ -477,22 +516,6 @@
           "type": "string",
           "format": "uint64",
           "description": "Amount to send in satoshis."
-        }
-      }
-    },
-    "v1RequestInput": {
-      "type": "object",
-      "properties": {
-        "txid": {
-          "type": "string"
-        },
-        "vout": {
-          "type": "integer",
-          "format": "int64"
-        },
-        "amount": {
-          "type": "string",
-          "format": "uint64"
         }
       }
     },
@@ -530,45 +553,6 @@
         }
       }
     },
-    "v1TxRequestInfo": {
-      "type": "object",
-      "properties": {
-        "id": {
-          "type": "string"
-        },
-        "createdAt": {
-          "type": "string",
-          "format": "int64"
-        },
-        "receivers": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1Output"
-          }
-        },
-        "inputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1RequestInput"
-          }
-        },
-        "boardingInputs": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1RequestInput"
-          }
-        },
-        "cosignersPublicKeys": {
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        }
-      }
-    },
     "v1UpdateMarketHourConfigRequest": {
       "type": "object",
       "properties": {
@@ -579,26 +563,6 @@
     },
     "v1UpdateMarketHourConfigResponse": {
       "type": "object"
-    },
-    "v1WithdrawRequest": {
-      "type": "object",
-      "properties": {
-        "address": {
-          "type": "string"
-        },
-        "amount": {
-          "type": "string",
-          "format": "uint64"
-        }
-      }
-    },
-    "v1WithdrawResponse": {
-      "type": "object",
-      "properties": {
-        "txid": {
-          "type": "string"
-        }
-      }
     }
   }
 }

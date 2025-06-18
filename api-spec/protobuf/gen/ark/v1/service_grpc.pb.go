@@ -18,19 +18,59 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type ArkServiceClient interface {
+	// GetInfo returns information and parameters of the server.
 	GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error)
-	GetBoardingAddress(ctx context.Context, in *GetBoardingAddressRequest, opts ...grpc.CallOption) (*GetBoardingAddressResponse, error)
+	// RegisterIntent allows to register a new intent that will be eventually selected by the server
+	// for a particular batch.
+	// The client should provide a BIP-322 message with the intent information, and the server should
+	// respond with an intent id.
 	RegisterIntent(ctx context.Context, in *RegisterIntentRequest, opts ...grpc.CallOption) (*RegisterIntentResponse, error)
+	// DeleteIntent removes a previously registered intent from the server.
+	// The client should provide the BIP-322 signature and message including any of the vtxos used in
+	// the registered intent to prove its ownership.
+	// The server should delete the intent and return success.
 	DeleteIntent(ctx context.Context, in *DeleteIntentRequest, opts ...grpc.CallOption) (*DeleteIntentResponse, error)
-	RegisterInputsForNextRound(ctx context.Context, in *RegisterInputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterInputsForNextRoundResponse, error)
+	// ConfirmRegistration allows a client that has been selected for the next batch to confirm its
+	// participation by revealing the intent id.
 	ConfirmRegistration(ctx context.Context, in *ConfirmRegistrationRequest, opts ...grpc.CallOption) (*ConfirmRegistrationResponse, error)
-	RegisterOutputsForNextRound(ctx context.Context, in *RegisterOutputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterOutputsForNextRoundResponse, error)
+	// SubmitTreeNonces allows a cosigner to submit the tree nonces for the musig2 session of a given
+	// batch.
+	// The client should provide the batch id, the cosigner public key, and the tree nonces.
+	// The server should verify the cosigner public key and the nonces, and store them for later
+	// aggregation once nonces from all clients are collected.
 	SubmitTreeNonces(ctx context.Context, in *SubmitTreeNoncesRequest, opts ...grpc.CallOption) (*SubmitTreeNoncesResponse, error)
+	// SubmitTreeSignatures allows a cosigner to submit the tree signatures for the musig2 session of
+	// a given batch.
+	// The client should provide the batch id, the cosigner public key, and the tree signatures.
+	// The server should verify the cosigner public key and the signatures, and store them for later
+	// aggregation once signatures from all clients are collected.
 	SubmitTreeSignatures(ctx context.Context, in *SubmitTreeSignaturesRequest, opts ...grpc.CallOption) (*SubmitTreeSignaturesResponse, error)
+	// SubmitSignedForfeitTxs allows a client to submit signed forfeit transactions and/or signed
+	// commitment transaction (in case of onboarding).
+	// The server should verify the signed txs and return success.
 	SubmitSignedForfeitTxs(ctx context.Context, in *SubmitSignedForfeitTxsRequest, opts ...grpc.CallOption) (*SubmitSignedForfeitTxsResponse, error)
+	// GetEventStream is a server-side streaming RPC that allows clients to receive a stream of
+	// events related to batch processing.
+	// Clients should use this stream as soon as they are ready to join a batch and can listen for
+	// various events such as batch start, batch finalization, and other related activities.
+	// The server pushes these events to the client in real-time as soon as its ready to move to the
+	// next phase of the batch processing.
 	GetEventStream(ctx context.Context, in *GetEventStreamRequest, opts ...grpc.CallOption) (ArkService_GetEventStreamClient, error)
-	SubmitOffchainTx(ctx context.Context, in *SubmitOffchainTxRequest, opts ...grpc.CallOption) (*SubmitOffchainTxResponse, error)
-	FinalizeOffchainTx(ctx context.Context, in *FinalizeOffchainTxRequest, opts ...grpc.CallOption) (*FinalizeOffchainTxResponse, error)
+	// SubmitTx is the first leg of the process of spending vtxos offchain and allows a client to
+	// submit a signed Ark transaction and the unsigned checkpoint transactions.
+	// The server should verify the signed transactions and return the fully signed Ark tx and the
+	// signed checkpoint txs.
+	SubmitTx(ctx context.Context, in *SubmitTxRequest, opts ...grpc.CallOption) (*SubmitTxResponse, error)
+	// FinalizeTx is the last lef of the process of spending vtxos offchain and allows a client to
+	// submit the fully signed checkpoint txs for the provided Ark txid .
+	// The server verifies the signed checkpoint transactions and returns success if everything is
+	// valid.
+	FinalizeTx(ctx context.Context, in *FinalizeTxRequest, opts ...grpc.CallOption) (*FinalizeTxResponse, error)
+	// GetTransactionsStream is a server-side streaming RPC that allows clients to receive
+	// notifications in real-time about any commitment tx or ark tx processed and finalized by the
+	// server.
+	// NOTE: the stream doesn't have history support, therefore returns only txs from the moment it's
+	// opened until it's closed.
 	GetTransactionsStream(ctx context.Context, in *GetTransactionsStreamRequest, opts ...grpc.CallOption) (ArkService_GetTransactionsStreamClient, error)
 }
 
@@ -45,15 +85,6 @@ func NewArkServiceClient(cc grpc.ClientConnInterface) ArkServiceClient {
 func (c *arkServiceClient) GetInfo(ctx context.Context, in *GetInfoRequest, opts ...grpc.CallOption) (*GetInfoResponse, error) {
 	out := new(GetInfoResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetInfo", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *arkServiceClient) GetBoardingAddress(ctx context.Context, in *GetBoardingAddressRequest, opts ...grpc.CallOption) (*GetBoardingAddressResponse, error) {
-	out := new(GetBoardingAddressResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/GetBoardingAddress", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -78,27 +109,9 @@ func (c *arkServiceClient) DeleteIntent(ctx context.Context, in *DeleteIntentReq
 	return out, nil
 }
 
-func (c *arkServiceClient) RegisterInputsForNextRound(ctx context.Context, in *RegisterInputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterInputsForNextRoundResponse, error) {
-	out := new(RegisterInputsForNextRoundResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/RegisterInputsForNextRound", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 func (c *arkServiceClient) ConfirmRegistration(ctx context.Context, in *ConfirmRegistrationRequest, opts ...grpc.CallOption) (*ConfirmRegistrationResponse, error) {
 	out := new(ConfirmRegistrationResponse)
 	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/ConfirmRegistration", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
-func (c *arkServiceClient) RegisterOutputsForNextRound(ctx context.Context, in *RegisterOutputsForNextRoundRequest, opts ...grpc.CallOption) (*RegisterOutputsForNextRoundResponse, error) {
-	out := new(RegisterOutputsForNextRoundResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/RegisterOutputsForNextRound", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -164,18 +177,18 @@ func (x *arkServiceGetEventStreamClient) Recv() (*GetEventStreamResponse, error)
 	return m, nil
 }
 
-func (c *arkServiceClient) SubmitOffchainTx(ctx context.Context, in *SubmitOffchainTxRequest, opts ...grpc.CallOption) (*SubmitOffchainTxResponse, error) {
-	out := new(SubmitOffchainTxResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SubmitOffchainTx", in, out, opts...)
+func (c *arkServiceClient) SubmitTx(ctx context.Context, in *SubmitTxRequest, opts ...grpc.CallOption) (*SubmitTxResponse, error) {
+	out := new(SubmitTxResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/SubmitTx", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *arkServiceClient) FinalizeOffchainTx(ctx context.Context, in *FinalizeOffchainTxRequest, opts ...grpc.CallOption) (*FinalizeOffchainTxResponse, error) {
-	out := new(FinalizeOffchainTxResponse)
-	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/FinalizeOffchainTx", in, out, opts...)
+func (c *arkServiceClient) FinalizeTx(ctx context.Context, in *FinalizeTxRequest, opts ...grpc.CallOption) (*FinalizeTxResponse, error) {
+	out := new(FinalizeTxResponse)
+	err := c.cc.Invoke(ctx, "/ark.v1.ArkService/FinalizeTx", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -218,19 +231,59 @@ func (x *arkServiceGetTransactionsStreamClient) Recv() (*GetTransactionsStreamRe
 // All implementations should embed UnimplementedArkServiceServer
 // for forward compatibility
 type ArkServiceServer interface {
+	// GetInfo returns information and parameters of the server.
 	GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error)
-	GetBoardingAddress(context.Context, *GetBoardingAddressRequest) (*GetBoardingAddressResponse, error)
+	// RegisterIntent allows to register a new intent that will be eventually selected by the server
+	// for a particular batch.
+	// The client should provide a BIP-322 message with the intent information, and the server should
+	// respond with an intent id.
 	RegisterIntent(context.Context, *RegisterIntentRequest) (*RegisterIntentResponse, error)
+	// DeleteIntent removes a previously registered intent from the server.
+	// The client should provide the BIP-322 signature and message including any of the vtxos used in
+	// the registered intent to prove its ownership.
+	// The server should delete the intent and return success.
 	DeleteIntent(context.Context, *DeleteIntentRequest) (*DeleteIntentResponse, error)
-	RegisterInputsForNextRound(context.Context, *RegisterInputsForNextRoundRequest) (*RegisterInputsForNextRoundResponse, error)
+	// ConfirmRegistration allows a client that has been selected for the next batch to confirm its
+	// participation by revealing the intent id.
 	ConfirmRegistration(context.Context, *ConfirmRegistrationRequest) (*ConfirmRegistrationResponse, error)
-	RegisterOutputsForNextRound(context.Context, *RegisterOutputsForNextRoundRequest) (*RegisterOutputsForNextRoundResponse, error)
+	// SubmitTreeNonces allows a cosigner to submit the tree nonces for the musig2 session of a given
+	// batch.
+	// The client should provide the batch id, the cosigner public key, and the tree nonces.
+	// The server should verify the cosigner public key and the nonces, and store them for later
+	// aggregation once nonces from all clients are collected.
 	SubmitTreeNonces(context.Context, *SubmitTreeNoncesRequest) (*SubmitTreeNoncesResponse, error)
+	// SubmitTreeSignatures allows a cosigner to submit the tree signatures for the musig2 session of
+	// a given batch.
+	// The client should provide the batch id, the cosigner public key, and the tree signatures.
+	// The server should verify the cosigner public key and the signatures, and store them for later
+	// aggregation once signatures from all clients are collected.
 	SubmitTreeSignatures(context.Context, *SubmitTreeSignaturesRequest) (*SubmitTreeSignaturesResponse, error)
+	// SubmitSignedForfeitTxs allows a client to submit signed forfeit transactions and/or signed
+	// commitment transaction (in case of onboarding).
+	// The server should verify the signed txs and return success.
 	SubmitSignedForfeitTxs(context.Context, *SubmitSignedForfeitTxsRequest) (*SubmitSignedForfeitTxsResponse, error)
+	// GetEventStream is a server-side streaming RPC that allows clients to receive a stream of
+	// events related to batch processing.
+	// Clients should use this stream as soon as they are ready to join a batch and can listen for
+	// various events such as batch start, batch finalization, and other related activities.
+	// The server pushes these events to the client in real-time as soon as its ready to move to the
+	// next phase of the batch processing.
 	GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error
-	SubmitOffchainTx(context.Context, *SubmitOffchainTxRequest) (*SubmitOffchainTxResponse, error)
-	FinalizeOffchainTx(context.Context, *FinalizeOffchainTxRequest) (*FinalizeOffchainTxResponse, error)
+	// SubmitTx is the first leg of the process of spending vtxos offchain and allows a client to
+	// submit a signed Ark transaction and the unsigned checkpoint transactions.
+	// The server should verify the signed transactions and return the fully signed Ark tx and the
+	// signed checkpoint txs.
+	SubmitTx(context.Context, *SubmitTxRequest) (*SubmitTxResponse, error)
+	// FinalizeTx is the last lef of the process of spending vtxos offchain and allows a client to
+	// submit the fully signed checkpoint txs for the provided Ark txid .
+	// The server verifies the signed checkpoint transactions and returns success if everything is
+	// valid.
+	FinalizeTx(context.Context, *FinalizeTxRequest) (*FinalizeTxResponse, error)
+	// GetTransactionsStream is a server-side streaming RPC that allows clients to receive
+	// notifications in real-time about any commitment tx or ark tx processed and finalized by the
+	// server.
+	// NOTE: the stream doesn't have history support, therefore returns only txs from the moment it's
+	// opened until it's closed.
 	GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error
 }
 
@@ -241,23 +294,14 @@ type UnimplementedArkServiceServer struct {
 func (UnimplementedArkServiceServer) GetInfo(context.Context, *GetInfoRequest) (*GetInfoResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetInfo not implemented")
 }
-func (UnimplementedArkServiceServer) GetBoardingAddress(context.Context, *GetBoardingAddressRequest) (*GetBoardingAddressResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method GetBoardingAddress not implemented")
-}
 func (UnimplementedArkServiceServer) RegisterIntent(context.Context, *RegisterIntentRequest) (*RegisterIntentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RegisterIntent not implemented")
 }
 func (UnimplementedArkServiceServer) DeleteIntent(context.Context, *DeleteIntentRequest) (*DeleteIntentResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method DeleteIntent not implemented")
 }
-func (UnimplementedArkServiceServer) RegisterInputsForNextRound(context.Context, *RegisterInputsForNextRoundRequest) (*RegisterInputsForNextRoundResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RegisterInputsForNextRound not implemented")
-}
 func (UnimplementedArkServiceServer) ConfirmRegistration(context.Context, *ConfirmRegistrationRequest) (*ConfirmRegistrationResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ConfirmRegistration not implemented")
-}
-func (UnimplementedArkServiceServer) RegisterOutputsForNextRound(context.Context, *RegisterOutputsForNextRoundRequest) (*RegisterOutputsForNextRoundResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method RegisterOutputsForNextRound not implemented")
 }
 func (UnimplementedArkServiceServer) SubmitTreeNonces(context.Context, *SubmitTreeNoncesRequest) (*SubmitTreeNoncesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method SubmitTreeNonces not implemented")
@@ -271,11 +315,11 @@ func (UnimplementedArkServiceServer) SubmitSignedForfeitTxs(context.Context, *Su
 func (UnimplementedArkServiceServer) GetEventStream(*GetEventStreamRequest, ArkService_GetEventStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetEventStream not implemented")
 }
-func (UnimplementedArkServiceServer) SubmitOffchainTx(context.Context, *SubmitOffchainTxRequest) (*SubmitOffchainTxResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method SubmitOffchainTx not implemented")
+func (UnimplementedArkServiceServer) SubmitTx(context.Context, *SubmitTxRequest) (*SubmitTxResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SubmitTx not implemented")
 }
-func (UnimplementedArkServiceServer) FinalizeOffchainTx(context.Context, *FinalizeOffchainTxRequest) (*FinalizeOffchainTxResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method FinalizeOffchainTx not implemented")
+func (UnimplementedArkServiceServer) FinalizeTx(context.Context, *FinalizeTxRequest) (*FinalizeTxResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FinalizeTx not implemented")
 }
 func (UnimplementedArkServiceServer) GetTransactionsStream(*GetTransactionsStreamRequest, ArkService_GetTransactionsStreamServer) error {
 	return status.Errorf(codes.Unimplemented, "method GetTransactionsStream not implemented")
@@ -306,24 +350,6 @@ func _ArkService_GetInfo_Handler(srv interface{}, ctx context.Context, dec func(
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ArkServiceServer).GetInfo(ctx, req.(*GetInfoRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ArkService_GetBoardingAddress_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(GetBoardingAddressRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).GetBoardingAddress(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/GetBoardingAddress",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).GetBoardingAddress(ctx, req.(*GetBoardingAddressRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -364,24 +390,6 @@ func _ArkService_DeleteIntent_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_RegisterInputsForNextRound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterInputsForNextRoundRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).RegisterInputsForNextRound(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/RegisterInputsForNextRound",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).RegisterInputsForNextRound(ctx, req.(*RegisterInputsForNextRoundRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 func _ArkService_ConfirmRegistration_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ConfirmRegistrationRequest)
 	if err := dec(in); err != nil {
@@ -396,24 +404,6 @@ func _ArkService_ConfirmRegistration_Handler(srv interface{}, ctx context.Contex
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(ArkServiceServer).ConfirmRegistration(ctx, req.(*ConfirmRegistrationRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
-func _ArkService_RegisterOutputsForNextRound_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(RegisterOutputsForNextRoundRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(ArkServiceServer).RegisterOutputsForNextRound(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/RegisterOutputsForNextRound",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).RegisterOutputsForNextRound(ctx, req.(*RegisterOutputsForNextRoundRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -493,38 +483,38 @@ func (x *arkServiceGetEventStreamServer) Send(m *GetEventStreamResponse) error {
 	return x.ServerStream.SendMsg(m)
 }
 
-func _ArkService_SubmitOffchainTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(SubmitOffchainTxRequest)
+func _ArkService_SubmitTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SubmitTxRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).SubmitOffchainTx(ctx, in)
+		return srv.(ArkServiceServer).SubmitTx(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/SubmitOffchainTx",
+		FullMethod: "/ark.v1.ArkService/SubmitTx",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).SubmitOffchainTx(ctx, req.(*SubmitOffchainTxRequest))
+		return srv.(ArkServiceServer).SubmitTx(ctx, req.(*SubmitTxRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _ArkService_FinalizeOffchainTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(FinalizeOffchainTxRequest)
+func _ArkService_FinalizeTx_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FinalizeTxRequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(ArkServiceServer).FinalizeOffchainTx(ctx, in)
+		return srv.(ArkServiceServer).FinalizeTx(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/ark.v1.ArkService/FinalizeOffchainTx",
+		FullMethod: "/ark.v1.ArkService/FinalizeTx",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(ArkServiceServer).FinalizeOffchainTx(ctx, req.(*FinalizeOffchainTxRequest))
+		return srv.(ArkServiceServer).FinalizeTx(ctx, req.(*FinalizeTxRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -562,10 +552,6 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ArkService_GetInfo_Handler,
 		},
 		{
-			MethodName: "GetBoardingAddress",
-			Handler:    _ArkService_GetBoardingAddress_Handler,
-		},
-		{
 			MethodName: "RegisterIntent",
 			Handler:    _ArkService_RegisterIntent_Handler,
 		},
@@ -574,16 +560,8 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ArkService_DeleteIntent_Handler,
 		},
 		{
-			MethodName: "RegisterInputsForNextRound",
-			Handler:    _ArkService_RegisterInputsForNextRound_Handler,
-		},
-		{
 			MethodName: "ConfirmRegistration",
 			Handler:    _ArkService_ConfirmRegistration_Handler,
-		},
-		{
-			MethodName: "RegisterOutputsForNextRound",
-			Handler:    _ArkService_RegisterOutputsForNextRound_Handler,
 		},
 		{
 			MethodName: "SubmitTreeNonces",
@@ -598,12 +576,12 @@ var ArkService_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _ArkService_SubmitSignedForfeitTxs_Handler,
 		},
 		{
-			MethodName: "SubmitOffchainTx",
-			Handler:    _ArkService_SubmitOffchainTx_Handler,
+			MethodName: "SubmitTx",
+			Handler:    _ArkService_SubmitTx_Handler,
 		},
 		{
-			MethodName: "FinalizeOffchainTx",
-			Handler:    _ArkService_FinalizeOffchainTx_Handler,
+			MethodName: "FinalizeTx",
+			Handler:    _ArkService_FinalizeTx_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
