@@ -4,12 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
 )
 
 const (
@@ -20,10 +16,6 @@ const (
 var (
 	ErrConnectionClosedByServer = fmt.Errorf("connection closed by server")
 )
-
-type BatchEvent interface {
-	isBatchEvent()
-}
 
 type TransportClient interface {
 	GetInfo(ctx context.Context) (*Info, error)
@@ -63,7 +55,7 @@ type Info struct {
 }
 
 type BatchEventChannel struct {
-	Event BatchEvent
+	Event any
 	Err   error
 }
 
@@ -77,67 +69,21 @@ type TapscriptsVtxo struct {
 	Tapscripts []string
 }
 
-type Output struct {
-	Address string // onchain or offchain address
-	Amount  uint64
-}
-
-func (o Output) ToTxOut() (*wire.TxOut, bool, error) {
-	var pkScript []byte
-	isOnchain := false
-
-	arkAddress, err := common.DecodeAddress(o.Address)
-	if err != nil {
-		// decode onchain address
-		btcAddress, err := btcutil.DecodeAddress(o.Address, nil)
-		if err != nil {
-			return nil, false, err
-		}
-
-		pkScript, err = txscript.PayToAddrScript(btcAddress)
-		if err != nil {
-			return nil, false, err
-		}
-
-		isOnchain = true
-	} else {
-		pkScript, err = common.P2TRScript(arkAddress.VtxoTapKey)
-		if err != nil {
-			return nil, false, err
-		}
-	}
-
-	if len(pkScript) == 0 {
-		return nil, false, fmt.Errorf("invalid address")
-	}
-
-	return &wire.TxOut{
-		Value:    int64(o.Amount),
-		PkScript: pkScript,
-	}, isOnchain, nil
-}
-
 type BatchFinalizationEvent struct {
 	Id              string
 	Tx              string
 	ConnectorsIndex map[string]types.VtxoKey // <txid:vout> -> outpoint
 }
 
-func (e BatchFinalizationEvent) isBatchEvent() {}
-
 type BatchFinalizedEvent struct {
 	Id   string
 	Txid string
 }
 
-func (e BatchFinalizedEvent) isBatchEvent() {}
-
 type BatchFailedEvent struct {
 	Id     string
 	Reason string
 }
-
-func (e BatchFailedEvent) isBatchEvent() {}
 
 type TreeSigningStartedEvent struct {
 	Id                   string
@@ -145,14 +91,10 @@ type TreeSigningStartedEvent struct {
 	CosignersPubkeys     []string
 }
 
-func (e TreeSigningStartedEvent) isBatchEvent() {}
-
 type TreeNoncesAggregatedEvent struct {
 	Id     string
 	Nonces tree.TreeNonces
 }
-
-func (e TreeNoncesAggregatedEvent) isBatchEvent() {}
 
 type TreeTxEvent struct {
 	Id         string
@@ -160,8 +102,6 @@ type TreeTxEvent struct {
 	BatchIndex int32
 	Node       tree.Node
 }
-
-func (e TreeTxEvent) isBatchEvent() {}
 
 type TreeSignatureEvent struct {
 	Id         string
@@ -172,15 +112,11 @@ type TreeSignatureEvent struct {
 	Signature  string
 }
 
-func (e TreeSignatureEvent) isBatchEvent() {}
-
 type BatchStartedEvent struct {
 	Id              string
 	HashedIntentIds []string
 	BatchExpiry     int64
 }
-
-func (e BatchStartedEvent) isBatchEvent() {}
 
 type TransactionEvent struct {
 	CommitmentTx *TxNotification

@@ -278,7 +278,7 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.BatchEve
 				}
 
 				// Handle different event types
-				var event client.BatchEvent
+				var event any
 				var _err error
 				switch {
 				case resp.Result.BatchFailed != nil:

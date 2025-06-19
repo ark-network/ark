@@ -28,7 +28,7 @@ type event struct {
 	eventResponse
 }
 
-func (e event) toBatchEvent() (client.BatchEvent, error) {
+func (e event) toBatchEvent() (any, error) {
 	if ee := e.GetBatchFailed(); ee != nil {
 		return client.BatchFailedEvent{
 			Id:     ee.GetId(),
