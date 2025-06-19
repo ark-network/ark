@@ -32,9 +32,9 @@ func (v *txStore) AddTransactions(ctx context.Context, txs []types.Transaction) 
 	txBody := func(querierWithTx *queries.Queries) error {
 		for i := range txs {
 			tx := txs[i]
-			txidType := "round"
-			if tx.RedeemTxid != "" {
-				txidType = "redeem"
+			txidType := "commitment"
+			if tx.ArkTxid != "" {
+				txidType = "ark"
 			}
 			if tx.BoardingTxid != "" {
 				txidType = "boarding"
@@ -159,9 +159,9 @@ func (v *txStore) RbfTransactions(ctx context.Context, rbfTxs map[string]types.T
 	txBody := func(querierWithTx *queries.Queries) error {
 		for _, tx := range txs {
 			replacedBy := rbfTxs[tx.TransactionKey.String()]
-			txidType := "round"
-			if replacedBy.RedeemTxid != "" {
-				txidType = "redeem"
+			txidType := "commitment"
+			if replacedBy.ArkTxid != "" {
+				txidType = "ark"
 			}
 			if replacedBy.BoardingTxid != "" {
 				txidType = "boarding"
@@ -276,12 +276,12 @@ func (v *txStore) sendEvent(event types.TransactionEvent) {
 }
 
 func rowToTx(row queries.Tx) types.Transaction {
-	var roundTxid, redeemTxid, boardingTxid string
-	if row.TxidType == "round" {
-		roundTxid = row.Txid
+	var commitmentTxid, arkTxid, boardingTxid string
+	if row.TxidType == "commitment" {
+		commitmentTxid = row.Txid
 	}
-	if row.TxidType == "redeem" {
-		redeemTxid = row.Txid
+	if row.TxidType == "ark" {
+		arkTxid = row.Txid
 	}
 	if row.TxidType == "boarding" {
 		boardingTxid = row.Txid
@@ -292,9 +292,9 @@ func rowToTx(row queries.Tx) types.Transaction {
 	}
 	return types.Transaction{
 		TransactionKey: types.TransactionKey{
-			RoundTxid:    roundTxid,
-			RedeemTxid:   redeemTxid,
-			BoardingTxid: boardingTxid,
+			CommitmentTxid: commitmentTxid,
+			ArkTxid:        arkTxid,
+			BoardingTxid:   boardingTxid,
 		},
 		Amount:    uint64(row.Amount),
 		Type:      types.TxType(row.Type),

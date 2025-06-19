@@ -59,16 +59,16 @@ func (o *GetVtxosRequestOption) GetOutpoints() []string {
 	return outs
 }
 
-func (o *GetVtxosRequestOption) WithSpentOnly(spentOnly bool) {
-	o.spentOnly = spentOnly
+func (o *GetVtxosRequestOption) WithSpentOnly() {
+	o.spentOnly = true
 }
 
 func (o *GetVtxosRequestOption) GetSpentOnly() bool {
 	return o.spentOnly
 }
 
-func (o *GetVtxosRequestOption) WithSpendableOnly(spendableOnly bool) {
-	o.spendableOnly = spendableOnly
+func (o *GetVtxosRequestOption) WithSpendableOnly() {
+	o.spendableOnly = true
 }
 
 func (o *GetVtxosRequestOption) GetSpendableOnly() bool {
@@ -95,4 +95,16 @@ func (o *GetTxHistoryRequestOption) WithEndTime(endTime time.Time) {
 
 func (o *GetTxHistoryRequestOption) GetEndTime() time.Time {
 	return o.endTime
+}
+
+func extendArray[T any](arr []T, position int) []T {
+	if arr == nil {
+		return make([]T, position+1)
+	}
+
+	if len(arr) <= position {
+		return append(arr, make([]T, position-len(arr)+1)...)
+	}
+
+	return arr
 }

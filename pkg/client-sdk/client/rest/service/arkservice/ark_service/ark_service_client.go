@@ -58,9 +58,7 @@ type ClientService interface {
 
 	ArkServiceDeleteIntent(params *ArkServiceDeleteIntentParams, opts ...ClientOption) (*ArkServiceDeleteIntentOK, error)
 
-	ArkServiceFinalizeOffchainTx(params *ArkServiceFinalizeOffchainTxParams, opts ...ClientOption) (*ArkServiceFinalizeOffchainTxOK, error)
-
-	ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error)
+	ArkServiceFinalizeTx(params *ArkServiceFinalizeTxParams, opts ...ClientOption) (*ArkServiceFinalizeTxOK, error)
 
 	ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams, opts ...ClientOption) (*ArkServiceGetEventStreamOK, error)
 
@@ -68,19 +66,15 @@ type ClientService interface {
 
 	ArkServiceGetTransactionsStream(params *ArkServiceGetTransactionsStreamParams, opts ...ClientOption) (*ArkServiceGetTransactionsStreamOK, error)
 
-	ArkServiceRegisterInputsForNextRound(params *ArkServiceRegisterInputsForNextRoundParams, opts ...ClientOption) (*ArkServiceRegisterInputsForNextRoundOK, error)
-
 	ArkServiceRegisterIntent(params *ArkServiceRegisterIntentParams, opts ...ClientOption) (*ArkServiceRegisterIntentOK, error)
-
-	ArkServiceRegisterOutputsForNextRound(params *ArkServiceRegisterOutputsForNextRoundParams, opts ...ClientOption) (*ArkServiceRegisterOutputsForNextRoundOK, error)
-
-	ArkServiceSubmitOffchainTx(params *ArkServiceSubmitOffchainTxParams, opts ...ClientOption) (*ArkServiceSubmitOffchainTxOK, error)
 
 	ArkServiceSubmitSignedForfeitTxs(params *ArkServiceSubmitSignedForfeitTxsParams, opts ...ClientOption) (*ArkServiceSubmitSignedForfeitTxsOK, error)
 
 	ArkServiceSubmitTreeNonces(params *ArkServiceSubmitTreeNoncesParams, opts ...ClientOption) (*ArkServiceSubmitTreeNoncesOK, error)
 
 	ArkServiceSubmitTreeSignatures(params *ArkServiceSubmitTreeSignaturesParams, opts ...ClientOption) (*ArkServiceSubmitTreeSignaturesOK, error)
+
+	ArkServiceSubmitTx(params *ArkServiceSubmitTxParams, opts ...ClientOption) (*ArkServiceSubmitTxOK, error)
 
 	SetTransport(transport runtime.ClientTransport)
 }
@@ -133,7 +127,7 @@ func (a *Client) ArkServiceDeleteIntent(params *ArkServiceDeleteIntentParams, op
 	op := &runtime.ClientOperation{
 		ID:                 "ArkService_DeleteIntent",
 		Method:             "POST",
-		PathPattern:        "/v1/round/deleteIntent",
+		PathPattern:        "/v1/batch/deleteIntent",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
@@ -160,22 +154,22 @@ func (a *Client) ArkServiceDeleteIntent(params *ArkServiceDeleteIntentParams, op
 }
 
 /*
-ArkServiceFinalizeOffchainTx ark service finalize offchain tx API
+ArkServiceFinalizeTx ark service finalize tx API
 */
-func (a *Client) ArkServiceFinalizeOffchainTx(params *ArkServiceFinalizeOffchainTxParams, opts ...ClientOption) (*ArkServiceFinalizeOffchainTxOK, error) {
+func (a *Client) ArkServiceFinalizeTx(params *ArkServiceFinalizeTxParams, opts ...ClientOption) (*ArkServiceFinalizeTxOK, error) {
 	// TODO: Validate the params before sending
 	if params == nil {
-		params = NewArkServiceFinalizeOffchainTxParams()
+		params = NewArkServiceFinalizeTxParams()
 	}
 	op := &runtime.ClientOperation{
-		ID:                 "ArkService_FinalizeOffchainTx",
+		ID:                 "ArkService_FinalizeTx",
 		Method:             "POST",
-		PathPattern:        "/v1/offchain-tx/finalize",
+		PathPattern:        "/v1/tx/finalize",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
 		Params:             params,
-		Reader:             &ArkServiceFinalizeOffchainTxReader{formats: a.formats},
+		Reader:             &ArkServiceFinalizeTxReader{formats: a.formats},
 		Context:            params.Context,
 		Client:             params.HTTPClient,
 	}
@@ -187,49 +181,12 @@ func (a *Client) ArkServiceFinalizeOffchainTx(params *ArkServiceFinalizeOffchain
 	if err != nil {
 		return nil, err
 	}
-	success, ok := result.(*ArkServiceFinalizeOffchainTxOK)
+	success, ok := result.(*ArkServiceFinalizeTxOK)
 	if ok {
 		return success, nil
 	}
 	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceFinalizeOffchainTxDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServiceGetBoardingAddress ark service get boarding address API
-*/
-func (a *Client) ArkServiceGetBoardingAddress(params *ArkServiceGetBoardingAddressParams, opts ...ClientOption) (*ArkServiceGetBoardingAddressOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceGetBoardingAddressParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_GetBoardingAddress",
-		Method:             "POST",
-		PathPattern:        "/v1/boarding",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceGetBoardingAddressReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceGetBoardingAddressOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceGetBoardingAddressDefault)
+	unexpectedSuccess := result.(*ArkServiceFinalizeTxDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 
@@ -244,7 +201,7 @@ func (a *Client) ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams
 	op := &runtime.ClientOperation{
 		ID:                 "ArkService_GetEventStream",
 		Method:             "GET",
-		PathPattern:        "/v1/events",
+		PathPattern:        "/v1/batch/events",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
@@ -318,7 +275,7 @@ func (a *Client) ArkServiceGetTransactionsStream(params *ArkServiceGetTransactio
 	op := &runtime.ClientOperation{
 		ID:                 "ArkService_GetTransactionsStream",
 		Method:             "GET",
-		PathPattern:        "/v1/transactions",
+		PathPattern:        "/v1/txs",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
@@ -345,43 +302,6 @@ func (a *Client) ArkServiceGetTransactionsStream(params *ArkServiceGetTransactio
 }
 
 /*
-ArkServiceRegisterInputsForNextRound ark service register inputs for next round API
-*/
-func (a *Client) ArkServiceRegisterInputsForNextRound(params *ArkServiceRegisterInputsForNextRoundParams, opts ...ClientOption) (*ArkServiceRegisterInputsForNextRoundOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceRegisterInputsForNextRoundParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_RegisterInputsForNextRound",
-		Method:             "POST",
-		PathPattern:        "/v1/round/registerInputs",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceRegisterInputsForNextRoundReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceRegisterInputsForNextRoundOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceRegisterInputsForNextRoundDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
 ArkServiceRegisterIntent ark service register intent API
 */
 func (a *Client) ArkServiceRegisterIntent(params *ArkServiceRegisterIntentParams, opts ...ClientOption) (*ArkServiceRegisterIntentOK, error) {
@@ -392,7 +312,7 @@ func (a *Client) ArkServiceRegisterIntent(params *ArkServiceRegisterIntentParams
 	op := &runtime.ClientOperation{
 		ID:                 "ArkService_RegisterIntent",
 		Method:             "POST",
-		PathPattern:        "/v1/round/registerIntent",
+		PathPattern:        "/v1/batch/registerIntent",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
@@ -419,80 +339,6 @@ func (a *Client) ArkServiceRegisterIntent(params *ArkServiceRegisterIntentParams
 }
 
 /*
-ArkServiceRegisterOutputsForNextRound ark service register outputs for next round API
-*/
-func (a *Client) ArkServiceRegisterOutputsForNextRound(params *ArkServiceRegisterOutputsForNextRoundParams, opts ...ClientOption) (*ArkServiceRegisterOutputsForNextRoundOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceRegisterOutputsForNextRoundParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_RegisterOutputsForNextRound",
-		Method:             "POST",
-		PathPattern:        "/v1/round/registerOutputs",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceRegisterOutputsForNextRoundReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceRegisterOutputsForNextRoundOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceRegisterOutputsForNextRoundDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
-ArkServiceSubmitOffchainTx ark service submit offchain tx API
-*/
-func (a *Client) ArkServiceSubmitOffchainTx(params *ArkServiceSubmitOffchainTxParams, opts ...ClientOption) (*ArkServiceSubmitOffchainTxOK, error) {
-	// TODO: Validate the params before sending
-	if params == nil {
-		params = NewArkServiceSubmitOffchainTxParams()
-	}
-	op := &runtime.ClientOperation{
-		ID:                 "ArkService_SubmitOffchainTx",
-		Method:             "POST",
-		PathPattern:        "/v1/offchain-tx/submit",
-		ProducesMediaTypes: []string{"application/json"},
-		ConsumesMediaTypes: []string{"application/json"},
-		Schemes:            []string{"http"},
-		Params:             params,
-		Reader:             &ArkServiceSubmitOffchainTxReader{formats: a.formats},
-		Context:            params.Context,
-		Client:             params.HTTPClient,
-	}
-	for _, opt := range opts {
-		opt(op)
-	}
-
-	result, err := a.transport.Submit(op)
-	if err != nil {
-		return nil, err
-	}
-	success, ok := result.(*ArkServiceSubmitOffchainTxOK)
-	if ok {
-		return success, nil
-	}
-	// unexpected success response
-	unexpectedSuccess := result.(*ArkServiceSubmitOffchainTxDefault)
-	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
-}
-
-/*
 ArkServiceSubmitSignedForfeitTxs ark service submit signed forfeit txs API
 */
 func (a *Client) ArkServiceSubmitSignedForfeitTxs(params *ArkServiceSubmitSignedForfeitTxsParams, opts ...ClientOption) (*ArkServiceSubmitSignedForfeitTxsOK, error) {
@@ -503,7 +349,7 @@ func (a *Client) ArkServiceSubmitSignedForfeitTxs(params *ArkServiceSubmitSigned
 	op := &runtime.ClientOperation{
 		ID:                 "ArkService_SubmitSignedForfeitTxs",
 		Method:             "POST",
-		PathPattern:        "/v1/round/submitForfeitTxs",
+		PathPattern:        "/v1/batch/submitForfeitTxs",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
@@ -540,7 +386,7 @@ func (a *Client) ArkServiceSubmitTreeNonces(params *ArkServiceSubmitTreeNoncesPa
 	op := &runtime.ClientOperation{
 		ID:                 "ArkService_SubmitTreeNonces",
 		Method:             "POST",
-		PathPattern:        "/v1/round/tree/submitNonces",
+		PathPattern:        "/v1/batch/tree/submitNonces",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
@@ -577,7 +423,7 @@ func (a *Client) ArkServiceSubmitTreeSignatures(params *ArkServiceSubmitTreeSign
 	op := &runtime.ClientOperation{
 		ID:                 "ArkService_SubmitTreeSignatures",
 		Method:             "POST",
-		PathPattern:        "/v1/round/tree/submitSignatures",
+		PathPattern:        "/v1/batch/tree/submitSignatures",
 		ProducesMediaTypes: []string{"application/json"},
 		ConsumesMediaTypes: []string{"application/json"},
 		Schemes:            []string{"http"},
@@ -600,6 +446,43 @@ func (a *Client) ArkServiceSubmitTreeSignatures(params *ArkServiceSubmitTreeSign
 	}
 	// unexpected success response
 	unexpectedSuccess := result.(*ArkServiceSubmitTreeSignaturesDefault)
+	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
+}
+
+/*
+ArkServiceSubmitTx ark service submit tx API
+*/
+func (a *Client) ArkServiceSubmitTx(params *ArkServiceSubmitTxParams, opts ...ClientOption) (*ArkServiceSubmitTxOK, error) {
+	// TODO: Validate the params before sending
+	if params == nil {
+		params = NewArkServiceSubmitTxParams()
+	}
+	op := &runtime.ClientOperation{
+		ID:                 "ArkService_SubmitTx",
+		Method:             "POST",
+		PathPattern:        "/v1/tx/submit",
+		ProducesMediaTypes: []string{"application/json"},
+		ConsumesMediaTypes: []string{"application/json"},
+		Schemes:            []string{"http"},
+		Params:             params,
+		Reader:             &ArkServiceSubmitTxReader{formats: a.formats},
+		Context:            params.Context,
+		Client:             params.HTTPClient,
+	}
+	for _, opt := range opts {
+		opt(op)
+	}
+
+	result, err := a.transport.Submit(op)
+	if err != nil {
+		return nil, err
+	}
+	success, ok := result.(*ArkServiceSubmitTxOK)
+	if ok {
+		return success, nil
+	}
+	// unexpected success response
+	unexpectedSuccess := result.(*ArkServiceSubmitTxDefault)
 	return nil, runtime.NewAPIError("unexpected success response: content available as default response in error", unexpectedSuccess, unexpectedSuccess.Code())
 }
 

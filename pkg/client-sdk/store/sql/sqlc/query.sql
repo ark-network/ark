@@ -1,7 +1,7 @@
 -- name: InsertVtxo :exec
 INSERT INTO vtxo (
-    txid, vout, pubkey, amount, round_txid, spent_by, spent, pending, expires_at, created_at, redeem_tx
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    txid, vout, script, amount, commitment_txid, spent_by, spent, preconfirmed, expires_at, created_at, swept, redeemed
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: UpdateVtxo :exec
 UPDATE vtxo

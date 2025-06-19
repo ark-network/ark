@@ -22,33 +22,24 @@ type ArkClient interface {
 	Balance(ctx context.Context, computeExpiryDetails bool) (*Balance, error)
 	Receive(ctx context.Context) (onchainAddr, offchainAddr, boardingAddr string, err error)
 	SendOffChain(
-		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver,
-		withZeroFees bool,
+		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver, withZeroFees bool,
 	) (string, error)
 	RegisterIntent(
-		ctx context.Context,
-		vtxos []client.Vtxo,
-		boardingUtxos []types.Utxo,
-		notes []string,
-		outputs []client.Output,
-		cosignersPublicKeys []string,
+		ctx context.Context, vtxos []types.Vtxo, boardingUtxos []types.Utxo, notes []string,
+		outputs []client.Output, cosignersPublicKeys []string,
 	) (intentID string, err error)
 	DeleteIntent(
-		ctx context.Context,
-		vtxos []client.Vtxo,
-		boardingUtxos []types.Utxo,
-		notes []string,
+		ctx context.Context, vtxos []types.Vtxo, boardingUtxos []types.Utxo, notes []string,
 	) error
 	Settle(ctx context.Context, opts ...Option) (string, error)
 	CollaborativeExit(
-		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool,
-		opts ...Option,
+		ctx context.Context, addr string, amount uint64, withExpiryCoinselect bool, opts ...Option,
 	) (string, error)
 	StartUnilateralExit(ctx context.Context) error
 	CompleteUnilateralExit(ctx context.Context, to string) (string, error)
 	OnboardAgainAllExpiredBoardings(ctx context.Context) (string, error)
 	WithdrawFromAllExpiredBoardings(ctx context.Context, to string) (string, error)
-	ListVtxos(ctx context.Context) (spendable, spent []client.Vtxo, err error)
+	ListVtxos(ctx context.Context) (spendable, spent []types.Vtxo, err error)
 	Dump(ctx context.Context) (seed string, err error)
 	GetTransactionHistory(ctx context.Context) ([]types.Transaction, error)
 	GetTransactionEventChannel(ctx context.Context) chan types.TransactionEvent
@@ -63,6 +54,5 @@ type ArkClient interface {
 type Receiver interface {
 	To() string
 	Amount() uint64
-
 	IsOnchain() bool
 }

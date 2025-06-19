@@ -84,7 +84,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Infof("alice settled the onboard funds in round %s", txid)
+	log.Infof("alice settled the onboard funds in commitment tx %s", txid)
 
 	fmt.Println("")
 	log.Info("bob is setting up his ark wallet...")
@@ -126,7 +126,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Info("transaction completed out of round")
+	log.Info("transaction completed")
 
 	if err := generateBlock(); err != nil {
 		log.Fatal(err)
@@ -153,12 +153,12 @@ func main() {
 
 	fmt.Println("")
 	log.Info("bob is settling the received funds...")
-	roundTxid, err := bobArkClient.Settle(ctx)
+	commitmentTxid, err := bobArkClient.Settle(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Infof("bob settled the received funds in round %s", roundTxid)
+	log.Infof("bob settled the received funds in commitment tx %s", commitmentTxid)
 
 	time.Sleep(500 * time.Second)
 }
