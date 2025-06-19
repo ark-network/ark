@@ -112,6 +112,8 @@ func ValidateVtxoTxGraph(
 				return false, fmt.Errorf("unable to get cosigners keys: %w", err)
 			}
 
+			cosigners = uniqueCosigners(cosigners)
+
 			if len(cosigners) == 0 {
 				return false, ErrMissingCosignersPublicKeys
 			}

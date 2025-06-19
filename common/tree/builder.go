@@ -130,22 +130,32 @@ type node interface {
 	getOutputs() ([]*wire.TxOut, error)
 	getChildren() []node
 	getCosigners() []*secp256k1.PublicKey
+	getInputPkScript() []byte
 }
 
 type leaf struct {
-	amount    int64
-	pkScript  []byte
-	cosigners []*secp256k1.PublicKey
+	amount        int64
+	pkScript      []byte
+	inputPkScript []byte
+	cosigners     []*secp256k1.PublicKey
 }
 
 type branch struct {
-	cosigners []*secp256k1.PublicKey
-	pkScript  []byte
-	children  []node
+	cosigners     []*secp256k1.PublicKey
+	inputPkScript []byte
+	children      []node
+}
+
+func (l *leaf) getInputPkScript() []byte {
+	return l.inputPkScript
 }
 
 func (b *branch) getCosigners() []*secp256k1.PublicKey {
 	return b.cosigners
+}
+
+func (b *branch) getInputPkScript() []byte {
+	return b.inputPkScript
 }
 
 func (l *leaf) getCosigners() []*secp256k1.PublicKey {
@@ -190,7 +200,7 @@ func (b *branch) getOutputs() ([]*wire.TxOut, error) {
 	for _, child := range b.children {
 		outputs = append(outputs, &wire.TxOut{
 			Value:    child.getAmount(),
-			PkScript: b.pkScript,
+			PkScript: child.getInputPkScript(),
 		})
 	}
 
@@ -275,10 +285,21 @@ func createTxTree(
 			return nil, fmt.Errorf("no cosigners for %s", r.Script)
 		}
 
+		aggregatedKey, err := AggregateKeys(cosigners, tapTreeRoot)
+		if err != nil {
+			return nil, fmt.Errorf("failed to aggregate keys: %w", err)
+		}
+
+		inputPkScript, err := common.P2TRScript(aggregatedKey.FinalKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create script pubkey: %w", err)
+		}
+
 		leafNode := &leaf{
-			amount:    int64(r.Amount),
-			pkScript:  pkScript,
-			cosigners: cosigners,
+			amount:        int64(r.Amount),
+			pkScript:      pkScript,
+			inputPkScript: inputPkScript,
+			cosigners:     cosigners,
 		}
 		nodes = append(nodes, leafNode)
 	}
@@ -329,15 +350,15 @@ func createUpperLevel(nodes []node, tapTreeRoot []byte, radix int) ([]node, erro
 			return nil, err
 		}
 
-		pkScript, err := common.P2TRScript(aggregatedKey.FinalKey)
+		inputPkScript, err := common.P2TRScript(aggregatedKey.FinalKey)
 		if err != nil {
 			return nil, err
 		}
 
 		branchNode := &branch{
-			pkScript:  pkScript,
-			cosigners: cosigners,
-			children:  children,
+			inputPkScript: inputPkScript,
+			cosigners:     cosigners,
+			children:      children,
 		}
 
 		groups = append(groups, branchNode)

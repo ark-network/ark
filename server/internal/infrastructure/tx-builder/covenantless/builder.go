@@ -591,13 +591,8 @@ func (b *txBuilder) BuildRoundTx(
 		return roundTx, vtxoTree, nextConnectorAddress, nil, nil
 	}
 
-	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
-	if err != nil {
-		return "", nil, "", nil, err
-	}
-
 	rootConnectorsOutpoint := &wire.OutPoint{
-		Hash:  partialTx.UnsignedTx.TxHash(),
+		Hash:  ptx.UnsignedTx.TxHash(),
 		Index: 1,
 	}
 
