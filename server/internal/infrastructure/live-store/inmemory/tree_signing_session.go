@@ -52,8 +52,14 @@ func (s *treeSigningSessionsStore) Get(roundId string) (*ports.MusigSigningSessi
 func (s *treeSigningSessionsStore) Delete(roundId string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	close(s.nonceCollectedCh[roundId])
-	close(s.sigsCollectedCh[roundId])
+
+	if ch, exists := s.nonceCollectedCh[roundId]; exists {
+		close(ch)
+	}
+	if ch, exists := s.sigsCollectedCh[roundId]; exists {
+		close(ch)
+	}
+
 	delete(s.nonceCollectedCh, roundId)
 	delete(s.sigsCollectedCh, roundId)
 	delete(s.sessions, roundId)
@@ -76,7 +82,12 @@ func (s *treeSigningSessionsStore) AddNonces(
 	s.sessions[roundId].Nonces[pubkey] = nonces
 
 	if len(s.sessions[roundId].Nonces) == s.sessions[roundId].NbCosigners-1 {
-		s.nonceCollectedCh[roundId] <- struct{}{}
+		if ch, exists := s.nonceCollectedCh[roundId]; exists {
+			select {
+			case ch <- struct{}{}:
+			default:
+			}
+		}
 	}
 
 	return nil
@@ -99,16 +110,31 @@ func (s *treeSigningSessionsStore) AddSignatures(
 	s.sessions[roundId].Signatures[pubkey] = sigs
 
 	if len(s.sessions[roundId].Signatures) == s.sessions[roundId].NbCosigners-1 {
-		s.sigsCollectedCh[roundId] <- struct{}{}
+		if ch, exists := s.sigsCollectedCh[roundId]; exists {
+			select {
+			case ch <- struct{}{}:
+			default:
+			}
+		}
 	}
 
 	return nil
 }
 
 func (s *treeSigningSessionsStore) NoncesCollected(roundId string) <-chan struct{} {
-	return s.nonceCollectedCh[roundId]
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	if ch, exists := s.nonceCollectedCh[roundId]; exists {
+		return ch
+	}
+	return nil
 }
 
 func (s *treeSigningSessionsStore) SignaturesCollected(roundId string) <-chan struct{} {
-	return s.sigsCollectedCh[roundId]
+	s.lock.RLock()
+	defer s.lock.RUnlock()
+	if ch, exists := s.sigsCollectedCh[roundId]; exists {
+		return ch
+	}
+	return nil
 }
