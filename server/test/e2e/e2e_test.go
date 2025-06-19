@@ -1688,8 +1688,6 @@ func TestDeleteIntent(t *testing.T) {
 }
 
 func TestSweep(t *testing.T) {
-	t.Skip()
-
 	var receive utils.ArkReceive
 	receiveStr, err := runArkCommand("receive")
 	require.NoError(t, err)
