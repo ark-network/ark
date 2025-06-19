@@ -98,9 +98,6 @@ func checkSigsRoundtrip(t *testing.T) func(sigs tree.TreePartialSigs) {
 		jsonData, err := json.Marshal(sigs)
 		require.NoError(t, err)
 
-		t.Logf("sigs: %s", string(jsonData))
-		t.Fail()
-
 		// Unmarshal from JSON
 		decodedSigs := make(tree.TreePartialSigs)
 		err = json.Unmarshal(jsonData, &decodedSigs)
