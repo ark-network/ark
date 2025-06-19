@@ -130,44 +130,54 @@ type node interface {
 	getOutputs() ([]*wire.TxOut, error)
 	getChildren() []node
 	getCosigners() []*secp256k1.PublicKey
-	getInputPkScript() []byte
+	getInputScript() []byte
 }
 
 type leaf struct {
-	amount        int64
-	pkScript      []byte
-	inputPkScript []byte
-	cosigners     []*secp256k1.PublicKey
+	output      *wire.TxOut
+	inputScript []byte
+	cosigners   []*secp256k1.PublicKey
 }
 
-type branch struct {
-	cosigners     []*secp256k1.PublicKey
-	inputPkScript []byte
-	children      []node
-}
-
-func (l *leaf) getInputPkScript() []byte {
-	return l.inputPkScript
-}
-
-func (b *branch) getCosigners() []*secp256k1.PublicKey {
-	return b.cosigners
-}
-
-func (b *branch) getInputPkScript() []byte {
-	return b.inputPkScript
+func (l *leaf) getInputScript() []byte {
+	return l.inputScript
 }
 
 func (l *leaf) getCosigners() []*secp256k1.PublicKey {
 	return l.cosigners
 }
 
-func (b *branch) getChildren() []node {
-	return b.children
-}
-
 func (l *leaf) getChildren() []node {
 	return []node{}
+}
+
+func (l *leaf) getAmount() int64 {
+	return l.output.Value
+}
+
+func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
+	return []*wire.TxOut{
+		l.output,
+		AnchorOutput(),
+	}, nil
+}
+
+type branch struct {
+	inputScript []byte
+	cosigners   []*secp256k1.PublicKey
+	children    []node
+}
+
+func (b *branch) getInputScript() []byte {
+	return b.inputScript
+}
+
+func (b *branch) getCosigners() []*secp256k1.PublicKey {
+	return b.cosigners
+}
+
+func (b *branch) getChildren() []node {
+	return b.children
 }
 
 func (b *branch) getAmount() int64 {
@@ -180,27 +190,13 @@ func (b *branch) getAmount() int64 {
 	return amount
 }
 
-func (l *leaf) getAmount() int64 {
-	return l.amount
-}
-
-func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
-	return []*wire.TxOut{
-		{
-			Value:    l.amount,
-			PkScript: l.pkScript,
-		},
-		AnchorOutput(),
-	}, nil
-}
-
 func (b *branch) getOutputs() ([]*wire.TxOut, error) {
 	outputs := make([]*wire.TxOut, 0)
 
 	for _, child := range b.children {
 		outputs = append(outputs, &wire.TxOut{
 			Value:    child.getAmount(),
-			PkScript: child.getInputPkScript(),
+			PkScript: child.getInputScript(),
 		})
 	}
 
@@ -290,16 +286,15 @@ func createTxTree(
 			return nil, fmt.Errorf("failed to aggregate keys: %w", err)
 		}
 
-		inputPkScript, err := common.P2TRScript(aggregatedKey.FinalKey)
+		inputScript, err := common.P2TRScript(aggregatedKey.FinalKey)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create script pubkey: %w", err)
 		}
 
 		leafNode := &leaf{
-			amount:        int64(r.Amount),
-			pkScript:      pkScript,
-			inputPkScript: inputPkScript,
-			cosigners:     cosigners,
+			output:      &wire.TxOut{Value: int64(r.Amount), PkScript: pkScript},
+			inputScript: inputScript,
+			cosigners:   cosigners,
 		}
 		nodes = append(nodes, leafNode)
 	}
@@ -356,9 +351,9 @@ func createUpperLevel(nodes []node, tapTreeRoot []byte, radix int) ([]node, erro
 		}
 
 		branchNode := &branch{
-			inputPkScript: inputPkScript,
-			cosigners:     cosigners,
-			children:      children,
+			inputScript: inputPkScript,
+			cosigners:   cosigners,
+			children:    children,
 		}
 
 		groups = append(groups, branchNode)
