@@ -64,31 +64,36 @@ func randomTx() string {
 var (
 	vtxoTree = []tree.TxGraphChunk{
 		{
+			Txid:     randomString(32),
 			Tx:       randomTx(),
 			Children: map[uint32]string{},
 		},
 		{
-			Tx: randomTx(),
+			Txid: randomString(32),
+			Tx:   randomTx(),
 			Children: map[uint32]string{
 				0: randomString(32),
 			},
 		},
 		{
-			Tx: randomTx(),
-			Children: map[uint32]string{
-				0: randomString(32),
-				1: randomString(32),
-			},
-		},
-		{
-			Tx: randomTx(),
+			Txid: randomString(32),
+			Tx:   randomTx(),
 			Children: map[uint32]string{
 				0: randomString(32),
 				1: randomString(32),
 			},
 		},
 		{
-			Tx: randomTx(),
+			Txid: randomString(32),
+			Tx:   randomTx(),
+			Children: map[uint32]string{
+				0: randomString(32),
+				1: randomString(32),
+			},
+		},
+		{
+			Txid: randomString(32),
+			Tx:   randomTx(),
 			Children: map[uint32]string{
 				0: txidb,
 				1: txida,
@@ -97,24 +102,28 @@ var (
 	}
 	connectorsTree = []tree.TxGraphChunk{
 		{
-			Tx: randomTx(),
+			Txid: randomString(32),
+			Tx:   randomTx(),
 			Children: map[uint32]string{
 				0: randomString(32),
 			},
 		},
 		{
-			Tx: randomTx(),
+			Txid: randomString(32),
+			Tx:   randomTx(),
 			Children: map[uint32]string{
 				0: randomString(32),
 			},
 		},
 		{
-			Tx: randomTx(),
+			Txid: randomString(32),
+			Tx:   randomTx(),
 			Children: map[uint32]string{
 				0: randomString(32),
 			},
 		},
 		{
+			Txid:     randomString(32),
 			Tx:       randomTx(),
 			Children: map[uint32]string{},
 		},

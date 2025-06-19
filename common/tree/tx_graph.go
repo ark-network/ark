@@ -20,18 +20,11 @@ type TxGraph struct {
 // it is used to serialize and deserialize the graph because TxGraph is recursive
 // a list of TxGraphChunk can be used to reconstruct the TxGraph
 type TxGraphChunk struct {
+	Txid string
 	// Tx is the base64 encoded root PSBT
 	Tx string
 	// Children maps root output index to child txid
 	Children map[uint32]string
-}
-
-func (c *TxGraphChunk) TxID() string {
-	packet, err := psbt.NewFromRawBytes(strings.NewReader(c.Tx), true)
-	if err != nil {
-		return ""
-	}
-	return packet.UnsignedTx.TxID()
 }
 
 // NewTxGraph creates a new TxGraph from a list of TxGraphChunk
@@ -117,6 +110,7 @@ func (g *TxGraph) Serialize() ([]TxGraphChunk, error) {
 		childTxids[outputIndex] = child.Root.UnsignedTx.TxID()
 	}
 	chunks = append(chunks, TxGraphChunk{
+		Txid:     g.Root.UnsignedTx.TxID(),
 		Tx:       base64.StdEncoding.EncodeToString(serializedTx.Bytes()),
 		Children: childTxids,
 	})

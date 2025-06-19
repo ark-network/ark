@@ -24,8 +24,9 @@ message Round {
 }
 
 message TxGraphChunk {
-  string tx = 1;
-  map<uint32, string> children = 2;
+  string txid = 1;
+  string tx = 2;
+  map<uint32, string> children = 3;
 }
 
 message Outpoint {

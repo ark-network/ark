@@ -1002,6 +1002,9 @@
     "v1IndexerNode": {
       "type": "object",
       "properties": {
+        "txid": {
+          "type": "string"
+        },
         "tx": {
           "type": "string"
         },

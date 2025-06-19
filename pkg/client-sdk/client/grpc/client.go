@@ -324,6 +324,7 @@ func (a *grpcClient) GetRound(
 	for _, chunk := range round.GetVtxoTree() {
 		children := make(map[uint32]string)
 		chunksVtxoTree = append(chunksVtxoTree, tree.TxGraphChunk{
+			Txid:     chunk.GetTxid(),
 			Tx:       chunk.GetTx(),
 			Children: children,
 		})
@@ -333,6 +334,7 @@ func (a *grpcClient) GetRound(
 	for _, chunk := range round.GetConnectors() {
 		children := make(map[uint32]string)
 		chunksConnectors = append(chunksConnectors, tree.TxGraphChunk{
+			Txid:     chunk.GetTxid(),
 			Tx:       chunk.GetTx(),
 			Children: children,
 		})
@@ -370,6 +372,7 @@ func (a *grpcClient) GetRoundByID(
 	for _, chunk := range round.GetVtxoTree() {
 		children := make(map[uint32]string)
 		chunksVtxoTree = append(chunksVtxoTree, tree.TxGraphChunk{
+			Txid:     chunk.GetTxid(),
 			Tx:       chunk.GetTx(),
 			Children: children,
 		})
@@ -379,6 +382,7 @@ func (a *grpcClient) GetRoundByID(
 	for _, chunk := range round.GetConnectors() {
 		children := make(map[uint32]string)
 		chunksConnectors = append(chunksConnectors, tree.TxGraphChunk{
+			Txid:     chunk.GetTxid(),
 			Tx:       chunk.GetTx(),
 			Children: children,
 		})

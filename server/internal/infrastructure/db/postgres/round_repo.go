@@ -336,6 +336,7 @@ func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid s
 		pos := int(tx.Position)
 		chunks = extendArray(chunks, pos)
 		chunks[pos] = tree.TxGraphChunk{
+			Txid:     tx.Txid,
 			Tx:       tx.Tx,
 			Children: map[uint32]string{}, // TODO children
 		}
@@ -364,6 +365,7 @@ func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) 
 		pos := int(tx.Position)
 		chunks = extendArray(chunks, pos)
 		chunks[pos] = tree.TxGraphChunk{
+			Txid:     tx.Txid,
 			Tx:       tx.Tx,
 			Children: map[uint32]string{}, // TODO children
 		}
@@ -520,12 +522,14 @@ func rowsToRounds(rows []combinedRow) ([]*domain.Round, error) {
 			case "connector":
 				round.Connectors = extendArray(round.Connectors, int(position.Int32))
 				round.Connectors[int(position.Int32)] = tree.TxGraphChunk{
+					Txid:     v.tx.Txid.String,
 					Tx:       v.tx.Tx.String,
 					Children: map[uint32]string{}, // TODO children
 				}
 			case "tree":
 				round.VtxoTree = extendArray(round.VtxoTree, int(position.Int32))
 				round.VtxoTree[int(position.Int32)] = tree.TxGraphChunk{
+					Txid:     v.tx.Txid.String,
 					Tx:       v.tx.Tx.String,
 					Children: map[uint32]string{}, // TODO children
 				}
@@ -570,7 +574,7 @@ func createUpsertTransactionParams(chunk tree.TxGraphChunk, roundID string, txTy
 	}
 
 	if txType == "connector" || txType == "tree" {
-		params.Txid = chunk.TxID()
+		params.Txid = chunk.Txid
 		// TODO : children
 	}
 

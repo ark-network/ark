@@ -22,6 +22,9 @@ type V1IndexerNode struct {
 
 	// tx
 	Tx string `json:"tx,omitempty"`
+
+	// txid
+	Txid string `json:"txid,omitempty"`
 }
 
 // Validate validates this v1 indexer node

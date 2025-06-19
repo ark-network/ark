@@ -521,6 +521,7 @@ func (a *restClient) GetRound(
 			children[uint32(vout)] = v
 		}
 		chunksVtxoTree = append(chunksVtxoTree, tree.TxGraphChunk{
+			Txid:     chunk.Txid,
 			Tx:       chunk.Tx,
 			Children: children,
 		})
@@ -537,6 +538,7 @@ func (a *restClient) GetRound(
 			children[uint32(vout)] = v
 		}
 		chunksConnectors = append(chunksConnectors, tree.TxGraphChunk{
+			Txid:     chunk.Txid,
 			Tx:       chunk.Tx,
 			Children: children,
 		})
@@ -592,6 +594,7 @@ func (a *restClient) GetRoundByID(
 			children[uint32(vout)] = v
 		}
 		chunksVtxoTree = append(chunksVtxoTree, tree.TxGraphChunk{
+			Txid:     chunk.Txid,
 			Tx:       chunk.Tx,
 			Children: children,
 		})
@@ -608,6 +611,7 @@ func (a *restClient) GetRoundByID(
 			children[uint32(vout)] = v
 		}
 		chunksConnectors = append(chunksConnectors, tree.TxGraphChunk{
+			Txid:     chunk.Txid,
 			Tx:       chunk.Tx,
 			Children: children,
 		})

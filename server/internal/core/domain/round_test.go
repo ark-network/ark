@@ -76,35 +76,48 @@ var (
 	}
 	vtxoTree = []tree.TxGraphChunk{
 		{
-			Tx: emptyPtx,
+			Txid: txid,
+			Tx:   emptyPtx,
 			Children: map[uint32]string{
 				0: txid,
 			},
 		},
 		{
-			Tx: emptyPtx,
+			Txid: txid,
+			Tx:   emptyPtx,
 			Children: map[uint32]string{
 				0: txid,
 				1: txid,
 			},
 		},
 		{
+			Txid:     txid,
 			Tx:       emptyPtx,
 			Children: map[uint32]string{},
 		},
 		{
+			Txid:     txid,
 			Tx:       emptyPtx,
 			Children: map[uint32]string{},
 		},
 	}
 	connectors = []tree.TxGraphChunk{
 		{
-			Tx: emptyPtx,
+			Txid: txid,
+			Tx:   emptyPtx,
 			Children: map[uint32]string{
 				0: txid,
 			},
 		},
 		{
+			Txid: txid,
+			Tx:   emptyPtx,
+			Children: map[uint32]string{
+				0: txid,
+			},
+		},
+		{
+			Txid:     txid,
 			Tx:       emptyPtx,
 			Children: map[uint32]string{},
 		},

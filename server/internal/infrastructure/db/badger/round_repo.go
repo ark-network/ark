@@ -271,17 +271,15 @@ func (r *roundRepository) addTxs(
 		}
 
 		for _, chunk := range round.Connectors {
-			txid := chunk.TxID()
-			txs[txid] = Tx{
-				Txid: txid,
+			txs[chunk.Txid] = Tx{
+				Txid: chunk.Txid,
 				Tx:   chunk.Tx,
 			}
 		}
 
 		for _, chunk := range round.VtxoTree {
-			txid := chunk.TxID()
-			txs[txid] = Tx{
-				Txid: txid,
+			txs[chunk.Txid] = Tx{
+				Txid: chunk.Txid,
 				Tx:   chunk.Tx,
 			}
 		}

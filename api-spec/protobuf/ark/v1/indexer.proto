@@ -213,8 +213,9 @@ message IndexerOutpoint {
 }
 
 message IndexerNode {
-  string tx = 1;
-  map<uint32, string> children = 2; // vout -> txid
+  string txid = 1;
+  string tx = 2;
+  map<uint32, string> children = 3; // vout -> txid
 }
 
 message IndexerVtxo {
