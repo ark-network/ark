@@ -2,17 +2,10 @@ package client
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
-	"time"
 
-	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/common/tree"
-	"github.com/btcsuite/btcd/btcec/v2/schnorr"
-	"github.com/btcsuite/btcd/btcutil"
-	"github.com/btcsuite/btcd/txscript"
-	"github.com/btcsuite/btcd/wire"
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 )
 
 const (
@@ -24,45 +17,21 @@ var (
 	ErrConnectionClosedByServer = fmt.Errorf("connection closed by server")
 )
 
-type RoundEvent interface {
-	isRoundEvent()
-}
-
 type TransportClient interface {
 	GetInfo(ctx context.Context) (*Info, error)
-	RegisterInputsForNextRound(
-		ctx context.Context, inputs []Input,
-	) (string, error)
-	RegisterIntent(
-		ctx context.Context, signature, message string,
-	) (string, error)
-	DeleteIntent(ctx context.Context, requestID, signature, message string) error
+	RegisterIntent(ctx context.Context, signature, message string) (string, error)
+	DeleteIntent(ctx context.Context, signature, message string) error
 	ConfirmRegistration(ctx context.Context, intentID string) error
-	RegisterOutputsForNextRound(
-		ctx context.Context, requestID string, outputs []Output, cosignersPublicKeys []string,
-	) error
-	SubmitTreeNonces(
-		ctx context.Context, roundID, cosignerPubkey string, nonces tree.TreeNonces,
-	) error
-	SubmitTreeSignatures(
-		ctx context.Context, roundID, cosignerPubkey string, signatures tree.TreePartialSigs,
-	) error
-	SubmitSignedForfeitTxs(
-		ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
-	) error
-	GetEventStream(ctx context.Context) (<-chan RoundEventChannel, func(), error)
-	SubmitOffchainTx(
-		ctx context.Context, virtualTx string, checkpointsTxs []string,
-	) (signedCheckpointsTxs []string, signedVirtualTx, virtualTxid string, err error)
-	FinalizeOffchainTx(
-		ctx context.Context, virtualTxid string, checkpointsTxs []string,
-	) error
-	ListVtxos(ctx context.Context, addr string) ([]Vtxo, []Vtxo, error)
-	GetRound(ctx context.Context, txID string) (*Round, error)
-	GetRoundByID(ctx context.Context, roundID string) (*Round, error)
-	Close()
+	SubmitTreeNonces(ctx context.Context, batchId, cosignerPubkey string, nonces tree.TreeNonces) error
+	SubmitTreeSignatures(ctx context.Context, batchId, cosignerPubkey string, signatures tree.TreePartialSigs) error
+	SubmitSignedForfeitTxs(ctx context.Context, signedForfeitTxs []string, signedCommitmentTx string) error
+	GetEventStream(ctx context.Context) (<-chan BatchEventChannel, func(), error)
+	SubmitTx(ctx context.Context, signedArkTx string, checkpointTxs []string) (
+		arkTxid, finalArkTx string, signedCheckpointTxs []string, err error,
+	)
+	FinalizeTx(ctx context.Context, arkTxid string, finalCheckpointTxs []string) error
 	GetTransactionsStream(ctx context.Context) (<-chan TransactionEvent, func(), error)
-	SubscribeForAddress(ctx context.Context, address string) (<-chan AddressEvent, func(), error)
+	Close()
 }
 
 type Info struct {
@@ -70,10 +39,10 @@ type Info struct {
 	PubKey                  string
 	VtxoTreeExpiry          int64
 	UnilateralExitDelay     int64
+	BoardingExitDelay       int64
 	RoundInterval           int64
 	Network                 string
 	Dust                    uint64
-	BoardingExitDelay       int64
 	ForfeitAddress          string
 	MarketHourStartTime     int64
 	MarketHourEndTime       int64
@@ -85,196 +54,57 @@ type Info struct {
 	VtxoMaxAmount           int64
 }
 
-type RoundEventChannel struct {
-	Event RoundEvent
+type BatchEventChannel struct {
+	Event any
 	Err   error
 }
 
-type Outpoint struct {
-	Txid string
-	VOut uint32
-}
-
-func (o Outpoint) String() string {
-	return fmt.Sprintf("%s:%d", o.Txid, o.VOut)
-}
-
-func (o Outpoint) Equals(other Outpoint) bool {
-	return o.Txid == other.Txid && o.VOut == other.VOut
-}
-
 type Input struct {
-	Outpoint
+	types.VtxoKey
 	Tapscripts []string
-}
-
-type Vtxo struct {
-	Outpoint
-	PubKey    string
-	Amount    uint64
-	RoundTxid string
-	ExpiresAt time.Time
-	CreatedAt time.Time
-	RedeemTx  string
-	IsPending bool
-	SpentBy   string
-	Swept     bool
-	Spent     bool
-}
-
-func (v Vtxo) IsRecoverable() bool {
-	return v.Swept && !v.Spent
-}
-
-func (v Vtxo) Address(server *secp256k1.PublicKey, net common.Network) (string, error) {
-	pubkeyBytes, err := hex.DecodeString(v.PubKey)
-	if err != nil {
-		return "", err
-	}
-
-	pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
-	if err != nil {
-		return "", err
-	}
-
-	a := &common.Address{
-		HRP:        net.Addr,
-		Server:     server,
-		VtxoTapKey: pubkey,
-	}
-
-	return a.Encode()
 }
 
 type TapscriptsVtxo struct {
-	Vtxo
+	types.Vtxo
 	Tapscripts []string
 }
 
-type Output struct {
-	Address string // onchain or offchain address
-	Amount  uint64
-}
-
-func (o Output) ToTxOut() (*wire.TxOut, bool, error) {
-	var pkScript []byte
-	isOnchain := false
-
-	arkAddress, err := common.DecodeAddress(o.Address)
-	if err != nil {
-		// decode onchain address
-		btcAddress, err := btcutil.DecodeAddress(o.Address, nil)
-		if err != nil {
-			return nil, false, err
-		}
-
-		pkScript, err = txscript.PayToAddrScript(btcAddress)
-		if err != nil {
-			return nil, false, err
-		}
-
-		isOnchain = true
-	} else {
-		pkScript, err = common.P2TRScript(arkAddress.VtxoTapKey)
-		if err != nil {
-			return nil, false, err
-		}
-	}
-
-	if len(pkScript) == 0 {
-		return nil, false, fmt.Errorf("invalid address")
-	}
-
-	return &wire.TxOut{
-		Value:    int64(o.Amount),
-		PkScript: pkScript,
-	}, isOnchain, nil
-}
-
-type RoundStage int
-
-func (s RoundStage) String() string {
-	switch s {
-	case RoundStageRegistration:
-		return "ROUND_STAGE_REGISTRATION"
-	case RoundStageFinalization:
-		return "ROUND_STAGE_FINALIZATION"
-	case RoundStageFinalized:
-		return "ROUND_STAGE_FINALIZED"
-	case RoundStageFailed:
-		return "ROUND_STAGE_FAILED"
-	default:
-		return "ROUND_STAGE_UNDEFINED"
-	}
-}
-
-const (
-	RoundStageUndefined RoundStage = iota
-	RoundStageRegistration
-	RoundStageFinalization
-	RoundStageFinalized
-	RoundStageFailed
-)
-
-type Round struct {
-	ID         string
-	StartedAt  *time.Time
-	EndedAt    *time.Time
-	Tx         string
-	Tree       tree.TxTree
-	ForfeitTxs []string
-	Connectors tree.TxTree
-	Stage      RoundStage
-}
-
-type RoundFinalizationEvent struct {
-	ID              string
+type BatchFinalizationEvent struct {
+	Id              string
 	Tx              string
-	ConnectorsIndex map[string]Outpoint // <txid:vout> -> outpoint
+	ConnectorsIndex map[string]types.VtxoKey // <txid:vout> -> outpoint
 }
 
-func (e RoundFinalizationEvent) isRoundEvent() {}
-
-type RoundFinalizedEvent struct {
-	ID   string
+type BatchFinalizedEvent struct {
+	Id   string
 	Txid string
 }
 
-func (e RoundFinalizedEvent) isRoundEvent() {}
-
-type RoundFailedEvent struct {
-	ID     string
+type BatchFailedEvent struct {
+	Id     string
 	Reason string
 }
 
-func (e RoundFailedEvent) isRoundEvent() {}
-
-type RoundSigningStartedEvent struct {
-	ID               string
-	UnsignedRoundTx  string
-	CosignersPubkeys []string
+type TreeSigningStartedEvent struct {
+	Id                   string
+	UnsignedCommitmentTx string
+	CosignersPubkeys     []string
 }
 
-func (e RoundSigningStartedEvent) isRoundEvent() {}
-
-type RoundSigningNoncesGeneratedEvent struct {
-	ID     string
+type TreeNoncesAggregatedEvent struct {
+	Id     string
 	Nonces tree.TreeNonces
 }
 
-func (e RoundSigningNoncesGeneratedEvent) isRoundEvent() {}
-
-type BatchTreeEvent struct {
-	ID         string
+type TreeTxEvent struct {
+	Id         string
 	Topic      []string
 	BatchIndex int32
 	Node       tree.Node
 }
 
-func (e BatchTreeEvent) isRoundEvent() {}
-
-type BatchTreeSignatureEvent struct {
-	ID         string
+type TreeSignatureEvent struct {
+	Id         string
 	Topic      []string
 	BatchIndex int32
 	Level      int32
@@ -282,39 +112,21 @@ type BatchTreeSignatureEvent struct {
 	Signature  string
 }
 
-func (e BatchTreeSignatureEvent) isRoundEvent() {}
-
 type BatchStartedEvent struct {
-	ID             string
-	IntentIdHashes []string
-	BatchExpiry    int64
+	Id              string
+	HashedIntentIds []string
+	BatchExpiry     int64
 }
-
-func (e BatchStartedEvent) isRoundEvent() {}
 
 type TransactionEvent struct {
-	Round  *RoundTransaction
-	Redeem *RedeemTransaction
-	Err    error
+	CommitmentTx *TxNotification
+	ArkTx        *TxNotification
+	Err          error
 }
 
-type RoundTransaction struct {
-	Txid                 string
-	SpentVtxos           []Vtxo
-	SpendableVtxos       []Vtxo
-	ClaimedBoardingUtxos []Outpoint
-	Hex                  string
-}
-
-type RedeemTransaction struct {
+type TxNotification struct {
 	Txid           string
-	SpentVtxos     []Vtxo
-	SpendableVtxos []Vtxo
-	Hex            string
-}
-
-type AddressEvent struct {
-	NewVtxos   []Vtxo
-	SpentVtxos []Vtxo
-	Err        error
+	TxHex          string
+	SpentVtxos     []types.Vtxo
+	SpendableVtxos []types.Vtxo
 }

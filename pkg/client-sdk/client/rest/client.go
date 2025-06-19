@@ -18,10 +18,8 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/arkservice/ark_service"
-	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/explorerservice"
-	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/explorerservice/explorer_service"
 	"github.com/ark-network/ark/pkg/client-sdk/client/rest/service/models"
-	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 )
@@ -30,9 +28,7 @@ import (
 type restClient struct {
 	serverURL      string
 	svc            ark_service.ClientService
-	explorerSvc    explorer_service.ClientService
 	requestTimeout time.Duration
-	treeCache      *utils.Cache[tree.TxTree]
 }
 
 // NewClient creates a new REST client for the Ark service
@@ -44,15 +40,11 @@ func NewClient(serverURL string) (client.TransportClient, error) {
 	if err != nil {
 		return nil, err
 	}
-	explorerSvc, err := newRestExplorerClient(serverURL)
-	if err != nil {
-		return nil, err
-	}
+
 	// TODO: use twice the round interval.
 	reqTimeout := 15 * time.Second
-	treeCache := utils.NewCache[tree.TxTree]()
 
-	return &restClient{serverURL, svc, explorerSvc, reqTimeout, treeCache}, nil
+	return &restClient{serverURL, svc, reqTimeout}, nil
 }
 
 func (a *restClient) GetInfo(
@@ -137,57 +129,12 @@ func (a *restClient) GetInfo(
 	}, nil
 }
 
-func (a *restClient) GetBoardingAddress(
-	ctx context.Context, pubkey string,
-) (string, error) {
-	body := models.V1GetBoardingAddressRequest{
-		Pubkey: pubkey,
-	}
-
-	resp, err := a.svc.ArkServiceGetBoardingAddress(
-		ark_service.NewArkServiceGetBoardingAddressParams().WithBody(&body),
-	)
-	if err != nil {
-		return "",
-			err
-	}
-	return resp.Payload.Address, nil
-}
-
-func (a *restClient) RegisterInputsForNextRound(
-	ctx context.Context, inputs []client.Input,
-) (string, error) {
-	ins := make([]*models.V1Input, 0, len(inputs))
-	for _, i := range inputs {
-		ins = append(ins, &models.V1Input{
-			Outpoint: &models.V1Outpoint{
-				Txid: i.Txid,
-				Vout: int64(i.VOut),
-			},
-			TaprootTree: &models.V1Tapscripts{
-				Scripts: i.Tapscripts,
-			},
-		})
-	}
-	body := &models.V1RegisterInputsForNextRoundRequest{
-		Inputs: ins,
-	}
-	resp, err := a.svc.ArkServiceRegisterInputsForNextRound(
-		ark_service.NewArkServiceRegisterInputsForNextRoundParams().WithBody(body),
-	)
-	if err != nil {
-		return "", err
-	}
-
-	return resp.Payload.RequestID, nil
-}
-
 func (a *restClient) RegisterIntent(
 	ctx context.Context,
 	signature, message string,
 ) (string, error) {
 	body := &models.V1RegisterIntentRequest{
-		Bip322Signature: &models.V1Bip322Signature{
+		Intent: &models.V1Bip322Signature{
 			Message:   message,
 			Signature: signature,
 		},
@@ -199,22 +146,15 @@ func (a *restClient) RegisterIntent(
 		return "", err
 	}
 
-	return resp.Payload.RequestID, nil
+	return resp.Payload.IntentID, nil
 }
 
-func (a *restClient) DeleteIntent(_ context.Context, intentID, signature, message string) error {
-	var body *models.V1DeleteIntentRequest
-	if intentID != "" {
-		body = &models.V1DeleteIntentRequest{
-			IntentID: intentID,
-		}
-	} else {
-		body = &models.V1DeleteIntentRequest{
-			Bip322Signature: &models.V1Bip322Signature{
-				Message:   message,
-				Signature: signature,
-			},
-		}
+func (a *restClient) DeleteIntent(_ context.Context, signature, message string) error {
+	body := &models.V1DeleteIntentRequest{
+		Proof: &models.V1Bip322Signature{
+			Message:   message,
+			Signature: signature,
+		},
 	}
 
 	_, err := a.svc.ArkServiceDeleteIntent(
@@ -233,32 +173,8 @@ func (a *restClient) ConfirmRegistration(ctx context.Context, intentID string) e
 	return err
 }
 
-func (a *restClient) RegisterOutputsForNextRound(
-	ctx context.Context, requestID string, outputs []client.Output, cosignersPublicKeys []string,
-) error {
-	outs := make([]*models.V1Output, 0, len(outputs))
-	for _, o := range outputs {
-		outs = append(outs, &models.V1Output{
-			Address: o.Address,
-			Amount:  strconv.Itoa(int(o.Amount)),
-		})
-	}
-	body := models.V1RegisterOutputsForNextRoundRequest{
-		RequestID: requestID,
-		Outputs:   outs,
-	}
-	if len(cosignersPublicKeys) > 0 {
-		body.CosignersPublicKeys = cosignersPublicKeys
-	}
-	_, err := a.svc.ArkServiceRegisterOutputsForNextRound(
-		ark_service.NewArkServiceRegisterOutputsForNextRoundParams().WithBody(&body),
-	)
-	return err
-}
-
 func (a *restClient) SubmitTreeNonces(
-	ctx context.Context, roundID, cosignerPubkey string,
-	nonces tree.TreeNonces,
+	ctx context.Context, batchId, cosignerPubkey string, nonces tree.TreeNonces,
 ) error {
 	var nonceBuffer bytes.Buffer
 
@@ -269,23 +185,19 @@ func (a *restClient) SubmitTreeNonces(
 	serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
 
 	body := &models.V1SubmitTreeNoncesRequest{
-		RoundID:    roundID,
+		BatchID:    batchId,
 		Pubkey:     cosignerPubkey,
 		TreeNonces: serializedNonces,
 	}
 
-	if _, err := a.svc.ArkServiceSubmitTreeNonces(
+	_, err := a.svc.ArkServiceSubmitTreeNonces(
 		ark_service.NewArkServiceSubmitTreeNoncesParams().WithBody(body),
-	); err != nil {
-		return err
-	}
-
-	return nil
+	)
+	return err
 }
 
 func (a *restClient) SubmitTreeSignatures(
-	ctx context.Context, roundID, cosignerPubkey string,
-	signatures tree.TreePartialSigs,
+	ctx context.Context, batchId, cosignerPubkey string, signatures tree.TreePartialSigs,
 ) error {
 	var sigsBuffer bytes.Buffer
 
@@ -296,26 +208,23 @@ func (a *restClient) SubmitTreeSignatures(
 	serializedSigs := hex.EncodeToString(sigsBuffer.Bytes())
 
 	body := &models.V1SubmitTreeSignaturesRequest{
-		RoundID:        roundID,
+		BatchID:        batchId,
 		Pubkey:         cosignerPubkey,
 		TreeSignatures: serializedSigs,
 	}
 
-	if _, err := a.svc.ArkServiceSubmitTreeSignatures(
+	_, err := a.svc.ArkServiceSubmitTreeSignatures(
 		ark_service.NewArkServiceSubmitTreeSignaturesParams().WithBody(body),
-	); err != nil {
-		return err
-	}
-
-	return nil
+	)
+	return err
 }
 
 func (a *restClient) SubmitSignedForfeitTxs(
-	ctx context.Context, signedForfeitTxs []string, signedRoundTx string,
+	ctx context.Context, signedForfeitTxs []string, signedCommitmentTx string,
 ) error {
 	body := models.V1SubmitSignedForfeitTxsRequest{
-		SignedForfeitTxs: signedForfeitTxs,
-		SignedRoundTx:    signedRoundTx,
+		SignedForfeitTxs:   signedForfeitTxs,
+		SignedCommitmentTx: signedCommitmentTx,
 	}
 	_, err := a.svc.ArkServiceSubmitSignedForfeitTxs(
 		ark_service.NewArkServiceSubmitSignedForfeitTxsParams().WithBody(&body),
@@ -323,15 +232,15 @@ func (a *restClient) SubmitSignedForfeitTxs(
 	return err
 }
 
-func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEventChannel, func(), error) {
+func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.BatchEventChannel, func(), error) {
 	ctx, cancel := context.WithCancel(ctx)
-	eventsCh := make(chan client.RoundEventChannel)
+	eventsCh := make(chan client.BatchEventChannel)
 	chunkCh := make(chan chunk)
 	url := fmt.Sprintf("%s/v1/events", c.serverURL)
 
 	go listenToStream(url, chunkCh)
 
-	go func(ctx context.Context, eventsCh chan client.RoundEventChannel, chunkCh chan chunk) {
+	go func(ctx context.Context, eventsCh chan client.BatchEventChannel, chunkCh chan chunk) {
 		defer close(eventsCh)
 
 		for {
@@ -344,14 +253,14 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEve
 				}
 
 				if chunk.err != nil {
-					eventsCh <- client.RoundEventChannel{Err: chunk.err}
+					eventsCh <- client.BatchEventChannel{Err: chunk.err}
 					return
 				}
 				// TODO: handle receival of partial chunks
 				resp := ark_service.ArkServiceGetEventStreamOKBody{}
 				if err := json.Unmarshal(chunk.msg, &resp); err != nil {
-					eventsCh <- client.RoundEventChannel{
-						Err: fmt.Errorf("failed to parse message from round event stream: %s, %s", err, string(chunk.msg)),
+					eventsCh <- client.BatchEventChannel{
+						Err: fmt.Errorf("failed to parse message from batch event stream: %s, %s", err, string(chunk.msg)),
 					}
 					return
 				}
@@ -362,20 +271,20 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEve
 				}
 
 				if resp.Error != nil {
-					eventsCh <- client.RoundEventChannel{
+					eventsCh <- client.BatchEventChannel{
 						Err: fmt.Errorf("received error %d: %s", resp.Error.Code, resp.Error.Message),
 					}
 					return
 				}
 
 				// Handle different event types
-				var event client.RoundEvent
+				var event any
 				var _err error
 				switch {
-				case resp.Result.RoundFailed != nil:
-					e := resp.Result.RoundFailed
-					event = client.RoundFailedEvent{
-						ID:     e.ID,
+				case resp.Result.BatchFailed != nil:
+					e := resp.Result.BatchFailed
+					event = client.BatchFailedEvent{
+						Id:     e.ID,
 						Reason: e.Reason,
 					}
 				case resp.Result.BatchStarted != nil:
@@ -386,47 +295,47 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEve
 						break
 					}
 					event = client.BatchStartedEvent{
-						ID:             e.ID,
-						IntentIdHashes: e.IntentIDHashes,
-						BatchExpiry:    int64(batchExpiry),
+						Id:              e.ID,
+						HashedIntentIds: e.IntentIDHashes,
+						BatchExpiry:     int64(batchExpiry),
 					}
-				case resp.Result.RoundFinalization != nil:
-					e := resp.Result.RoundFinalization
+				case resp.Result.BatchFinalization != nil:
+					e := resp.Result.BatchFinalization
 
-					event = client.RoundFinalizationEvent{
-						ID:              e.ID,
-						Tx:              e.RoundTx,
+					event = client.BatchFinalizationEvent{
+						Id:              e.ID,
+						Tx:              e.CommitmentTx,
 						ConnectorsIndex: connectorsIndexFromProto{e.ConnectorsIndex}.parse(),
 					}
-				case resp.Result.RoundFinalized != nil:
-					e := resp.Result.RoundFinalized
-					event = client.RoundFinalizedEvent{
-						ID:   e.ID,
-						Txid: e.RoundTxid,
+				case resp.Result.BatchFinalized != nil:
+					e := resp.Result.BatchFinalized
+					event = client.BatchFinalizedEvent{
+						Id:   e.ID,
+						Txid: e.CommitmentTxid,
 					}
-				case resp.Result.RoundSigning != nil:
-					e := resp.Result.RoundSigning
-					event = client.RoundSigningStartedEvent{
-						ID:               e.ID,
-						UnsignedRoundTx:  e.UnsignedRoundTx,
-						CosignersPubkeys: e.CosignersPubkeys,
+				case resp.Result.TreeSigningStarted != nil:
+					e := resp.Result.TreeSigningStarted
+					event = client.TreeSigningStartedEvent{
+						Id:                   e.ID,
+						UnsignedCommitmentTx: e.UnsignedCommitmentTx,
+						CosignersPubkeys:     e.CosignersPubkeys,
 					}
-				case resp.Result.RoundSigningNoncesGenerated != nil:
-					e := resp.Result.RoundSigningNoncesGenerated
+				case resp.Result.TreeNoncesAggregated != nil:
+					e := resp.Result.TreeNoncesAggregated
 					reader := hex.NewDecoder(strings.NewReader(e.TreeNonces))
 					nonces, err := tree.DecodeNonces(reader)
 					if err != nil {
 						_err = err
 						break
 					}
-					event = client.RoundSigningNoncesGeneratedEvent{
-						ID:     e.ID,
+					event = client.TreeNoncesAggregatedEvent{
+						Id:     e.ID,
 						Nonces: nonces,
 					}
-				case resp.Result.BatchTree != nil:
-					e := resp.Result.BatchTree
-					event = client.BatchTreeEvent{
-						ID:         e.ID,
+				case resp.Result.TreeTx != nil:
+					e := resp.Result.TreeTx
+					event = client.TreeTxEvent{
+						Id:         e.ID,
 						Topic:      e.Topic,
 						BatchIndex: e.BatchIndex,
 						Node: tree.Node{
@@ -438,10 +347,10 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEve
 							LevelIndex: e.TreeTx.LevelIndex,
 						},
 					}
-				case resp.Result.BatchTreeSignature != nil:
-					e := resp.Result.BatchTreeSignature
-					event = client.BatchTreeSignatureEvent{
-						ID:         e.ID,
+				case resp.Result.TreeSignature != nil:
+					e := resp.Result.TreeSignature
+					event = client.TreeSignatureEvent{
+						Id:         e.ID,
 						Topic:      e.Topic,
 						BatchIndex: e.BatchIndex,
 						Level:      e.Level,
@@ -450,7 +359,7 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEve
 					}
 				}
 
-				eventsCh <- client.RoundEventChannel{
+				eventsCh <- client.BatchEventChannel{
 					Event: event,
 					Err:   _err,
 				}
@@ -461,127 +370,33 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEve
 	return eventsCh, cancel, nil
 }
 
-func (a *restClient) SubmitOffchainTx(
-	ctx context.Context, virtualTx string, checkpointsTxs []string,
-) ([]string, string, string, error) {
-	req := &models.V1SubmitOffchainTxRequest{
-		VirtualTx:     virtualTx,
-		CheckpointTxs: checkpointsTxs,
+func (a *restClient) SubmitTx(
+	ctx context.Context, signedArkTx string, checkpointTxs []string,
+) (string, string, []string, error) {
+	req := &models.V1SubmitTxRequest{
+		SignedArkTx:   signedArkTx,
+		CheckpointTxs: checkpointTxs,
 	}
-	resp, err := a.svc.ArkServiceSubmitOffchainTx(
-		ark_service.NewArkServiceSubmitOffchainTxParams().WithBody(req),
+	resp, err := a.svc.ArkServiceSubmitTx(
+		ark_service.NewArkServiceSubmitTxParams().WithBody(req),
 	)
 	if err != nil {
-		return nil, "", "", err
+		return "", "", nil, err
 	}
-	return resp.Payload.SignedCheckpointTxs, resp.Payload.SignedVirtualTx, resp.Payload.Txid, nil
+	return resp.Payload.ArkTxid, resp.Payload.FinalArkTx, resp.Payload.SignedCheckpointTxs, nil
 }
 
-func (a *restClient) FinalizeOffchainTx(
-	ctx context.Context, virtualTxid string, checkpointsTxs []string,
+func (a *restClient) FinalizeTx(
+	ctx context.Context, arkTxid string, finalCheckpointTxs []string,
 ) error {
-	req := &models.V1FinalizeOffchainTxRequest{
-		Txid:          virtualTxid,
-		CheckpointTxs: checkpointsTxs,
+	req := &models.V1FinalizeTxRequest{
+		ArkTxid:            arkTxid,
+		FinalCheckpointTxs: finalCheckpointTxs,
 	}
-	_, err := a.svc.ArkServiceFinalizeOffchainTx(
-		ark_service.NewArkServiceFinalizeOffchainTxParams().WithBody(req),
+	_, err := a.svc.ArkServiceFinalizeTx(
+		ark_service.NewArkServiceFinalizeTxParams().WithBody(req),
 	)
 	return err
-}
-
-func (a *restClient) GetRound(
-	ctx context.Context, txID string,
-) (*client.Round, error) {
-	resp, err := a.explorerSvc.ExplorerServiceGetRound(
-		explorer_service.NewExplorerServiceGetRoundParams().WithTxid(txID),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	start, err := strconv.Atoi(resp.Payload.Round.Start)
-	if err != nil {
-		return nil, err
-	}
-
-	end, err := strconv.Atoi(resp.Payload.Round.End)
-	if err != nil {
-		return nil, err
-	}
-
-	startedAt := time.Unix(int64(start), 0)
-	var endedAt *time.Time
-	if end > 0 {
-		t := time.Unix(int64(end), 0)
-		endedAt = &t
-	}
-
-	return &client.Round{
-		ID:         resp.Payload.Round.ID,
-		StartedAt:  &startedAt,
-		EndedAt:    endedAt,
-		Tx:         resp.Payload.Round.RoundTx,
-		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
-		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
-		Connectors: treeFromProto{resp.Payload.Round.Connectors}.parse(),
-		Stage:      toRoundStage(*resp.Payload.Round.Stage),
-	}, nil
-}
-
-func (a *restClient) GetRoundByID(
-	ctx context.Context, roundID string,
-) (*client.Round, error) {
-	resp, err := a.explorerSvc.ExplorerServiceGetRoundByID(
-		explorer_service.NewExplorerServiceGetRoundByIDParams().WithID(roundID),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	start, err := strconv.Atoi(resp.Payload.Round.Start)
-	if err != nil {
-		return nil, err
-	}
-
-	end, err := strconv.Atoi(resp.Payload.Round.End)
-	if err != nil {
-		return nil, err
-	}
-
-	startedAt := time.Unix(int64(start), 0)
-	var endedAt *time.Time
-	if end > 0 {
-		t := time.Unix(int64(end), 0)
-		endedAt = &t
-	}
-
-	return &client.Round{
-		ID:         resp.Payload.Round.ID,
-		StartedAt:  &startedAt,
-		EndedAt:    endedAt,
-		Tx:         resp.Payload.Round.RoundTx,
-		Tree:       treeFromProto{resp.Payload.Round.VtxoTree}.parse(),
-		ForfeitTxs: resp.Payload.Round.ForfeitTxs,
-		Connectors: treeFromProto{resp.Payload.Round.Connectors}.parse(),
-		Stage:      toRoundStage(*resp.Payload.Round.Stage),
-	}, nil
-}
-
-func (a *restClient) ListVtxos(
-	ctx context.Context, addr string,
-) ([]client.Vtxo, []client.Vtxo, error) {
-	resp, err := a.explorerSvc.ExplorerServiceListVtxos(
-		explorer_service.NewExplorerServiceListVtxosParams().WithAddress(addr),
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	spendableVtxos := vtxosFromRest(resp.Payload.SpendableVtxos)
-	spentVtxos := vtxosFromRest(resp.Payload.SpentVtxos)
-
-	return spendableVtxos, spentVtxos, nil
 }
 
 func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.TransactionEvent, func(), error) {
@@ -630,21 +445,20 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 				}
 
 				var event client.TransactionEvent
-				if resp.Result.Round != nil {
+				if resp.Result.CommitmentTx != nil {
 					event = client.TransactionEvent{
-						Round: &client.RoundTransaction{
-							Txid:                 resp.Result.Round.Txid,
-							SpentVtxos:           vtxosFromRest(resp.Result.Round.SpentVtxos),
-							SpendableVtxos:       vtxosFromRest(resp.Result.Round.SpendableVtxos),
-							ClaimedBoardingUtxos: outpointsFromRest(resp.Result.Round.ClaimedBoardingUtxos),
+						CommitmentTx: &client.TxNotification{
+							Txid:           resp.Result.CommitmentTx.Txid,
+							SpentVtxos:     vtxosFromRest(resp.Result.CommitmentTx.SpentVtxos),
+							SpendableVtxos: vtxosFromRest(resp.Result.CommitmentTx.SpendableVtxos),
 						},
 					}
-				} else if resp.Result.Redeem != nil {
+				} else if resp.Result.ArkTx != nil {
 					event = client.TransactionEvent{
-						Redeem: &client.RedeemTransaction{
-							Txid:           resp.Result.Redeem.Txid,
-							SpentVtxos:     vtxosFromRest(resp.Result.Redeem.SpentVtxos),
-							SpendableVtxos: vtxosFromRest(resp.Result.Redeem.SpendableVtxos),
+						ArkTx: &client.TxNotification{
+							Txid:           resp.Result.ArkTx.Txid,
+							SpentVtxos:     vtxosFromRest(resp.Result.ArkTx.SpentVtxos),
+							SpendableVtxos: vtxosFromRest(resp.Result.ArkTx.SpendableVtxos),
 						},
 					}
 				}
@@ -653,62 +467,6 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 			}
 		}
 	}(ctx, eventsCh, chunkCh)
-
-	return eventsCh, cancel, nil
-}
-
-func (c *restClient) SubscribeForAddress(ctx context.Context, addr string) (<-chan client.AddressEvent, func(), error) {
-	ctx, cancel := context.WithCancel(ctx)
-	eventsCh := make(chan client.AddressEvent)
-	chunkCh := make(chan chunk)
-	url := fmt.Sprintf("%s/v1/vtxos/%s/subscribe", c.serverURL, addr)
-
-	go listenToStream(url, chunkCh)
-
-	go func(eventsCh chan client.AddressEvent, chunkCh chan chunk) {
-		defer close(eventsCh)
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case chunk := <-chunkCh:
-				if chunk.err == nil && len(chunk.msg) == 0 {
-					continue
-				}
-
-				if chunk.err != nil {
-					eventsCh <- client.AddressEvent{Err: chunk.err}
-					return
-				}
-
-				resp := explorer_service.ExplorerServiceSubscribeForAddressOKBody{}
-				if err := json.Unmarshal(chunk.msg, &resp); err != nil {
-					eventsCh <- client.AddressEvent{
-						Err: fmt.Errorf("failed to parse message from address stream: %s", err),
-					}
-					return
-				}
-
-				emptyResp := explorer_service.ExplorerServiceSubscribeForAddressOKBody{}
-				if resp == emptyResp {
-					continue
-				}
-
-				if resp.Error != nil {
-					eventsCh <- client.AddressEvent{
-						Err: fmt.Errorf("received error from address stream: %s", resp.Error.Message),
-					}
-					return
-				}
-
-				eventsCh <- client.AddressEvent{
-					NewVtxos:   vtxosFromRest(resp.Result.NewVtxos),
-					SpentVtxos: vtxosFromRest(resp.Result.SpentVtxos),
-				}
-			}
-		}
-	}(eventsCh, chunkCh)
 
 	return eventsCh, cancel, nil
 }
@@ -742,86 +500,15 @@ func newRestArkClient(
 	return svc.ArkService, nil
 }
 
-func newRestExplorerClient(
-	serviceURL string,
-) (explorer_service.ClientService, error) {
-	parsedURL, err := url.Parse(serviceURL)
-	if err != nil {
-		return nil, err
-	}
-
-	schemes := []string{parsedURL.Scheme}
-	host := parsedURL.Host
-	basePath := parsedURL.Path
-
-	if basePath == "" {
-		basePath = arkservice.DefaultBasePath
-	}
-
-	cfg := &explorerservice.TransportConfig{
-		Host:     host,
-		BasePath: basePath,
-		Schemes:  schemes,
-	}
-
-	transport := httptransport.New(cfg.Host, cfg.BasePath, cfg.Schemes)
-	svc := explorerservice.New(transport, strfmt.Default)
-	return svc.ExplorerService, nil
-}
-
-func toRoundStage(stage models.V1RoundStage) client.RoundStage {
-	switch stage {
-	case models.V1RoundStageROUNDSTAGEREGISTRATION:
-		return client.RoundStageRegistration
-	case models.V1RoundStageROUNDSTAGEFINALIZATION:
-		return client.RoundStageFinalization
-	case models.V1RoundStageROUNDSTAGEFINALIZED:
-		return client.RoundStageFinalized
-	case models.V1RoundStageROUNDSTAGEFAILED:
-		return client.RoundStageFailed
-	default:
-		return client.RoundStageUndefined
-	}
-}
-
-// treeFromProto is a wrapper type for V1Tree
-type treeFromProto struct {
-	*models.V1Tree
-}
-
-func (t treeFromProto) parse() tree.TxTree {
-	if t.V1Tree == nil || t.Levels == nil {
-		return tree.TxTree{}
-	}
-
-	vtxoTree := make(tree.TxTree, 0, len(t.Levels))
-	for _, l := range t.Levels {
-		level := make([]tree.Node, 0, len(l.Nodes))
-		for _, n := range l.Nodes {
-			level = append(level, tree.Node{
-				Txid:       n.Txid,
-				Tx:         n.Tx,
-				ParentTxid: n.ParentTxid,
-				Leaf:       n.Leaf,
-				Level:      n.Level,
-				LevelIndex: n.LevelIndex,
-			})
-		}
-		vtxoTree = append(vtxoTree, level)
-	}
-
-	return vtxoTree
-}
-
 // connectorsIndexFromProto is a wrapper type for map[string]models.V1Outpoint
 type connectorsIndexFromProto struct {
 	connectorsIndex map[string]models.V1Outpoint
 }
 
-func (c connectorsIndexFromProto) parse() map[string]client.Outpoint {
-	connectorsIndex := make(map[string]client.Outpoint)
+func (c connectorsIndexFromProto) parse() map[string]types.VtxoKey {
+	connectorsIndex := make(map[string]types.VtxoKey)
 	for vtxoOutpointStr, connectorOutpoint := range c.connectorsIndex {
-		connectorsIndex[vtxoOutpointStr] = client.Outpoint{
+		connectorsIndex[vtxoOutpointStr] = types.VtxoKey{
 			Txid: connectorOutpoint.Txid,
 			VOut: uint32(connectorOutpoint.Vout),
 		}
@@ -829,23 +516,12 @@ func (c connectorsIndexFromProto) parse() map[string]client.Outpoint {
 	return connectorsIndex
 }
 
-func outpointsFromRest(restOutpoints []*models.V1Outpoint) []client.Outpoint {
-	outpoints := make([]client.Outpoint, len(restOutpoints))
-	for i, o := range restOutpoints {
-		outpoints[i] = client.Outpoint{
-			Txid: o.Txid,
-			VOut: uint32(o.Vout),
-		}
-	}
-	return outpoints
-}
-
-func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
-	vtxos := make([]client.Vtxo, len(restVtxos))
+func vtxosFromRest(restVtxos []*models.V1Vtxo) []types.Vtxo {
+	vtxos := make([]types.Vtxo, len(restVtxos))
 	for i, v := range restVtxos {
 		var expiresAt, createdAt time.Time
-		if v.ExpireAt != "" && v.ExpireAt != "0" {
-			expAt, err := strconv.Atoi(v.ExpireAt)
+		if v.ExpiresAt != "" && v.ExpiresAt != "0" {
+			expAt, err := strconv.Atoi(v.ExpiresAt)
 			if err != nil {
 				return nil
 			}
@@ -865,21 +541,21 @@ func vtxosFromRest(restVtxos []*models.V1Vtxo) []client.Vtxo {
 			return nil
 		}
 
-		vtxos[i] = client.Vtxo{
-			Outpoint: client.Outpoint{
+		vtxos[i] = types.Vtxo{
+			VtxoKey: types.VtxoKey{
 				Txid: v.Outpoint.Txid,
 				VOut: uint32(v.Outpoint.Vout),
 			},
-			PubKey:    v.Pubkey,
-			Amount:    uint64(amount),
-			RoundTxid: v.RoundTxid,
-			ExpiresAt: expiresAt,
-			RedeemTx:  v.RedeemTx,
-			IsPending: v.IsPending,
-			SpentBy:   v.SpentBy,
-			CreatedAt: createdAt,
-			Swept:     v.Swept,
-			Spent:     v.Spent,
+			Script:         v.Script,
+			Amount:         uint64(amount),
+			CommitmentTxid: v.CommitmentTxid,
+			ExpiresAt:      expiresAt,
+			CreatedAt:      createdAt,
+			Preconfirmed:   v.Preconfirmed,
+			Swept:          v.Swept,
+			Redeemed:       v.Redeemed,
+			Spent:          v.Spent,
+			SpentBy:        v.SpentBy,
 		}
 	}
 	return vtxos

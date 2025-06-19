@@ -62,8 +62,17 @@ IndexerServiceGetVtxosParams contains all the parameters to send to the API endp
 */
 type IndexerServiceGetVtxosParams struct {
 
-	// Addresses.
+	/* Addresses.
+
+	   Either specify a list of addresses to list the vtxos for
+	*/
 	Addresses []string
+
+	/* Outpoints.
+
+	   Or specify a list of outpoints. The 2 filters are mutually exclusive
+	*/
+	Outpoints []string
 
 	// PageIndex.
 	//
@@ -75,10 +84,16 @@ type IndexerServiceGetVtxosParams struct {
 	// Format: int32
 	PageSize *int32
 
-	// SpendableOnly.
+	/* SpendableOnly.
+
+	   Retrieve only spendable vtxos
+	*/
 	SpendableOnly *bool
 
-	// SpentOnly.
+	/* SpentOnly.
+
+	   Retrieve only spendable vtxos. The 2 filters are mutually exclusive
+	*/
 	SpentOnly *bool
 
 	timeout    time.Duration
@@ -145,6 +160,17 @@ func (o *IndexerServiceGetVtxosParams) SetAddresses(addresses []string) {
 	o.Addresses = addresses
 }
 
+// WithOutpoints adds the outpoints to the indexer service get vtxos params
+func (o *IndexerServiceGetVtxosParams) WithOutpoints(outpoints []string) *IndexerServiceGetVtxosParams {
+	o.SetOutpoints(outpoints)
+	return o
+}
+
+// SetOutpoints adds the outpoints to the indexer service get vtxos params
+func (o *IndexerServiceGetVtxosParams) SetOutpoints(outpoints []string) {
+	o.Outpoints = outpoints
+}
+
 // WithPageIndex adds the pageIndex to the indexer service get vtxos params
 func (o *IndexerServiceGetVtxosParams) WithPageIndex(pageIndex *int32) *IndexerServiceGetVtxosParams {
 	o.SetPageIndex(pageIndex)
@@ -202,14 +228,20 @@ func (o *IndexerServiceGetVtxosParams) WriteToRequest(r runtime.ClientRequest, r
 		// binding items for addresses
 		joinedAddresses := o.bindParamAddresses(reg)
 
-		// path array param addresses
-		// SetPathParam does not support variadic arguments, since we used JoinByFormat
-		// we can send the first item in the array as it's all the items of the previous
-		// array joined together
-		if len(joinedAddresses) > 0 {
-			if err := r.SetPathParam("addresses", joinedAddresses[0]); err != nil {
-				return err
-			}
+		// query array param addresses
+		if err := r.SetQueryParam("addresses", joinedAddresses...); err != nil {
+			return err
+		}
+	}
+
+	if o.Outpoints != nil {
+
+		// binding items for outpoints
+		joinedOutpoints := o.bindParamOutpoints(reg)
+
+		// query array param outpoints
+		if err := r.SetQueryParam("outpoints", joinedOutpoints...); err != nil {
+			return err
 		}
 	}
 
@@ -298,8 +330,25 @@ func (o *IndexerServiceGetVtxosParams) bindParamAddresses(formats strfmt.Registr
 		addressesIC = append(addressesIC, addressesIIV)
 	}
 
-	// items.CollectionFormat: "csv"
-	addressesIS := swag.JoinByFormat(addressesIC, "csv")
+	// items.CollectionFormat: "multi"
+	addressesIS := swag.JoinByFormat(addressesIC, "multi")
 
 	return addressesIS
+}
+
+// bindParamIndexerServiceGetVtxos binds the parameter outpoints
+func (o *IndexerServiceGetVtxosParams) bindParamOutpoints(formats strfmt.Registry) []string {
+	outpointsIR := o.Outpoints
+
+	var outpointsIC []string
+	for _, outpointsIIR := range outpointsIR { // explode []string
+
+		outpointsIIV := outpointsIIR // string as string
+		outpointsIC = append(outpointsIC, outpointsIIV)
+	}
+
+	// items.CollectionFormat: "multi"
+	outpointsIS := swag.JoinByFormat(outpointsIC, "multi")
+
+	return outpointsIS
 }

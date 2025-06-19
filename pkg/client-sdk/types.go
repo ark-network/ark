@@ -3,10 +3,10 @@ package arksdk
 import (
 	"fmt"
 
-	"github.com/ark-network/ark/pkg/client-sdk/client"
 	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
 	restclient "github.com/ark-network/ark/pkg/client-sdk/client/rest"
 	"github.com/ark-network/ark/pkg/client-sdk/internal/utils"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/ark-network/ark/pkg/client-sdk/wallet"
 )
 
@@ -129,7 +129,7 @@ type CoinSelectOptions struct {
 	// If true, coin selector will select coins closest to expiry first.
 	WithExpirySorting bool
 	// If specified, coin selector will select only coins in the list.
-	OutpointsFilter []client.Outpoint
+	OutpointsFilter []types.VtxoKey
 	// If true, coin selector will select recoverable (swept but unspent) vtxos first.
 	SelectRecoverableVtxos bool
 }

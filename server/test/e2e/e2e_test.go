@@ -21,6 +21,8 @@ import (
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	grpcclient "github.com/ark-network/ark/pkg/client-sdk/client/grpc"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
+	"github.com/ark-network/ark/pkg/client-sdk/indexer"
+	grpcindexer "github.com/ark-network/ark/pkg/client-sdk/indexer/grpc"
 	"github.com/ark-network/ark/pkg/client-sdk/redemption"
 	"github.com/ark-network/ark/pkg/client-sdk/store"
 	inmemorystoreconfig "github.com/ark-network/ark/pkg/client-sdk/store/inmemory"
@@ -155,7 +157,7 @@ func TestSettleInSameRound(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, vtxos)
 	}()
-	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobOffchainAddr, 5000)}, false)
+	_, err = alice.SendOffChain(ctx, false, []types.Receiver{{To: bobOffchainAddr, Amount: 5000}})
 	require.NoError(t, err)
 
 	wg.Wait()
@@ -168,7 +170,7 @@ func TestSettleInSameRound(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, vtxos)
 	}()
-	_, err = bob.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(aliceOffchainAddr, 3000)}, false)
+	_, err = bob.SendOffChain(ctx, false, []types.Receiver{{To: aliceOffchainAddr, Amount: 3000}})
 	require.NoError(t, err)
 
 	wg.Wait()
@@ -221,15 +223,15 @@ func TestSettleInSameRound(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, bobVtxosAfter)
 
-	var aliceNewVtxo, bobNewVtxo client.Vtxo
+	var aliceNewVtxo, bobNewVtxo types.Vtxo
 	for _, vtxo := range aliceVtxosAfter {
-		if vtxo.RoundTxid == aliceSecondRoundID {
+		if vtxo.CommitmentTxid == aliceSecondRoundID {
 			aliceNewVtxo = vtxo
 			break
 		}
 	}
 	for _, vtxo := range bobVtxosAfter {
-		if vtxo.RoundTxid == bobSecondRoundID {
+		if vtxo.CommitmentTxid == bobSecondRoundID {
 			bobNewVtxo = vtxo
 			break
 		}
@@ -237,7 +239,7 @@ func TestSettleInSameRound(t *testing.T) {
 
 	require.NotEmpty(t, aliceNewVtxo)
 	require.NotEmpty(t, bobNewVtxo)
-	require.Equal(t, aliceNewVtxo.RoundTxid, bobNewVtxo.RoundTxid)
+	require.Equal(t, aliceNewVtxo.CommitmentTxid, bobNewVtxo.CommitmentTxid)
 }
 
 func TestUnilateralExit(t *testing.T) {
@@ -337,6 +339,7 @@ func TestCollaborativeExit(t *testing.T) {
 
 func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	ctx := context.Background()
+	indexerSvc := setupIndexer(t)
 	sdkClient, grpcClient := setupArkSDK(t)
 	defer sdkClient.Stop()
 	defer grpcClient.Close()
@@ -378,20 +381,23 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 	require.NoError(t, err)
 	require.NotEmpty(t, spentVtxos)
 
-	var vtxo client.Vtxo
+	var vtxo types.Vtxo
 	for _, v := range spentVtxos {
-		if v.RoundTxid == roundId && !v.IsPending {
+		if v.CommitmentTxid == roundId && !v.Preconfirmed {
 			vtxo = v
 			break
 		}
 	}
 
-	round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
+	vtxoTree, err := indexerSvc.GetFullVtxoTree(ctx, indexer.Outpoint{
+		Txid: vtxo.CommitmentTxid,
+		VOut: 0,
+	})
 	require.NoError(t, err)
 
 	expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
 
-	branch, err := redemption.NewRedeemBranch(expl, round.Tree, vtxo)
+	branch, err := redemption.NewRedeemBranch(expl, vtxoTree, vtxo)
 	require.NoError(t, err)
 
 	txs, err := branch.RedeemPath()
@@ -425,6 +431,7 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 	t.Run("default vtxo script", func(t *testing.T) {
 		ctx := context.Background()
+		indexerSvc := setupIndexer(t)
 		sdkClient, grpcClient := setupArkSDK(t)
 		defer sdkClient.Stop()
 		defer grpcClient.Close()
@@ -462,7 +469,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			require.NotNil(t, vtxos)
 		}()
 
-		_, err = sdkClient.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(offchainAddress, 1000)}, false)
+		_, err = sdkClient.SendOffChain(ctx, false, []types.Receiver{{To: offchainAddress, Amount: 1000}})
 		require.NoError(t, err)
 
 		wg.Wait()
@@ -483,21 +490,24 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		require.NoError(t, err)
 		require.NotEmpty(t, spentVtxos)
 
-		var vtxo client.Vtxo
+		var vtxo types.Vtxo
 		for _, v := range spentVtxos {
-			if v.RoundTxid == roundId && !v.IsPending {
+			if v.CommitmentTxid == roundId && !v.Preconfirmed {
 				vtxo = v
 				break
 			}
 		}
 		require.NotEmpty(t, vtxo)
 
-		round, err := grpcClient.GetRound(ctx, vtxo.RoundTxid)
+		vtxoTree, err := indexerSvc.GetFullVtxoTree(ctx, indexer.Outpoint{
+			Txid: vtxo.CommitmentTxid,
+			VOut: 0,
+		})
 		require.NoError(t, err)
 
 		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
 
-		branch, err := redemption.NewRedeemBranch(expl, round.Tree, vtxo)
+		branch, err := redemption.NewRedeemBranch(expl, vtxoTree, vtxo)
 		require.NoError(t, err)
 
 		txs, err := branch.RedeemPath()
@@ -519,7 +529,9 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 
 	t.Run("cltv vtxo script", func(t *testing.T) {
 		ctx := context.Background()
+		indexerSvc := setupIndexer(t)
 		alice, grpcTransportClient := setupArkSDK(t)
+
 		defer alice.Stop()
 		defer grpcTransportClient.Close()
 
@@ -635,7 +647,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			require.NotNil(t, vtxos)
 		}()
 
-		txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)}, false)
+		txid, err := alice.SendOffChain(ctx, false, []types.Receiver{{To: bobAddrStr, Amount: sendAmount}})
 		require.NoError(t, err)
 		require.NotEmpty(t, txid)
 
@@ -648,7 +660,12 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		var virtualTx string
 		for _, vtxo := range spendable {
 			if vtxo.Txid == txid {
-				virtualTx = vtxo.RedeemTx
+				resp, err := indexerSvc.GetVirtualTxs(ctx, []string{txid})
+				require.NoError(t, err)
+				require.NotNil(t, resp)
+				require.NotEmpty(t, resp.Txs)
+
+				virtualTx = resp.Txs[0]
 				break
 			}
 		}
@@ -743,7 +760,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			require.NoError(t, err)
 		}
 
-		signedCheckpoints, _, bobTxid, err := grpcTransportClient.SubmitOffchainTx(ctx, signedTx, checkpoints)
+		bobTxid, _, signedCheckpoints, err := grpcTransportClient.SubmitTx(ctx, signedTx, checkpoints)
 		require.NoError(t, err)
 
 		finalCheckpoints := make([]string, 0, len(signedCheckpoints))
@@ -761,7 +778,7 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 			require.NotNil(t, vtxos)
 		}()
 
-		err = grpcTransportClient.FinalizeOffchainTx(ctx, bobTxid, finalCheckpoints)
+		err = grpcTransportClient.FinalizeTx(ctx, bobTxid, finalCheckpoints)
 		require.NoError(t, err)
 
 		wg.Wait()
@@ -780,10 +797,13 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		}
 		require.True(t, found)
 
-		round, err := grpcTransportClient.GetRound(ctx, initialTreeVtxo.RoundTxid)
+		vtxoTree, err := indexerSvc.GetFullVtxoTree(ctx, indexer.Outpoint{
+			Txid: initialTreeVtxo.CommitmentTxid,
+			VOut: 0,
+		})
 		require.NoError(t, err)
 
-		branch, err := redemption.NewRedeemBranch(explorer, round.Tree, initialTreeVtxo)
+		branch, err := redemption.NewRedeemBranch(explorer, vtxoTree, initialTreeVtxo)
 		require.NoError(t, err)
 
 		txs, err := branch.RedeemPath()
@@ -799,9 +819,16 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 
 		// make sure the vtxo of bob is not redeemed
 		// the checkpoint is not the bob's virtual tx
-		_, bobSpentVtxos, err := grpcTransportClient.ListVtxos(ctx, bobAddrStr)
+		opt := &indexer.GetVtxosRequestOption{}
+		// nolint
+		opt.WithAddresses([]string{bobAddrStr})
+		// nolint
+		opt.WithSpentOnly()
+
+		resp, err := indexerSvc.GetVtxos(ctx, *opt)
 		require.NoError(t, err)
-		require.Len(t, bobSpentVtxos, 1)
+		require.NotNil(t, resp)
+		require.Len(t, resp.Vtxos, 1)
 
 		// make sure the vtxo of alice is not spendable
 		aliceVtxos, _, err = alice.ListVtxos(ctx)
@@ -897,7 +924,7 @@ func TestSubDustVtxoTransaction(t *testing.T) {
 	wg.Wait()
 
 	// bob should fail to send the satoshi via offchain tx
-	_, err = bob.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddr, subdustAmount)}, false)
+	_, err = bob.SendOffChain(ctx, false, []types.Receiver{{To: bobAddr, Amount: subdustAmount}})
 	require.Error(t, err)
 
 	// bob should fail to settle the subdust
@@ -907,7 +934,7 @@ func TestSubDustVtxoTransaction(t *testing.T) {
 	// resend some funds to bob so he can settle
 	_, err = runArkCommand("send", "--amount", "1000", "--to", bobAddr, "--password", utils.Password)
 	require.NoError(t, err)
-	
+
 	// now that bob has enough funds (greater than dust), he should be able to settle
 	_, err = bob.Settle(ctx, arksdk.WithSubDustVtxos)
 	require.NoError(t, err)
@@ -967,7 +994,7 @@ func TestCollisionBetweenInRoundAndRedeemVtxo(t *testing.T) {
 	time.Sleep(50 * time.Millisecond)
 	go func() {
 		defer wg.Done()
-		txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddr, 1000)}, false)
+		txid, err := alice.SendOffChain(ctx, false, []types.Receiver{{To: bobAddr, Amount: 1000}})
 		ch <- resp{txid, err}
 	}()
 
@@ -1032,7 +1059,7 @@ func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, vtxos)
 	}()
-	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 1000)}, false)
+	_, err = alice.SendOffChain(ctx, false, []types.Receiver{{To: bobAddress, Amount: 1000}})
 	require.NoError(t, err)
 
 	wg.Wait()
@@ -1048,7 +1075,7 @@ func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, vtxos)
 	}()
-	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, false)
+	_, err = alice.SendOffChain(ctx, false, []types.Receiver{{To: bobAddress, Amount: 10000}})
 	require.NoError(t, err)
 
 	wg.Wait()
@@ -1064,7 +1091,7 @@ func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, vtxos)
 	}()
-	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, false)
+	_, err = alice.SendOffChain(ctx, false, []types.Receiver{{To: bobAddress, Amount: 10000}})
 	require.NoError(t, err)
 
 	wg.Wait()
@@ -1080,7 +1107,7 @@ func TestAliceSendsSeveralTimesToBob(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, vtxos)
 	}()
-	_, err = alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddress, 10000)}, false)
+	_, err = alice.SendOffChain(ctx, false, []types.Receiver{{To: bobAddress, Amount: 10000}})
 	require.NoError(t, err)
 
 	wg.Wait()
@@ -1127,6 +1154,7 @@ func TestRedeemNotes(t *testing.T) {
 
 func TestSendToCLTVMultisigClosure(t *testing.T) {
 	ctx := context.Background()
+	indexerSvc := setupIndexer(t)
 	alice, grpcAlice := setupArkSDK(t)
 	defer alice.Stop()
 	defer grpcAlice.Close()
@@ -1228,7 +1256,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, vtxos)
 	}()
-	txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)}, false)
+	txid, err := alice.SendOffChain(ctx, false, []types.Receiver{{To: bobAddrStr, Amount: sendAmount}})
 	require.NoError(t, err)
 	require.NotEmpty(t, txid)
 
@@ -1241,7 +1269,12 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	var virtualTx string
 	for _, vtxo := range spendable {
 		if vtxo.Txid == txid {
-			virtualTx = vtxo.RedeemTx
+			resp, err := indexerSvc.GetVirtualTxs(ctx, []string{txid})
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			require.NotEmpty(t, resp.Txs)
+
+			virtualTx = resp.Txs[0]
 			break
 		}
 	}
@@ -1330,7 +1363,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	}
 
 	// should fail because the tx is not yet valid
-	_, _, _, err = grpcAlice.SubmitOffchainTx(ctx, signedTx, checkpoints)
+	_, _, _, err = grpcAlice.SubmitTx(ctx, signedTx, checkpoints)
 	require.Error(t, err)
 
 	// Generate blocks to pass the timelock
@@ -1340,7 +1373,7 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 	}
 
 	// should succeed now
-	signedCheckpoints, _, txid, err := grpcAlice.SubmitOffchainTx(ctx, signedTx, checkpoints)
+	txid, _, signedCheckpoints, err := grpcAlice.SubmitTx(ctx, signedTx, checkpoints)
 	require.NoError(t, err)
 
 	finalCheckpoints := make([]string, 0, len(signedCheckpoints))
@@ -1350,12 +1383,13 @@ func TestSendToCLTVMultisigClosure(t *testing.T) {
 		finalCheckpoints = append(finalCheckpoints, finalCheckpoint)
 	}
 
-	err = grpcAlice.FinalizeOffchainTx(ctx, txid, finalCheckpoints)
+	err = grpcAlice.FinalizeTx(ctx, txid, finalCheckpoints)
 	require.NoError(t, err)
 }
 
 func TestSendToConditionMultisigClosure(t *testing.T) {
 	ctx := context.Background()
+	indexerSvc := setupIndexer(t)
 	alice, grpcAlice := setupArkSDK(t)
 	defer alice.Stop()
 	defer grpcAlice.Close()
@@ -1472,7 +1506,7 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 		require.NotNil(t, vtxos)
 	}()
 
-	txid, err := alice.SendOffChain(ctx, false, []arksdk.Receiver{arksdk.NewBitcoinReceiver(bobAddrStr, sendAmount)}, false)
+	txid, err := alice.SendOffChain(ctx, false, []types.Receiver{{To: bobAddrStr, Amount: sendAmount}})
 	require.NoError(t, err)
 	require.NotEmpty(t, txid)
 
@@ -1485,7 +1519,12 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 	var virtualTx string
 	for _, vtxo := range spendable {
 		if vtxo.Txid == txid {
-			virtualTx = vtxo.RedeemTx
+			resp, err := indexerSvc.GetVirtualTxs(ctx, []string{txid})
+			require.NoError(t, err)
+			require.NotNil(t, resp)
+			require.NotEmpty(t, resp.Txs)
+
+			virtualTx = resp.Txs[0]
 			break
 		}
 	}
@@ -1576,7 +1615,7 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 		checkpoints = append(checkpoints, encoded)
 	}
 
-	signedCheckpoints, _, bobTxid, err := grpcAlice.SubmitOffchainTx(ctx, signedTx, checkpoints)
+	bobTxid, _, signedCheckpoints, err := grpcAlice.SubmitTx(ctx, signedTx, checkpoints)
 	require.NoError(t, err)
 
 	finalCheckpoints := make([]string, 0, len(signedCheckpoints))
@@ -1595,7 +1634,7 @@ func TestSendToConditionMultisigClosure(t *testing.T) {
 		finalCheckpoints = append(finalCheckpoints, finalCheckpoint)
 	}
 
-	err = grpcAlice.FinalizeOffchainTx(ctx, bobTxid, finalCheckpoints)
+	err = grpcAlice.FinalizeTx(ctx, bobTxid, finalCheckpoints)
 	require.NoError(t, err)
 }
 
@@ -1646,14 +1685,6 @@ func TestDeleteIntent(t *testing.T) {
 	// should fail becasue no intent is associated with the vtxos
 	err = alice.DeleteIntent(ctx, aliceVtxos, []types.Utxo{}, nil)
 	require.Error(t, err)
-
-	// should not fail because intent is deleted
-	id, err := alice.RegisterIntent(ctx, aliceVtxos, []types.Utxo{}, nil, nil, nil)
-	require.NoError(t, err)
-
-	// delete again but using the intent ID
-	err = grpcAlice.DeleteIntent(ctx, id, "", "")
-	require.NoError(t, err)
 }
 
 func TestSweep(t *testing.T) {
@@ -1834,6 +1865,12 @@ func setupArkSDK(t *testing.T) (arksdk.ArkClient, client.TransportClient) {
 	require.NoError(t, err)
 
 	return client, grpcClient
+}
+
+func setupIndexer(t *testing.T) indexer.Indexer {
+	svc, err := grpcindexer.NewClient("localhost:7070")
+	require.NoError(t, err)
+	return svc
 }
 
 func generateNote(t *testing.T, amount uint32) string {

@@ -96,11 +96,9 @@ func ParseBitcoinAddress(addr string, net chaincfg.Params) (
 	return true, onchainScript, nil
 }
 
-func IsOnchainOnly(receivers []client.Output) bool {
+func IsOnchainOnly(receivers []types.Receiver) bool {
 	for _, receiver := range receivers {
-		isOnChain := len(receiver.Address) > 0
-
-		if !isOnChain {
+		if !receiver.IsOnchain() {
 			return false
 		}
 	}

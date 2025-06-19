@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
-	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/explorer"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"github.com/btcsuite/btcd/btcutil/psbt"
 )
 
 type CovenantlessRedeemBranch struct {
-	vtxo           client.Vtxo
+	vtxo           types.Vtxo
 	branch         []*psbt.Packet
 	vtxoTreeExpiry time.Duration
 	explorer       explorer.Explorer
@@ -22,7 +22,7 @@ type CovenantlessRedeemBranch struct {
 
 func NewRedeemBranch(
 	explorer explorer.Explorer,
-	vtxoTree tree.TxTree, vtxo client.Vtxo,
+	vtxoTree tree.TxTree, vtxo types.Vtxo,
 ) (*CovenantlessRedeemBranch, error) {
 	root, err := vtxoTree.Root()
 	if err != nil {
@@ -104,7 +104,7 @@ func (r *CovenantlessRedeemBranch) RedeemPath() ([]string, error) {
 func (r *CovenantlessRedeemBranch) ExpiresAt() (*time.Time, error) {
 	lastKnownBlocktime := int64(0)
 
-	confirmed, blocktime, _ := r.explorer.GetTxBlockTime(r.vtxo.RoundTxid)
+	confirmed, blocktime, _ := r.explorer.GetTxBlockTime(r.vtxo.CommitmentTxid)
 
 	if confirmed {
 		lastKnownBlocktime = blocktime

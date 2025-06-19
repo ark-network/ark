@@ -19,14 +19,14 @@ import (
 type V1RegisterIntentRequest struct {
 
 	// BIP322 signature embeds the outpoints and the proof of funds
-	Bip322Signature *V1Bip322Signature `json:"bip322Signature,omitempty"`
+	Intent *V1Bip322Signature `json:"intent,omitempty"`
 }
 
 // Validate validates this v1 register intent request
 func (m *V1RegisterIntentRequest) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateBip322Signature(formats); err != nil {
+	if err := m.validateIntent(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -36,17 +36,17 @@ func (m *V1RegisterIntentRequest) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *V1RegisterIntentRequest) validateBip322Signature(formats strfmt.Registry) error {
-	if swag.IsZero(m.Bip322Signature) { // not required
+func (m *V1RegisterIntentRequest) validateIntent(formats strfmt.Registry) error {
+	if swag.IsZero(m.Intent) { // not required
 		return nil
 	}
 
-	if m.Bip322Signature != nil {
-		if err := m.Bip322Signature.Validate(formats); err != nil {
+	if m.Intent != nil {
+		if err := m.Intent.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("bip322Signature")
+				return ve.ValidateName("intent")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("bip322Signature")
+				return ce.ValidateName("intent")
 			}
 			return err
 		}
@@ -59,7 +59,7 @@ func (m *V1RegisterIntentRequest) validateBip322Signature(formats strfmt.Registr
 func (m *V1RegisterIntentRequest) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateBip322Signature(ctx, formats); err != nil {
+	if err := m.contextValidateIntent(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -69,19 +69,19 @@ func (m *V1RegisterIntentRequest) ContextValidate(ctx context.Context, formats s
 	return nil
 }
 
-func (m *V1RegisterIntentRequest) contextValidateBip322Signature(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1RegisterIntentRequest) contextValidateIntent(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.Bip322Signature != nil {
+	if m.Intent != nil {
 
-		if swag.IsZero(m.Bip322Signature) { // not required
+		if swag.IsZero(m.Intent) { // not required
 			return nil
 		}
 
-		if err := m.Bip322Signature.ContextValidate(ctx, formats); err != nil {
+		if err := m.Intent.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("bip322Signature")
+				return ve.ValidateName("intent")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("bip322Signature")
+				return ce.ValidateName("intent")
 			}
 			return err
 		}

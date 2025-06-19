@@ -7,6 +7,8 @@ import (
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/server/internal/core/ports"
 	log "github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
 
 type walletInitHandler struct {
@@ -160,4 +162,20 @@ func (a *walletHandler) GetBalance(ctx context.Context, _ *arkv1.GetBalanceReque
 			Available: convertSatsToBTCStr(availableConnectorsBalance),
 		},
 	}, nil
+}
+
+func (a *walletHandler) Withdraw(ctx context.Context, req *arkv1.WithdrawRequest) (*arkv1.WithdrawResponse, error) {
+	if req.GetAmount() <= 0 {
+		return nil, status.Error(codes.InvalidArgument, "amount must be greater than 0")
+	}
+
+	if req.GetAddress() == "" {
+		return nil, status.Error(codes.InvalidArgument, "address is required")
+	}
+
+	txid, err := a.walletService.Withdraw(ctx, req.GetAddress(), req.GetAmount())
+	if err != nil {
+		return nil, err
+	}
+	return &arkv1.WithdrawResponse{Txid: txid}, nil
 }

@@ -18,6 +18,7 @@ import (
 	walletstore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store"
 	filestore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/file"
 	inmemorystore "github.com/ark-network/ark/pkg/client-sdk/wallet/singlekey/store/inmemory"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
@@ -158,22 +159,34 @@ func (a *arkClient) Stop() {
 	a.store.Close()
 }
 
-func (a *arkClient) ListVtxos(
-	ctx context.Context,
-) (spendableVtxos, spentVtxos []client.Vtxo, err error) {
+func (a *arkClient) ListVtxos(ctx context.Context) (
+	spendableVtxos, spentVtxos []types.Vtxo, err error,
+) {
 	_, offchainAddrs, _, _, err := a.wallet.GetAddresses(ctx)
 	if err != nil {
 		return
 	}
 
+	addresses := make([]string, 0, len(offchainAddrs))
 	for _, addr := range offchainAddrs {
-		spendable, spent, err := a.client.ListVtxos(ctx, addr.Address)
-		if err != nil {
-			return nil, nil, err
-		}
+		addresses = append(addresses, addr.Address)
+	}
+	opt := indexer.GetVtxosRequestOption{}
+	if err = opt.WithAddresses(addresses); err != nil {
+		return
+	}
 
-		spendableVtxos = append(spendableVtxos, spendable...)
-		spentVtxos = append(spentVtxos, spent...)
+	resp, err := a.indexer.GetVtxos(ctx, opt)
+	if err != nil {
+		return
+	}
+
+	for _, vtxo := range resp.Vtxos {
+		if vtxo.Spent || vtxo.Swept || vtxo.Redeemed {
+			spentVtxos = append(spentVtxos, vtxo)
+			continue
+		}
+		spendableVtxos = append(spendableVtxos, vtxo)
 	}
 
 	return
@@ -186,24 +199,35 @@ func (a *arkClient) NotifyIncomingFunds(
 		return nil, fmt.Errorf("wallet not initialized")
 	}
 
-	eventCh, closeFn, err := a.client.SubscribeForAddress(ctx, addr)
+	decoded, err := common.DecodeAddress(addr)
 	if err != nil {
 		return nil, err
 	}
-	defer closeFn()
+
+	scripts := []string{
+		hex.EncodeToString(schnorr.SerializePubKey(decoded.VtxoTapKey)),
+	}
+	subId, err := a.indexer.SubscribeForScripts(ctx, "", scripts)
+	if err != nil {
+		return nil, err
+	}
+
+	eventCh, closeFn, err := a.indexer.GetSubscription(ctx, subId)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		// nolint
+		a.indexer.UnsubscribeForScripts(ctx, subId, scripts)
+		closeFn()
+	}()
 
 	event := <-eventCh
 
 	if event.Err != nil {
-		err = event.Err
-		return nil, err
+		return nil, event.Err
 	}
-
-	incomingVtxos := make([]types.Vtxo, 0)
-	for _, vtxo := range event.NewVtxos {
-		incomingVtxos = append(incomingVtxos, toTypesVtxo(vtxo))
-	}
-	return incomingVtxos, nil
+	return event.NewVtxos, nil
 }
 
 func (a *arkClient) initWithWallet(
@@ -262,16 +286,22 @@ func (a *arkClient) initWithWallet(
 	}
 
 	storeData := types.Config{
-		ServerUrl:               args.ServerUrl,
-		ServerPubKey:            serverPubkey,
-		WalletType:              args.Wallet.GetType(),
-		ClientType:              args.ClientType,
-		Network:                 network,
-		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
-		RoundInterval:           info.RoundInterval,
-		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
-		Dust:                    info.Dust,
-		BoardingExitDelay:       common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
+		ServerUrl:    args.ServerUrl,
+		ServerPubKey: serverPubkey,
+		WalletType:   args.Wallet.GetType(),
+		ClientType:   args.ClientType,
+		Network:      network,
+		VtxoTreeExpiry: common.RelativeLocktime{
+			Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry),
+		},
+		RoundInterval: info.RoundInterval,
+		UnilateralExitDelay: common.RelativeLocktime{
+			Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay),
+		},
+		Dust: info.Dust,
+		BoardingExitDelay: common.RelativeLocktime{
+			Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay),
+		},
 		ForfeitAddress:          info.ForfeitAddress,
 		WithTransactionFeed:     args.WithTransactionFeed,
 		MarketHourStartTime:     info.MarketHourStartTime,
@@ -359,16 +389,22 @@ func (a *arkClient) init(
 	}
 
 	cfgData := types.Config{
-		ServerUrl:               args.ServerUrl,
-		ServerPubKey:            serverPubkey,
-		WalletType:              args.WalletType,
-		ClientType:              args.ClientType,
-		Network:                 network,
-		VtxoTreeExpiry:          common.RelativeLocktime{Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry)},
-		RoundInterval:           info.RoundInterval,
-		UnilateralExitDelay:     common.RelativeLocktime{Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay)},
-		Dust:                    info.Dust,
-		BoardingExitDelay:       common.RelativeLocktime{Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay)},
+		ServerUrl:    args.ServerUrl,
+		ServerPubKey: serverPubkey,
+		WalletType:   args.WalletType,
+		ClientType:   args.ClientType,
+		Network:      network,
+		VtxoTreeExpiry: common.RelativeLocktime{
+			Type: vtxoTreeExpiryType, Value: uint32(info.VtxoTreeExpiry),
+		},
+		RoundInterval: info.RoundInterval,
+		UnilateralExitDelay: common.RelativeLocktime{
+			Type: unilateralExitDelayType, Value: uint32(info.UnilateralExitDelay),
+		},
+		Dust: info.Dust,
+		BoardingExitDelay: common.RelativeLocktime{
+			Type: boardingExitDelayType, Value: uint32(info.BoardingExitDelay),
+		},
 		ExplorerURL:             explorerSvc.BaseUrl(),
 		ForfeitAddress:          info.ForfeitAddress,
 		WithTransactionFeed:     args.WithTransactionFeed,
@@ -443,7 +479,8 @@ func getIndexer(clientType, serverUrl string) (indexer.Indexer, error) {
 }
 
 func getWallet(
-	configStore types.ConfigStore, data *types.Config, supportedWallets utils.SupportedType[struct{}],
+	configStore types.ConfigStore, data *types.Config,
+	supportedWallets utils.SupportedType[struct{}],
 ) (wallet.WalletService, error) {
 	switch data.WalletType {
 	case wallet.SingleKeyWallet:
@@ -476,11 +513,11 @@ func getWalletStore(storeType, datadir string) (walletstore.WalletStore, error) 
 	}
 }
 
-func filterByOutpoints(vtxos []client.Vtxo, outpoints []client.Outpoint) []client.Vtxo {
-	filtered := make([]client.Vtxo, 0, len(vtxos))
+func filterByOutpoints(vtxos []types.Vtxo, outpoints []types.VtxoKey) []types.Vtxo {
+	filtered := make([]types.Vtxo, 0, len(vtxos))
 	for _, vtxo := range vtxos {
 		for _, outpoint := range outpoints {
-			if vtxo.Equals(outpoint) {
+			if vtxo.VtxoKey == outpoint {
 				filtered = append(filtered, vtxo)
 			}
 		}

@@ -84,7 +84,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	log.Infof("alice settled the onboard funds in round %s", txid)
+	log.Infof("alice settled the onboard funds in commitment tx %s", txid)
 
 	fmt.Println("")
 	log.Info("bob is setting up his ark wallet...")
@@ -115,18 +115,16 @@ func main() {
 	log.Infof("bob offchain balance: %d", bobBalance.OffchainBalance.Total)
 
 	amount := uint64(1000)
-	receivers := []arksdk.Receiver{
-		arksdk.NewBitcoinReceiver(bobOffchainAddr, amount),
-	}
+	receivers := []types.Receiver{{To: bobOffchainAddr, Amount: amount}}
 
 	fmt.Println("")
 	log.Infof("alice is sending %d sats to bob offchain...", amount)
 
-	if _, err = aliceArkClient.SendOffChain(ctx, false, receivers, true); err != nil {
+	if _, err = aliceArkClient.SendOffChain(ctx, false, receivers); err != nil {
 		log.Fatal(err)
 	}
 
-	log.Info("transaction completed out of round")
+	log.Info("transaction completed")
 
 	if err := generateBlock(); err != nil {
 		log.Fatal(err)
@@ -153,12 +151,12 @@ func main() {
 
 	fmt.Println("")
 	log.Info("bob is settling the received funds...")
-	roundTxid, err := bobArkClient.Settle(ctx)
+	commitmentTxid, err := bobArkClient.Settle(ctx)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	log.Infof("bob settled the received funds in round %s", roundTxid)
+	log.Infof("bob settled the received funds in commitment tx %s", commitmentTxid)
 
 	time.Sleep(500 * time.Second)
 }

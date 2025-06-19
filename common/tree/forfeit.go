@@ -7,7 +7,7 @@ import (
 )
 
 func BuildForfeitTx(
-	connectorInput, vtxoInput *wire.OutPoint,
+	vtxoInput, connectorInput *wire.OutPoint,
 	vtxoAmount, connectorAmount uint64,
 	vtxoScript, connectorScript, serverScript []byte,
 	txLocktime uint32,

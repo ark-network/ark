@@ -173,8 +173,18 @@ func NewService(
 			newVtxos := getNewVtxosFromRound(round)
 
 			go func() {
-				svc.transactionEventsCh <- RoundTransactionEvent{
-					RoundTxid:      round.Txid,
+				svc.transactionEventsCh <- TransactionEvent{
+					Type:           CommitmentTxType,
+					Txid:           round.Txid,
+					SpentVtxos:     spentVtxos,
+					SpendableVtxos: newVtxos,
+					TxHex:          round.CommitmentTx,
+				}
+			}()
+			go func() {
+				svc.indexerTxEventsCh <- TransactionEvent{
+					Type:           CommitmentTxType,
+					Txid:           round.Txid,
 					SpentVtxos:     spentVtxos,
 					SpendableVtxos: newVtxos,
 					TxHex:          round.CommitmentTx,
@@ -231,8 +241,24 @@ func NewService(
 					}
 				}()
 
-				svc.transactionEventsCh <- RedeemTransactionEvent{
-					RedeemTxid:     txid,
+				svc.transactionEventsCh <- TransactionEvent{
+					Type:           ArkTxType,
+					Txid:           txid,
+					SpentVtxos:     spentVtxos,
+					SpendableVtxos: newVtxos,
+					TxHex:          offchainTx.VirtualTx,
+				}
+			}()
+			go func() {
+				defer func() {
+					if r := recover(); r != nil {
+						log.Errorf("recovered from panic in sendTxEvent: %v", r)
+					}
+				}()
+
+				svc.indexerTxEventsCh <- TransactionEvent{
+					Type:           ArkTxType,
+					Txid:           txid,
 					SpentVtxos:     spentVtxos,
 					SpendableVtxos: newVtxos,
 					TxHex:          offchainTx.VirtualTx,

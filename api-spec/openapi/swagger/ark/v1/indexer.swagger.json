@@ -18,6 +18,7 @@
   "paths": {
     "/v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/tree": {
       "get": {
+        "summary": "GetVtxoTree returns the vtxo tree for the provided batch outpoint.\nThe response includes a list of txs with details on the tree posistion and may\ninclude pagination information if the results span multiple pages.",
         "operationId": "IndexerService_GetVtxoTree",
         "responses": {
           "200": {
@@ -69,6 +70,7 @@
     },
     "/v1/batch/{batchOutpoint.txid}/{batchOutpoint.vout}/tree/leaves": {
       "get": {
+        "summary": "GetVtxoTreeLeaves returns the list of leaves (vtxo outpoints) of the tree(s) for the\nprovided batch outpoint.\nThe response may be paginated if the results span multiple pages.",
         "operationId": "IndexerService_GetVtxoTreeLeaves",
         "responses": {
           "200": {
@@ -120,6 +122,7 @@
     },
     "/v1/commitmentTx/{txid}": {
       "get": {
+        "summary": "GetCommitmentTx returns information about a specific commitment transaction identified by the\nprovided txid.",
         "operationId": "IndexerService_GetCommitmentTx",
         "responses": {
           "200": {
@@ -150,6 +153,7 @@
     },
     "/v1/commitmentTx/{txid}/connectors": {
       "get": {
+        "summary": "GetConnectors returns the tree of connectors for the provided commitment transaction.\nThe response includes a list of connector txs with details on the tree posistion and may\ninclude pagination information if the results span multiple pages.",
         "operationId": "IndexerService_GetConnectors",
         "responses": {
           "200": {
@@ -194,6 +198,7 @@
     },
     "/v1/commitmentTx/{txid}/forfeitTxs": {
       "get": {
+        "summary": "GetForfeitTxs returns the list of forfeit transactions that were submitted for the provided\ncommitment transaction.\nThe response may include pagination information if the results span multiple pages.",
         "operationId": "IndexerService_GetForfeitTxs",
         "responses": {
           "200": {
@@ -238,6 +243,7 @@
     },
     "/v1/commitmentTx/{txid}/leaves": {
       "get": {
+        "summary": "GetCommitmentTxLeaves returns the list of leaves (vtxo outpoints) of all batch outputs' trees\nincluded in the provided commitment transaction.\nThe response may include pagination information if the results span multiple pages.",
         "operationId": "IndexerService_GetCommitmentTxLeaves",
         "responses": {
           "200": {
@@ -282,6 +288,7 @@
     },
     "/v1/commitmentTx/{txid}/swept": {
       "get": {
+        "summary": "GetSweptCommitmentTx returns the list of transaction (txid) that swept each batch output\nof the specified commitment transaction.\nIn most cases the list contains only one txid per batch, that means the funds locked in the\nbatch output have been claimed back.\nIf any of the leaves of the tree (vtxo) have been unrolled onchain before the expiration, the\nlist will contain many txids.\nIn a binary tree with 4 or more leaves, 1 unroll causes the server to broadcast 3 txs to sweep\nthe whole tree for example.\nIf a whole vtxo tree has been unrolled onchain, the list of txids for that batch output is be\nempty.",
         "operationId": "IndexerService_GetSweptCommitmentTx",
         "responses": {
           "200": {
@@ -310,118 +317,9 @@
         ]
       }
     },
-    "/v1/getVtxos/{addresses}": {
-      "get": {
-        "operationId": "IndexerService_GetVtxos",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetVtxosResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "addresses",
-            "in": "path",
-            "required": true,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "csv",
-            "minItems": 1
-          },
-          {
-            "name": "spendableOnly",
-            "in": "query",
-            "required": false,
-            "type": "boolean"
-          },
-          {
-            "name": "spentOnly",
-            "in": "query",
-            "required": false,
-            "type": "boolean"
-          },
-          {
-            "name": "page.size",
-            "in": "query",
-            "required": false,
-            "type": "integer",
-            "format": "int32"
-          },
-          {
-            "name": "page.index",
-            "in": "query",
-            "required": false,
-            "type": "integer",
-            "format": "int32"
-          }
-        ],
-        "tags": [
-          "IndexerService"
-        ]
-      }
-    },
-    "/v1/getVtxosByOutpoint/{outpoints}": {
-      "get": {
-        "operationId": "IndexerService_GetVtxosByOutpoint",
-        "responses": {
-          "200": {
-            "description": "A successful response.",
-            "schema": {
-              "$ref": "#/definitions/v1GetVtxosByOutpointResponse"
-            }
-          },
-          "default": {
-            "description": "An unexpected error response.",
-            "schema": {
-              "$ref": "#/definitions/rpcStatus"
-            }
-          }
-        },
-        "parameters": [
-          {
-            "name": "outpoints",
-            "in": "path",
-            "required": true,
-            "type": "array",
-            "items": {
-              "type": "string"
-            },
-            "collectionFormat": "csv",
-            "minItems": 1
-          },
-          {
-            "name": "page.size",
-            "in": "query",
-            "required": false,
-            "type": "integer",
-            "format": "int32"
-          },
-          {
-            "name": "page.index",
-            "in": "query",
-            "required": false,
-            "type": "integer",
-            "format": "int32"
-          }
-        ],
-        "tags": [
-          "IndexerService"
-        ]
-      }
-    },
     "/v1/history/{address}": {
       "get": {
+        "summary": "GetTransactionHistory returns the list of transactions for the provided address.\nThe tx history can be filtered by defining a start and/or end time.\nThe response may be paginated if the results span multiple pages.",
         "operationId": "IndexerService_GetTransactionHistory",
         "responses": {
           "200": {
@@ -480,6 +378,7 @@
     },
     "/v1/script/subscribe": {
       "post": {
+        "summary": "SubscribeForScripts allows to subscribe for tx notifications related to the provided vtxo\nscripts. It can also be used to update an existing subscribtion by adding new scripts to it.",
         "operationId": "IndexerService_SubscribeForScripts",
         "responses": {
           "200": {
@@ -512,6 +411,7 @@
     },
     "/v1/script/subscription/{subscriptionId}": {
       "get": {
+        "summary": "GetSubscription is a server-side streaming RPC which allows clients to receive real-time\nnotifications on transactions related to the subscribed vtxo scripts.\nThe subscription can be created or updated by using the SubscribeForScripts and \nUnsubscribeForScripts RPCs.",
         "operationId": "IndexerService_GetSubscription",
         "responses": {
           "200": {
@@ -551,6 +451,7 @@
     },
     "/v1/script/unsubscribe": {
       "post": {
+        "summary": "UnsubscribeForScripts allows to remove scripts from an existing subscription.",
         "operationId": "IndexerService_UnsubscribeForScripts",
         "responses": {
           "200": {
@@ -583,6 +484,7 @@
     },
     "/v1/virtualTx/{txids}": {
       "get": {
+        "summary": "GetVirtualTxs returns the virtual transactions in hex format for the specified txids.\nThe response may be paginated if the results span multiple pages.",
         "operationId": "IndexerService_GetVirtualTxs",
         "responses": {
           "200": {
@@ -632,6 +534,7 @@
     },
     "/v1/vtxo/{outpoint.txid}/{outpoint.vout}/chain": {
       "get": {
+        "summary": "GetVtxoChain returns the the chain of ark txs that starts from spending any vtxo leaf and ends\nwith the creation of the provided vtxo outpoint.\nThe response may be paginated if the results span multiple pages.",
         "operationId": "IndexerService_GetVtxoChain",
         "responses": {
           "200": {
@@ -660,6 +563,81 @@
             "required": true,
             "type": "integer",
             "format": "int64"
+          },
+          {
+            "name": "page.size",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          },
+          {
+            "name": "page.index",
+            "in": "query",
+            "required": false,
+            "type": "integer",
+            "format": "int32"
+          }
+        ],
+        "tags": [
+          "IndexerService"
+        ]
+      }
+    },
+    "/v1/vtxos": {
+      "get": {
+        "summary": "GetVtxos returns the list of vtxos based on the provided filter. Vtxos can be retrieved either\nby addresses or by outpoints, and optionally filtered by spendable or spent only.\nThe response may be paginated if the results span multiple pages.",
+        "operationId": "IndexerService_GetVtxos",
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/v1GetVtxosResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/rpcStatus"
+            }
+          }
+        },
+        "parameters": [
+          {
+            "name": "addresses",
+            "description": "Either specify a list of addresses to list the vtxos for",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "outpoints",
+            "description": "Or specify a list of outpoints. The 2 filters are mutually exclusive",
+            "in": "query",
+            "required": false,
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "collectionFormat": "multi"
+          },
+          {
+            "name": "spendableOnly",
+            "description": "Retrieve only spendable vtxos",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "name": "spentOnly",
+            "description": "Retrieve only spendable vtxos. The 2 filters are mutually exclusive",
+            "in": "query",
+            "required": false,
+            "type": "boolean"
           },
           {
             "name": "page.size",
@@ -910,21 +888,6 @@
         }
       }
     },
-    "v1GetVtxosByOutpointResponse": {
-      "type": "object",
-      "properties": {
-        "vtxos": {
-          "type": "array",
-          "items": {
-            "type": "object",
-            "$ref": "#/definitions/v1IndexerVtxo"
-          }
-        },
-        "page": {
-          "$ref": "#/definitions/v1IndexerPageResponse"
-        }
-      }
-    },
     "v1GetVtxosResponse": {
       "type": "object",
       "properties": {
@@ -1118,10 +1081,13 @@
         "script": {
           "type": "string"
         },
-        "isLeaf": {
+        "isPreconfirmed": {
           "type": "boolean"
         },
         "isSwept": {
+          "type": "boolean"
+        },
+        "isRedeemed": {
           "type": "boolean"
         },
         "isSpent": {
@@ -1146,7 +1112,7 @@
         },
         "subscriptionId": {
           "type": "string",
-          "title": "if set, update an existing subscription"
+          "title": "If set, update an existing subscription"
         }
       }
     },
@@ -1169,7 +1135,7 @@
           "items": {
             "type": "string"
           },
-          "title": "if empty, unsubscribe all scripts"
+          "title": "If empty, unsubscribe all scripts"
         }
       }
     },

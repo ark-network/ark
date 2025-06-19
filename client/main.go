@@ -342,7 +342,7 @@ func send(ctx *cli.Context) error {
 		return fmt.Errorf("missing destination, use --to and --amount or --receivers")
 	}
 
-	var receivers []arksdk.Receiver
+	var receivers []types.Receiver
 	var err error
 	if receiversJSON != "" {
 		receivers, err = parseReceivers(receiversJSON)
@@ -350,7 +350,7 @@ func send(ctx *cli.Context) error {
 			return err
 		}
 	} else {
-		receivers = []arksdk.Receiver{arksdk.NewBitcoinReceiver(to, amount)}
+		receivers = []types.Receiver{{To: to, Amount: amount}}
 	}
 
 	password, err := readPassword(ctx)
@@ -497,23 +497,23 @@ func loadOrCreateClient(
 	return client, err
 }
 
-func parseReceivers(receveirsJSON string) ([]arksdk.Receiver, error) {
+func parseReceivers(receveirsJSON string) ([]types.Receiver, error) {
 	list := make([]map[string]interface{}, 0)
 	if err := json.Unmarshal([]byte(receveirsJSON), &list); err != nil {
 		return nil, err
 	}
 
-	receivers := make([]arksdk.Receiver, 0, len(list))
+	receivers := make([]types.Receiver, 0, len(list))
 	for _, v := range list {
-		receivers = append(receivers, arksdk.NewBitcoinReceiver(
-			v["to"].(string), uint64(v["amount"].(float64)),
-		))
+		receivers = append(receivers, types.Receiver{
+			To: v["to"].(string), Amount: uint64(v["amount"].(float64)),
+		})
 	}
 	return receivers, nil
 }
 
-func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver, withZeroFees bool) error {
-	var onchainReceivers, offchainReceivers []arksdk.Receiver
+func sendCovenantLess(ctx *cli.Context, receivers []types.Receiver, withZeroFees bool) error {
+	var onchainReceivers, offchainReceivers []types.Receiver
 
 	for _, receiver := range receivers {
 		if receiver.IsOnchain() {
@@ -526,7 +526,7 @@ func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver, withZeroFee
 	computeExpiration := ctx.Bool(enableExpiryCoinselectFlag.Name)
 	if len(onchainReceivers) > 0 {
 		txid, err := arkSdkClient.CollaborativeExit(
-			ctx.Context, onchainReceivers[0].To(), onchainReceivers[0].Amount(), computeExpiration,
+			ctx.Context, onchainReceivers[0].To, onchainReceivers[0].Amount, computeExpiration,
 		)
 		if err != nil {
 			return err
@@ -534,9 +534,7 @@ func sendCovenantLess(ctx *cli.Context, receivers []arksdk.Receiver, withZeroFee
 		return printJSON(map[string]string{"txid": txid})
 	}
 
-	arkTxid, err := arkSdkClient.SendOffChain(
-		ctx.Context, computeExpiration, offchainReceivers, withZeroFees,
-	)
+	arkTxid, err := arkSdkClient.SendOffChain(ctx.Context, computeExpiration, offchainReceivers)
 	if err != nil {
 		return err
 	}
