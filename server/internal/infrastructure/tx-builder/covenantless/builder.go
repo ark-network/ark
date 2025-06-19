@@ -439,12 +439,12 @@ func (b *txBuilder) VerifyForfeitTxs(
 
 		rebuilt, err := tree.BuildForfeitTx(
 			&wire.OutPoint{
-				Hash:  connectorInput.PreviousOutPoint.Hash,
-				Index: connectorInput.PreviousOutPoint.Index,
-			},
-			&wire.OutPoint{
 				Hash:  vtxoInput.PreviousOutPoint.Hash,
 				Index: vtxoInput.PreviousOutPoint.Index,
+			},
+			&wire.OutPoint{
+				Hash:  connectorInput.PreviousOutPoint.Hash,
+				Index: connectorInput.PreviousOutPoint.Index,
 			},
 			vtxo.Amount,
 			uint64(connectorOutput.Value),
