@@ -4,14 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/redis/go-redis/v9"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
 
+	"github.com/redis/go-redis/v9"
+
 	inmemorylivestore "github.com/ark-network/ark/server/internal/infrastructure/live-store/inmemory"
-	"github.com/ark-network/ark/server/internal/infrastructure/live-store/redis"
+	redislivestore "github.com/ark-network/ark/server/internal/infrastructure/live-store/redis"
 
 	"github.com/ark-network/ark/common"
 	"github.com/ark-network/ark/server/internal/core/application"
@@ -84,6 +85,7 @@ type Config struct {
 	UnilateralExitDelay common.RelativeLocktime
 	BoardingExitDelay   common.RelativeLocktime
 	NoteUriPrefix       string
+	AllowCSVBlockType   bool
 
 	MarketHourStartTime     time.Time
 	MarketHourEndTime       time.Time
@@ -162,6 +164,7 @@ var (
 	VtxoMaxAmount             = "VTXO_MAX_AMOUNT"
 	UtxoMinAmount             = "UTXO_MIN_AMOUNT"
 	VtxoMinAmount             = "VTXO_MIN_AMOUNT"
+	AllowCSVBlockType         = "ALLOW_CSV_BLOCK_TYPE"
 
 	defaultDatadir             = common.AppDataDir("arkd", false)
 	defaultRoundInterval       = 30
@@ -187,6 +190,7 @@ var (
 	defaultUtxoMinAmount       = -1 // -1 means native dust limit (default)
 	defaultVtxoMinAmount       = -1 // -1 means native dust limit (default)
 	defaultVtxoMaxAmount       = -1 // -1 means no limit (default)
+	defaultAllowCSVBlockType   = false
 
 	defaultRoundMaxParticipantsCount = 128
 	defaultRoundMinParticipantsCount = 1
@@ -222,6 +226,7 @@ func LoadConfig() (*Config, error) {
 	viper.SetDefault(VtxoMinAmount, defaultVtxoMinAmount)
 	viper.SetDefault(LiveStoreType, defaultLiveStoreType)
 	viper.SetDefault(RedisTxNumOfRetries, defaultRedisTxNumOfRetries)
+	viper.SetDefault(AllowCSVBlockType, defaultAllowCSVBlockType)
 
 	if err := initDatadir(); err != nil {
 		return nil, fmt.Errorf("error while creating datadir: %s", err)
@@ -251,6 +256,11 @@ func LoadConfig() (*Config, error) {
 		if redisUrl == "" {
 			return nil, fmt.Errorf("REDIS_URL not provided")
 		}
+	}
+
+	allowCSVBlockType := viper.GetBool(AllowCSVBlockType)
+	if viper.GetString(SchedulerType) == "block" {
+		allowCSVBlockType = true
 	}
 
 	return &Config{
@@ -293,6 +303,7 @@ func LoadConfig() (*Config, error) {
 		UtxoMinAmount:             viper.GetInt64(UtxoMinAmount),
 		VtxoMaxAmount:             viper.GetInt64(VtxoMaxAmount),
 		VtxoMinAmount:             viper.GetInt64(VtxoMinAmount),
+		AllowCSVBlockType:         allowCSVBlockType,
 	}, nil
 }
 
@@ -341,6 +352,9 @@ func (c *Config) Validate() error {
 	if c.VtxoTreeExpiry.Type == common.LocktimeTypeBlock {
 		if c.SchedulerType != "block" {
 			return fmt.Errorf("scheduler type must be block if vtxo tree expiry is expressed in blocks")
+		}
+		if !c.AllowCSVBlockType {
+			return fmt.Errorf("CSV block type must be allowed if vtxo tree expiry is expressed in blocks")
 		}
 	} else { // seconds
 		if c.SchedulerType != "gocron" {
@@ -584,10 +598,10 @@ func (c *Config) schedulerService() error {
 func (c *Config) appService() error {
 	svc, err := application.NewService(
 		*c.network, c.RoundInterval, c.VtxoTreeExpiry, c.UnilateralExitDelay, c.BoardingExitDelay,
-		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.NoteUriPrefix,
+		c.wallet, c.repo, c.txBuilder, c.scanner, c.scheduler, c.liveStore, c.NoteUriPrefix,
 		c.MarketHourStartTime, c.MarketHourEndTime, c.MarketHourPeriod, c.MarketHourRoundInterval,
 		c.RoundMinParticipantsCount, c.RoundMaxParticipantsCount,
-		c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount, c.liveStore,
+		c.UtxoMaxAmount, c.UtxoMinAmount, c.VtxoMaxAmount, c.VtxoMinAmount, c.AllowCSVBlockType,
 	)
 	if err != nil {
 		return err

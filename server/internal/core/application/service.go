@@ -55,6 +55,7 @@ type covenantlessService struct {
 	vtxoMaxAmount             int64
 	vtxoMinSettlementAmount   int64
 	vtxoMinOffchainTxAmount   int64
+	allowCSVBlockType         bool
 
 	// TODO derive this from wallet
 	serverSigningKey    *secp256k1.PrivateKey
@@ -74,7 +75,7 @@ func NewService(
 	vtxoTreeExpiry, unilateralExitDelay, boardingExitDelay common.RelativeLocktime,
 	walletSvc ports.WalletService, repoManager ports.RepoManager,
 	builder ports.TxBuilder, scanner ports.BlockchainScanner,
-	scheduler ports.SchedulerService,
+	scheduler ports.SchedulerService, liveStore ports.LiveStore,
 	noteUriPrefix string,
 	marketHourStartTime, marketHourEndTime time.Time,
 	marketHourPeriod, marketHourRoundInterval time.Duration,
@@ -83,7 +84,7 @@ func NewService(
 	utxoMinAmount int64,
 	vtxoMaxAmount int64,
 	vtxoMinAmount int64,
-	liveStore ports.LiveStore,
+	allowCSVBlockType bool,
 ) (Service, error) {
 	pubkey, err := walletSvc.GetPubkey(context.Background())
 	if err != nil {
@@ -129,6 +130,7 @@ func NewService(
 		vtxoTreeExpiry:            vtxoTreeExpiry,
 		roundInterval:             time.Duration(roundInterval) * time.Second,
 		unilateralExitDelay:       unilateralExitDelay,
+		allowCSVBlockType:         allowCSVBlockType,
 		wallet:                    walletSvc,
 		repoManager:               repoManager,
 		builder:                   builder,
@@ -462,7 +464,7 @@ func (s *covenantlessService) SubmitOffchainTx(
 		}
 
 		// validate the vtxo script
-		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay, s.allowCSVBlockType); err != nil {
 			return nil, "", "", fmt.Errorf("invalid vtxo script: %s", err)
 		}
 
@@ -825,73 +827,28 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			return "", fmt.Errorf("vtxo %s is currently being spent", vtxoKey.String())
 		}
 
+		now := time.Now()
+		locktime, disabled := common.BIP68DecodeSequence(bip322signature.TxIn[i+1].Sequence)
+
 		vtxosResult, err := s.repoManager.Vtxos().GetVtxos(ctx, []domain.VtxoKey{vtxoKey})
 		if err != nil || len(vtxosResult) == 0 {
 			// vtxo not found in db, check if it exists on-chain
 			if _, ok := boardingTxs[vtxoKey.Txid]; !ok {
-				// check if the tx exists and is confirmed
-				txhex, err := s.wallet.GetTransaction(ctx, outpoint.Hash.String())
+				tx, err := s.validateBoardingInput(ctx, vtxoKey, tapscripts, now, locktime, disabled)
 				if err != nil {
-					return "", fmt.Errorf("failed to get tx %s: %s", vtxoKey.Txid, err)
+					return "", err
 				}
 
-				var tx wire.MsgTx
-				if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txhex))); err != nil {
-					return "", fmt.Errorf("failed to deserialize tx %s: %s", vtxoKey.Txid, err)
-				}
-
-				confirmed, _, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, vtxoKey.Txid)
-				if err != nil {
-					return "", fmt.Errorf("failed to check tx %s: %s", vtxoKey.Txid, err)
-				}
-
-				if !confirmed {
-					return "", fmt.Errorf("tx %s not confirmed", vtxoKey.Txid)
-				}
-
-				vtxoScript, err := tree.ParseVtxoScript(tapscripts)
-				if err != nil {
-					return "", fmt.Errorf("failed to parse boarding utxo taproot tree: %s", err)
-				}
-
-				// validate the vtxo script
-				if err := vtxoScript.Validate(s.pubkey, common.RelativeLocktime{
-					Type:  s.boardingExitDelay.Type,
-					Value: s.boardingExitDelay.Value,
-				}); err != nil {
-					return "", fmt.Errorf("invalid vtxo script: %s", err)
-				}
-
-				exitDelay, err := vtxoScript.SmallestExitDelay()
-				if err != nil {
-					return "", fmt.Errorf("failed to get exit delay: %s", err)
-				}
-
-				// if the exit path is available, forbid registering the boarding utxo
-				if time.Unix(blocktime, 0).Add(time.Duration(exitDelay.Seconds()) * time.Second).Before(time.Now()) {
-					return "", fmt.Errorf("tx %s expired", vtxoKey.Txid)
-				}
-
-				if s.utxoMaxAmount >= 0 {
-					if tx.TxOut[outpoint.Index].Value > s.utxoMaxAmount {
-						return "", fmt.Errorf("boarding input amount is higher than max utxo amount:%d", s.utxoMaxAmount)
-					}
-				}
-				if tx.TxOut[outpoint.Index].Value < s.utxoMinAmount {
-					return "", fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
-				}
-
-				boardingTxs[vtxoKey.Txid] = tx
+				boardingTxs[vtxoKey.Txid] = *tx
 			}
 
 			tx := boardingTxs[vtxoKey.Txid]
-			prevout := tx.TxOut[vtxoKey.VOut]
-			prevouts[outpoint] = prevout
+			prevouts[outpoint] = tx.TxOut[vtxoKey.VOut]
 			input := ports.Input{
 				VtxoKey:    vtxoKey,
 				Tapscripts: tapscripts,
 			}
-			boardingInput, err := newBoardingInput(tx, input, s.pubkey, s.boardingExitDelay)
+			boardingInput, err := newBoardingInput(tx, input, s.pubkey, s.boardingExitDelay, s.allowCSVBlockType)
 			if err != nil {
 				return "", err
 			}
@@ -909,7 +866,6 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			return "", fmt.Errorf("input %s:%d already redeemed", vtxo.Txid, vtxo.VOut)
 		}
 
-		// set the prevout
 		pubkeyBytes, err := hex.DecodeString(vtxo.PubKey)
 		if err != nil {
 			return "", fmt.Errorf("failed to decode script pubkey: %s", err)
@@ -930,35 +886,14 @@ func (s *covenantlessService) RegisterIntent(ctx context.Context, bip322signatur
 			PkScript: pkScript,
 		}
 
-		// We want to validate the taproot tree of an input vtxo only if it requires
-		// to be forfeited. Note and swept vtxos can't go onchain, so there's no reason to
-		// check if the user is trying to trick us.
-		if vtxo.RequiresForfeit() {
-			vtxoScript, err := tree.ParseVtxoScript(tapscripts)
-			if err != nil {
-				return "", fmt.Errorf("failed to parse vtxo taproot tree: %s", err)
-			}
-
-			// validate the vtxo script
-			if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
-				return "", fmt.Errorf("invalid vtxo script: %s", err)
-			}
-
-			tapKey, _, err := vtxoScript.TapTree()
+		// Only in case the vtxo is a note we skip the validation of its script and the csv delay.
+		if !vtxo.IsNote() {
+			vtxoTapKey, err := vtxo.TapKey()
 			if err != nil {
 				return "", fmt.Errorf("failed to get taproot key: %s", err)
 			}
-
-			expectedTapKey, err := vtxo.TapKey()
-			if err != nil {
-				return "", fmt.Errorf("failed to get taproot key: %s", err)
-			}
-
-			if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey)) {
-				return "", fmt.Errorf(
-					"invalid vtxo taproot key: got %x expected %x",
-					schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey),
-				)
+			if err := s.validateVtxoInput(tapscripts, vtxoTapKey, vtxo.CreatedAt, now, locktime, disabled); err != nil {
+				return "", err
 			}
 		}
 
@@ -1105,7 +1040,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 				}
 
 				// validate the vtxo script
-				if err := vtxoScript.Validate(s.pubkey, s.boardingExitDelay); err != nil {
+				if err := vtxoScript.Validate(s.pubkey, s.boardingExitDelay, s.allowCSVBlockType); err != nil {
 					return "", fmt.Errorf("invalid vtxo script: %s", err)
 				}
 
@@ -1132,7 +1067,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 			}
 
 			tx := boardingTxs[input.Txid]
-			boardingInput, err := newBoardingInput(tx, input, s.pubkey, s.boardingExitDelay)
+			boardingInput, err := newBoardingInput(tx, input, s.pubkey, s.boardingExitDelay, s.allowCSVBlockType)
 			if err != nil {
 				return "", err
 			}
@@ -1160,7 +1095,7 @@ func (s *covenantlessService) SpendVtxos(ctx context.Context, inputs []ports.Inp
 		}
 
 		// validate the vtxo script
-		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay); err != nil {
+		if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay, s.allowCSVBlockType); err != nil {
 			return "", fmt.Errorf("invalid vtxo script: %s", err)
 		}
 
@@ -2465,6 +2400,118 @@ func (s *covenantlessService) markAsRedeemed(ctx context.Context, vtxo domain.Vt
 	}
 
 	log.Debugf("vtxo %s:%d redeemed", vtxo.Txid, vtxo.VOut)
+	return nil
+}
+
+func (s *covenantlessService) validateBoardingInput(
+	ctx context.Context, vtxoKey domain.VtxoKey, tapscripts tree.TapTree,
+	now time.Time, locktime *common.RelativeLocktime, disabled bool,
+) (*wire.MsgTx, error) {
+	// check if the tx exists and is confirmed
+	txhex, err := s.wallet.GetTransaction(ctx, vtxoKey.Txid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get tx %s: %s", vtxoKey.Txid, err)
+	}
+
+	var tx wire.MsgTx
+	if err := tx.Deserialize(hex.NewDecoder(strings.NewReader(txhex))); err != nil {
+		return nil, fmt.Errorf("failed to deserialize tx %s: %s", vtxoKey.Txid, err)
+	}
+
+	confirmed, _, blocktime, err := s.wallet.IsTransactionConfirmed(ctx, vtxoKey.Txid)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check tx %s: %s", vtxoKey.Txid, err)
+	}
+
+	if !confirmed {
+		return nil, fmt.Errorf("tx %s not confirmed", vtxoKey.Txid)
+	}
+
+	vtxoScript, err := tree.ParseVtxoScript(tapscripts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse vtxo taproot tree: %s", err)
+	}
+
+	// validate the vtxo script
+	if err := vtxoScript.Validate(s.pubkey, common.RelativeLocktime{
+		Type:  s.boardingExitDelay.Type,
+		Value: s.boardingExitDelay.Value,
+	}, s.allowCSVBlockType); err != nil {
+		return nil, fmt.Errorf("invalid vtxo script: %s", err)
+	}
+
+	exitDelay, err := vtxoScript.SmallestExitDelay()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get exit delay: %s", err)
+	}
+
+	// if the exit path is available, forbid registering the boarding utxo
+	if time.Unix(blocktime, 0).Add(time.Duration(exitDelay.Seconds()) * time.Second).Before(now) {
+		return nil, fmt.Errorf("tx %s expired", vtxoKey.Txid)
+	}
+
+	// If the intent is registered using a exit path that contains CSV delay, we want to verify it
+	// by shifitng the current "now" in the future of the duration of the smallest exit delay.
+	// This way, any exit order guaranteed by the exit path is maintained at intent registration
+	if !disabled {
+		delta := now.Add(time.Duration(exitDelay.Seconds())*time.Second).Unix() - blocktime
+		if diff := locktime.Seconds() - delta; diff > 0 {
+			return nil, fmt.Errorf("vtxo script can be used for intent registration in %d seconds", diff)
+		}
+	}
+
+	if s.utxoMaxAmount >= 0 {
+		if tx.TxOut[vtxoKey.VOut].Value > s.utxoMaxAmount {
+			return nil, fmt.Errorf("boarding input amount is higher than max utxo amount:%d", s.utxoMaxAmount)
+		}
+	}
+	if tx.TxOut[vtxoKey.VOut].Value < s.utxoMinAmount {
+		return nil, fmt.Errorf("boarding input amount is lower than min utxo amount:%d", s.utxoMinAmount)
+	}
+
+	return &tx, nil
+}
+
+func (s *covenantlessService) validateVtxoInput(
+	tapscripts tree.TapTree, expectedTapKey *btcec.PublicKey,
+	vtxoCreatedAt int64, now time.Time, locktime *common.RelativeLocktime, disabled bool,
+) error {
+	vtxoScript, err := tree.ParseVtxoScript(tapscripts)
+	if err != nil {
+		return fmt.Errorf("failed to parse vtxo taproot tree: %s", err)
+	}
+
+	// validate the vtxo script
+	if err := vtxoScript.Validate(s.pubkey, s.unilateralExitDelay, s.allowCSVBlockType); err != nil {
+		return fmt.Errorf("invalid vtxo script: %s", err)
+	}
+
+	exitDelay, err := vtxoScript.SmallestExitDelay()
+	if err != nil {
+		return fmt.Errorf("failed to get exit delay: %s", err)
+	}
+
+	// If the intent is registered using a exit path that contains CSV delay, we want to verify it
+	// by shifitng the current "now" in the future of the duration of the smallest exit delay.
+	// This way, any exit order guaranteed by the exit path is maintained at intent registration
+	if !disabled {
+		delta := now.Add(time.Duration(exitDelay.Seconds())*time.Second).Unix() - vtxoCreatedAt
+		if diff := locktime.Seconds() - delta; diff > 0 {
+			return fmt.Errorf("vtxo script can be used for intent registration in %d seconds", diff)
+		}
+	}
+
+	tapKey, _, err := vtxoScript.TapTree()
+	if err != nil {
+		return fmt.Errorf("failed to get taproot key: %s", err)
+	}
+
+	if !bytes.Equal(schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey)) {
+		return fmt.Errorf(
+			"invalid vtxo taproot key: got %x expected %x",
+			schnorr.SerializePubKey(tapKey), schnorr.SerializePubKey(expectedTapKey),
+		)
+	}
 	return nil
 }
 

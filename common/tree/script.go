@@ -411,7 +411,7 @@ func (d *CSVMultisigClosure) Decode(script []byte) (bool, error) {
 
 	}
 
-	locktime, err := common.BIP68DecodeSequence(sequence)
+	locktime, err := common.BIP68DecodeSequenceFromBytes(sequence)
 	if err != nil {
 		return false, err
 	}

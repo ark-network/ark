@@ -106,7 +106,7 @@ func AddVtxoTreeExpiry(inIndex int, ptx *psbt.Packet, vtxoTreeExpiry common.Rela
 func GetVtxoTreeExpiry(in psbt.PInput) (*common.RelativeLocktime, error) {
 	for _, u := range in.Unknowns {
 		if bytes.Contains(u.Key, VTXO_TREE_EXPIRY_PSBT_KEY) {
-			return common.BIP68DecodeSequence(u.Value)
+			return common.BIP68DecodeSequenceFromBytes(u.Value)
 		}
 	}
 

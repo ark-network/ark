@@ -76,7 +76,9 @@ func (v *TapscriptsVtxoScript) Decode(scripts []string) error {
 	return nil
 }
 
-func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minLocktime common.RelativeLocktime) error {
+func (v *TapscriptsVtxoScript) Validate(
+	server *secp256k1.PublicKey, minLocktime common.RelativeLocktime, blockTypeAllowed bool,
+) error {
 	serverXonly := schnorr.SerializePubKey(server)
 	for _, forfeit := range v.ForfeitClosures() {
 		keys := make([]*secp256k1.PublicKey, 0)
@@ -84,6 +86,9 @@ func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minLocktime
 		case *MultisigClosure:
 			keys = c.PubKeys
 		case *CLTVMultisigClosure:
+			if !blockTypeAllowed && !c.Locktime.IsSeconds() {
+				return fmt.Errorf("invalid forfeit closure, CLTV block type not allowed")
+			}
 			keys = c.PubKeys
 		case *ConditionMultisigClosure:
 			keys = c.PubKeys
@@ -103,6 +108,13 @@ func (v *TapscriptsVtxoScript) Validate(server *secp256k1.PublicKey, minLocktime
 		}
 		if !found {
 			return fmt.Errorf("invalid forfeit closure, server pubkey not found")
+		}
+	}
+
+	for _, closure := range v.ExitClosures() {
+		c := closure.(*CSVMultisigClosure)
+		if !blockTypeAllowed && c.Locktime.Type == common.LocktimeTypeBlock {
+			return fmt.Errorf("invalid exit closure, CSV block type not allowed")
 		}
 	}
 

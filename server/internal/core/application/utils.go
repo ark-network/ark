@@ -150,6 +150,7 @@ func newBoardingInput(
 	input ports.Input,
 	serverPubKey *secp256k1.PublicKey,
 	boardingExitDelay common.RelativeLocktime,
+	blockTypeCSVAllowed bool,
 ) (*ports.BoardingInput, error) {
 	if len(tx.TxOut) <= int(input.VOut) {
 		return nil, fmt.Errorf("output not found")
@@ -179,7 +180,7 @@ func newBoardingInput(
 		)
 	}
 
-	if err := boardingScript.Validate(serverPubKey, boardingExitDelay); err != nil {
+	if err := boardingScript.Validate(serverPubKey, boardingExitDelay, blockTypeCSVAllowed); err != nil {
 		return nil, err
 	}
 
