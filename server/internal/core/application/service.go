@@ -1763,7 +1763,9 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 	thirdOfRemainingDuration := roundTiming.finalizationDuration()
 
 	defer func() {
-		s.liveStore.TreeSigingSessions().Delete(roundId)
+		if err := s.liveStore.TreeSigingSessions().Delete(roundId); err != nil {
+			log.WithError(err).Warn("failed to delete tree signing session")
+		}
 
 		if err := s.saveEvents(ctx, roundId, s.liveStore.CurrentRound().Get().Events()); err != nil {
 			log.WithError(err).Warn("failed to store new round events")

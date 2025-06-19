@@ -10,9 +10,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	log "github.com/sirupsen/logrus"
 	"strings"
 	"time"
+
+	log "github.com/sirupsen/logrus"
 
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/ports"
@@ -113,7 +114,7 @@ func (s *treeSigningSessionsStore) Get(roundId string) (*ports.MusigSigningSessi
 	return sess, true
 }
 
-func (s *treeSigningSessionsStore) Delete(roundId string) {
+func (s *treeSigningSessionsStore) Delete(roundId string) error {
 	ctx := context.Background()
 	metaKey := fmt.Sprintf(treeSessMetaKeyFmt, roundId)
 	noncesKey := fmt.Sprintf(treeSessNoncesKeyFmt, roundId)
@@ -127,6 +128,7 @@ func (s *treeSigningSessionsStore) Delete(roundId string) {
 		close(s.sigsCh)
 		s.sigsCh = nil
 	}
+	return nil
 }
 
 func (s *treeSigningSessionsStore) AddNonces(ctx context.Context, roundId string, pubkey string, nonces tree.TreeNonces) error {
