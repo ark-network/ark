@@ -31,11 +31,6 @@ type Musig2Nonce struct {
 type TreeNonces map[string]*Musig2Nonce                  // txid -> public nonces only
 type TreePartialSigs map[string]*musig2.PartialSignature // txid -> partial signature
 
-var _ json.Marshaler = TreeNonces{}
-var _ json.Unmarshaler = (*TreeNonces)(nil)
-var _ json.Marshaler = TreePartialSigs{}
-var _ json.Unmarshaler = (*TreePartialSigs)(nil)
-
 func (n TreeNonces) MarshalJSON() ([]byte, error) {
 	mapObject := make(map[string]string)
 	for txid, nonce := range n {
