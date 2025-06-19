@@ -1213,14 +1213,14 @@ func (a *covenantlessArkClient) refreshVtxoDb(spendableVtxos, spentVtxos []types
 	vtxosToAdd := make([]types.Vtxo, 0, len(spendableVtxos))
 	for _, vtxo := range spendableVtxos {
 		if _, ok := oldSpendableVtxoMap[vtxo.VtxoKey]; !ok {
-			vtxosToAdd = append(vtxosToAdd, toTypesVtxo(vtxo))
+			vtxosToAdd = append(vtxosToAdd, vtxo)
 		}
 	}
 
 	vtxosToReplace := make([]types.Vtxo, 0, len(spentVtxos))
 	for _, vtxo := range spentVtxos {
 		if _, ok := oldSpendableVtxoMap[vtxo.VtxoKey]; ok {
-			vtxosToReplace = append(vtxosToReplace, toTypesVtxo(vtxo))
+			vtxosToReplace = append(vtxosToReplace, vtxo)
 		}
 	}
 

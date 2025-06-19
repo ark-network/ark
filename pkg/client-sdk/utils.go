@@ -584,20 +584,6 @@ func getFancyTimeExpiration(nextExpiration int64) string {
 	return fancyTimeExpiration
 }
 
-func toTypesVtxo(src types.Vtxo) types.Vtxo {
-	return types.Vtxo{
-		VtxoKey: types.VtxoKey{
-			Txid: src.Txid,
-			VOut: src.VOut,
-		},
-		Script:         src.Script,
-		Amount:         src.Amount,
-		CommitmentTxid: src.CommitmentTxid,
-		ExpiresAt:      src.ExpiresAt,
-		CreatedAt:      src.CreatedAt,
-	}
-}
-
 func computeVSize(tx *wire.MsgTx) lntypes.VByte {
 	baseSize := tx.SerializeSizeStripped()
 	totalSize := tx.SerializeSize() // including witness

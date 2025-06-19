@@ -183,10 +183,10 @@ func (a *arkClient) ListVtxos(ctx context.Context) (
 
 	for _, vtxo := range resp.Vtxos {
 		if vtxo.Spent || vtxo.Swept || vtxo.Redeemed {
-			spentVtxos = append(spentVtxos, toTypesVtxo(vtxo))
+			spentVtxos = append(spentVtxos, vtxo)
 			continue
 		}
-		spendableVtxos = append(spendableVtxos, toTypesVtxo(vtxo))
+		spendableVtxos = append(spendableVtxos, vtxo)
 	}
 
 	return
