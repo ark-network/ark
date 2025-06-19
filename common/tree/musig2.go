@@ -28,8 +28,9 @@ type Musig2Nonce struct {
 	PubNonce [66]byte
 }
 
-type TreeNonces map[string]*Musig2Nonce                  // txid -> public nonces only
-type TreePartialSigs map[string]*musig2.PartialSignature // txid -> partial signature
+// TreeNonces is a map of txid to public nonces only
+// it implements json.Marshaler and json.Unmarshaler
+type TreeNonces map[string]*Musig2Nonce // txid -> public nonces only
 
 func (n TreeNonces) MarshalJSON() ([]byte, error) {
 	mapObject := make(map[string]string)
@@ -65,6 +66,10 @@ func (n *TreeNonces) UnmarshalJSON(data []byte) error {
 
 	return nil
 }
+
+// TreePartialSigs is a map of txid to partial signature
+// it implements json.Marshaler and json.Unmarshaler
+type TreePartialSigs map[string]*musig2.PartialSignature // txid -> partial signature
 
 func (s TreePartialSigs) MarshalJSON() ([]byte, error) {
 	mapObject := make(map[string]string)
