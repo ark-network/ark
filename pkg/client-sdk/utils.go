@@ -215,7 +215,7 @@ type arkTxInput struct {
 }
 
 func buildOffchainTx(
-	vtxos []arkTxInput, receivers []Receiver,
+	vtxos []arkTxInput, receivers []types.Receiver,
 	serverUnrollScript *tree.CSVMultisigClosure, dustLimit uint64,
 ) (string, []string, error) {
 	if len(vtxos) <= 0 {
@@ -278,14 +278,14 @@ func buildOffchainTx(
 			return "", nil, fmt.Errorf("receiver %d is onchain", i)
 		}
 
-		addr, err := common.DecodeAddress(receiver.To())
+		addr, err := common.DecodeAddress(receiver.To)
 		if err != nil {
 			return "", nil, err
 		}
 
 		var newVtxoScript []byte
 
-		if receiver.Amount() < dustLimit {
+		if receiver.Amount < dustLimit {
 			newVtxoScript, err = common.SubDustScript(addr.VtxoTapKey)
 		} else {
 			newVtxoScript, err = common.P2TRScript(addr.VtxoTapKey)
@@ -295,7 +295,7 @@ func buildOffchainTx(
 		}
 
 		outs = append(outs, &wire.TxOut{
-			Value:    int64(receiver.Amount()),
+			Value:    int64(receiver.Amount),
 			PkScript: newVtxoScript,
 		})
 	}
@@ -409,8 +409,7 @@ func extractExitPath(tapscripts []string) ([]byte, *common.TaprootMerkleProof, u
 
 // convert inputs to BIP322 inputs and return all the data needed to sign and proof PSBT
 func toBIP322Inputs(
-	boardingUtxos []types.Utxo, vtxos []client.TapscriptsVtxo,
-	notes []string,
+	boardingUtxos []types.Utxo, vtxos []client.TapscriptsVtxo, notes []string,
 ) ([]bip322.Input, []*common.TaprootMerkleProof, map[string][]string, map[int][]byte, error) {
 	inputs := make([]bip322.Input, 0, len(boardingUtxos)+len(vtxos))
 	exitLeaves := make([]*common.TaprootMerkleProof, 0, len(boardingUtxos)+len(vtxos))
@@ -664,7 +663,9 @@ func handleBatchTreeNode(node tree.Node, tree tree.TxTree) tree.TxTree {
 	return tree
 }
 
-func handleBatchTreeSignature(event client.TreeSignatureEvent, vtxoTree tree.TxTree) (tree.TxTree, error) {
+func handleBatchTreeSignature(
+	event client.TreeSignatureEvent, vtxoTree tree.TxTree,
+) (tree.TxTree, error) {
 	if event.BatchIndex != 0 {
 		return nil, fmt.Errorf("batch index %d is not 0", event.BatchIndex)
 	}
@@ -716,9 +717,7 @@ func checkSettleOptionsType(o interface{}) (*SettleOptions, error) {
 }
 
 func registerIntentMessage(
-	inputs []bip322.Input,
-	outputs []client.Output,
-	tapscripts map[string][]string,
+	inputs []bip322.Input, outputs []types.Receiver, tapscripts map[string][]string,
 	cosignersPublicKeys []string,
 ) (string, []*wire.TxOut, error) {
 	validAt := time.Now()

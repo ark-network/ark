@@ -115,14 +115,12 @@ func main() {
 	log.Infof("bob offchain balance: %d", bobBalance.OffchainBalance.Total)
 
 	amount := uint64(1000)
-	receivers := []arksdk.Receiver{
-		arksdk.NewBitcoinReceiver(bobOffchainAddr, amount),
-	}
+	receivers := []types.Receiver{{To: bobOffchainAddr, Amount: amount}}
 
 	fmt.Println("")
 	log.Infof("alice is sending %d sats to bob offchain...", amount)
 
-	if _, err = aliceArkClient.SendOffChain(ctx, false, receivers, true); err != nil {
+	if _, err = aliceArkClient.SendOffChain(ctx, false, receivers); err != nil {
 		log.Fatal(err)
 	}
 

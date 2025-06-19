@@ -8,6 +8,9 @@ import (
 
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
@@ -179,4 +182,49 @@ type Utxo struct {
 
 func (u *Utxo) Sequence() (uint32, error) {
 	return common.BIP68Sequence(u.Delay)
+}
+
+type Receiver struct {
+	To     string
+	Amount uint64
+}
+
+func (r Receiver) IsOnchain() bool {
+	_, err := btcutil.DecodeAddress(r.To, nil)
+	return err == nil
+}
+
+func (o Receiver) ToTxOut() (*wire.TxOut, bool, error) {
+	var pkScript []byte
+	isOnchain := false
+
+	arkAddress, err := common.DecodeAddress(o.To)
+	if err != nil {
+		// decode onchain address
+		btcAddress, err := btcutil.DecodeAddress(o.To, nil)
+		if err != nil {
+			return nil, false, err
+		}
+
+		pkScript, err = txscript.PayToAddrScript(btcAddress)
+		if err != nil {
+			return nil, false, err
+		}
+
+		isOnchain = true
+	} else {
+		pkScript, err = common.P2TRScript(arkAddress.VtxoTapKey)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	if len(pkScript) == 0 {
+		return nil, false, fmt.Errorf("invalid address")
+	}
+
+	return &wire.TxOut{
+		Value:    int64(o.Amount),
+		PkScript: pkScript,
+	}, isOnchain, nil
 }

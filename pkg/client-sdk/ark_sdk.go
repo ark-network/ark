@@ -3,7 +3,6 @@ package arksdk
 import (
 	"context"
 
-	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/types"
 )
 
@@ -22,11 +21,11 @@ type ArkClient interface {
 	Balance(ctx context.Context, computeExpiryDetails bool) (*Balance, error)
 	Receive(ctx context.Context) (onchainAddr, offchainAddr, boardingAddr string, err error)
 	SendOffChain(
-		ctx context.Context, withExpiryCoinselect bool, receivers []Receiver, withZeroFees bool,
+		ctx context.Context, withExpiryCoinselect bool, receivers []types.Receiver,
 	) (string, error)
 	RegisterIntent(
 		ctx context.Context, vtxos []types.Vtxo, boardingUtxos []types.Utxo, notes []string,
-		outputs []client.Output, cosignersPublicKeys []string,
+		outputs []types.Receiver, cosignersPublicKeys []string,
 	) (intentID string, err error)
 	DeleteIntent(
 		ctx context.Context, vtxos []types.Vtxo, boardingUtxos []types.Utxo, notes []string,
@@ -49,10 +48,4 @@ type ArkClient interface {
 	NotifyIncomingFunds(ctx context.Context, address string) ([]types.Vtxo, error)
 	Reset(ctx context.Context)
 	Stop()
-}
-
-type Receiver interface {
-	To() string
-	Amount() uint64
-	IsOnchain() bool
 }
