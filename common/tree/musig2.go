@@ -236,8 +236,8 @@ func NewTreeSignerSession(signer *btcec.PrivateKey) SignerSession {
 }
 
 type treeSignerSession struct {
-	txs                   map[string]*psbt.Packet
 	secretKey             *btcec.PrivateKey
+	txs                   map[string]*psbt.Packet
 	myNonces              map[string]*musig2.Nonces
 	aggregateNonces       TreeNonces
 	scriptRoot            []byte
@@ -291,7 +291,7 @@ func (t *treeSignerSession) Sign() (TreePartialSigs, error) {
 		return nil, errors.New("nonces not set")
 	}
 
-	musignParamsMap := make(map[string]musignParams)
+	musigParamsMap := make(map[string]musigParams)
 	serializedSignerPubKey := schnorr.SerializePubKey(t.secretKey.PubKey())
 
 	for txid, tx := range t.txs {
@@ -320,7 +320,7 @@ func (t *treeSignerSession) Sign() (TreePartialSigs, error) {
 			return nil, fmt.Errorf("missing secret nonce for txid %s", txid)
 		}
 
-		musignParamsMap[txid] = musignParams{
+		musigParamsMap[txid] = musigParams{
 			tx:             tx,
 			prevoutFetcher: prevoutFetcher,
 			combinedNonce:  combinedNonce.PubNonce,
@@ -329,7 +329,7 @@ func (t *treeSignerSession) Sign() (TreePartialSigs, error) {
 		}
 	}
 
-	return workPoolMap(musignParamsMap, musign(t.secretKey, t.scriptRoot))
+	return workPoolMap(musigParamsMap, sign(t.secretKey, t.scriptRoot))
 }
 
 // generateNonces iterates over the tree matrix and generates musig2 private and public nonces for each transaction
@@ -673,7 +673,7 @@ func generateNonces(signerPubKey *btcec.PublicKey) func(partialTx *psbt.Packet) 
 	}
 }
 
-type musignParams struct {
+type musigParams struct {
 	tx             *psbt.Packet
 	combinedNonce  [66]byte
 	secretNonce    [97]byte
@@ -681,9 +681,8 @@ type musignParams struct {
 	cosigners      []*secp256k1.PublicKey
 }
 
-func musign(signer *btcec.PrivateKey, scriptRoot []byte) func(params musignParams) (*musig2.PartialSignature, error) {
-
-	return func(params musignParams) (*musig2.PartialSignature, error) {
+func sign(signer *btcec.PrivateKey, scriptRoot []byte) func(params musigParams) (*musig2.PartialSignature, error) {
+	return func(params musigParams) (*musig2.PartialSignature, error) {
 
 		message, err := txscript.CalcTaprootSignatureHash(
 			txscript.NewTxSigHashes(params.tx.UnsignedTx, params.prevoutFetcher),
