@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"reflect"
 	"runtime"
 	"sync"
 
@@ -167,7 +166,7 @@ func AggregateKeys(
 	return key, nil
 }
 
-// ValidateTreeSigs iterates over the tree matrix and verify the TaprootKeySpendSig
+// ValidateTreeSigs iterates over the tree nodes and verify the TaprootKeySpendSig
 // the public key is rebuilt from the keys set in the unknown field of the psbt
 func ValidateTreeSigs(
 	scriptRoot []byte,
@@ -332,7 +331,7 @@ func (t *treeSignerSession) Sign() (TreePartialSigs, error) {
 	return workPoolMap(musigParamsMap, sign(t.secretKey, t.scriptRoot))
 }
 
-// generateNonces iterates over the tree matrix and generates musig2 private and public nonces for each transaction
+// generateNonces iterates over the tree nodes and generates musig2 private and public nonces for each transaction
 func (t *treeSignerSession) generateNonces() error {
 	if len(t.txs) == 0 {
 		return ErrMissingVtxoTree
@@ -534,8 +533,8 @@ func workPool[T any](items []T, workers int, processItem func(item T) error) err
 	}
 }
 
-// workPoolMatrix is a specialized version of workPool for processing maps jobs in parallel
-func workPoolMap[T any, R any](matrix map[string]T, processItem func(item T) (R, error)) (map[string]R, error) {
+// workPoolMap is a specialized version of workPool for processing maps jobs in parallel
+func workPoolMap[T any, R comparable](kvMap map[string]T, processItem func(item T) (R, error)) (map[string]R, error) {
 	locker := sync.Mutex{}
 	results := make(map[string]R)
 
@@ -544,8 +543,8 @@ func workPoolMap[T any, R any](matrix map[string]T, processItem func(item T) (R,
 		item T
 	}
 
-	items := make([]workItem, 0, len(matrix))
-	for key, item := range matrix {
+	items := make([]workItem, 0, len(kvMap))
+	for key, item := range kvMap {
 		items = append(items, workItem{key: key, item: item})
 	}
 
@@ -555,16 +554,8 @@ func workPoolMap[T any, R any](matrix map[string]T, processItem func(item T) (R,
 			return err
 		}
 
-		// if result is not nil (only for nilable types)
-		rv := reflect.ValueOf(result)
-		if rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface || rv.Kind() == reflect.Slice || rv.Kind() == reflect.Map || rv.Kind() == reflect.Chan || rv.Kind() == reflect.Func {
-			if !rv.IsNil() {
-				locker.Lock()
-				results[item.key] = result
-				locker.Unlock()
-			}
-		} else {
-			// non-nilable types, store the result
+		zero := new(R)
+		if result != *zero {
 			locker.Lock()
 			results[item.key] = result
 			locker.Unlock()
@@ -617,12 +608,12 @@ func combineNonces(allNonces map[string]TreeNonces) func(tx *psbt.Packet) (*Musi
 
 		for _, key := range keys {
 			keyStr := hex.EncodeToString(schnorr.SerializePubKey(key))
-			nonceMatrix, ok := allNonces[keyStr]
+			nonceMap, ok := allNonces[keyStr]
 			if !ok {
 				return nil, fmt.Errorf("nonces not set for cosigner key %x", key.SerializeCompressed())
 			}
 
-			nonce := nonceMatrix[tx.UnsignedTx.TxID()]
+			nonce := nonceMap[tx.UnsignedTx.TxID()]
 			if nonce == nil {
 				return nil, fmt.Errorf("missing nonce for cosigner key %x", key.SerializeCompressed())
 			}
@@ -683,7 +674,6 @@ type musigParams struct {
 
 func sign(signer *btcec.PrivateKey, scriptRoot []byte) func(params musigParams) (*musig2.PartialSignature, error) {
 	return func(params musigParams) (*musig2.PartialSignature, error) {
-
 		message, err := txscript.CalcTaprootSignatureHash(
 			txscript.NewTxSigHashes(params.tx.UnsignedTx, params.prevoutFetcher),
 			txscript.SigHashDefault,
