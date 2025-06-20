@@ -308,8 +308,7 @@ func runLiveStoreTests(t *testing.T, store ports.LiveStore) {
 		}
 
 		// Delete
-		err = store.TreeSigingSessions().Delete(roundId)
-		require.NoError(t, err)
+		store.TreeSigingSessions().Delete(roundId)
 
 		// Get
 		sigSession, exists := store.TreeSigingSessions().Get(roundId)

@@ -49,25 +49,20 @@ func (s *treeSigningSessionsStore) Get(roundId string) (*ports.MusigSigningSessi
 	sess, ok := s.sessions[roundId]
 	return sess, ok
 }
-func (s *treeSigningSessionsStore) Delete(roundId string) error {
+func (s *treeSigningSessionsStore) Delete(roundId string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
 
-	if _, exists := s.nonceCollectedCh[roundId]; !exists {
-		return fmt.Errorf(`nonce collected channel not found for round "%s"`, roundId)
+	if _, exists := s.nonceCollectedCh[roundId]; exists {
+		close(s.nonceCollectedCh[roundId])
 	}
-	if _, exists := s.sigsCollectedCh[roundId]; !exists {
-		return fmt.Errorf(`signatures collected channel not found for round "%s"`, roundId)
+	if _, exists := s.sigsCollectedCh[roundId]; exists {
+		close(s.sigsCollectedCh[roundId])
 	}
-
-	close(s.nonceCollectedCh[roundId])
-	close(s.sigsCollectedCh[roundId])
 
 	delete(s.nonceCollectedCh, roundId)
 	delete(s.sigsCollectedCh, roundId)
 	delete(s.sessions, roundId)
-
-	return nil
 }
 
 func (s *treeSigningSessionsStore) AddNonces(
@@ -83,18 +78,15 @@ func (s *treeSigningSessionsStore) AddNonces(
 	if _, ok := session.Cosigners[pubkey]; !ok {
 		return fmt.Errorf(`cosigner %s not found for round "%s"`, pubkey, roundId)
 	}
+	if _, exists := s.nonceCollectedCh[roundId]; !exists {
+		return fmt.Errorf("nonce channel not initialized for round %s", roundId)
+	}
 
 	s.sessions[roundId].Nonces[pubkey] = nonces
 
 	if len(s.sessions[roundId].Nonces) == s.sessions[roundId].NbCosigners-1 {
-		if ch, exists := s.nonceCollectedCh[roundId]; exists {
-			select {
-			case ch <- struct{}{}:
-			default:
-			}
-		}
+		s.nonceCollectedCh[roundId] <- struct{}{}
 	}
-
 	return nil
 }
 
@@ -111,16 +103,14 @@ func (s *treeSigningSessionsStore) AddSignatures(
 	if _, ok := session.Cosigners[pubkey]; !ok {
 		return fmt.Errorf(`cosigner %s not found for round "%s"`, pubkey, roundId)
 	}
+	if _, exists := s.sigsCollectedCh[roundId]; !exists {
+		return fmt.Errorf("signature channel not initialized for round %s", roundId)
+	}
 
 	s.sessions[roundId].Signatures[pubkey] = sigs
 
 	if len(s.sessions[roundId].Signatures) == s.sessions[roundId].NbCosigners-1 {
-		if ch, exists := s.sigsCollectedCh[roundId]; exists {
-			select {
-			case ch <- struct{}{}:
-			default:
-			}
-		}
+		s.sigsCollectedCh[roundId] <- struct{}{}
 	}
 
 	return nil

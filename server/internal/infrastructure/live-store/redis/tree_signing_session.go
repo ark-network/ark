@@ -114,7 +114,7 @@ func (s *treeSigningSessionsStore) Get(roundId string) (*ports.MusigSigningSessi
 	return sess, true
 }
 
-func (s *treeSigningSessionsStore) Delete(roundId string) error {
+func (s *treeSigningSessionsStore) Delete(roundId string) {
 	ctx := context.Background()
 	metaKey := fmt.Sprintf(treeSessMetaKeyFmt, roundId)
 	noncesKey := fmt.Sprintf(treeSessNoncesKeyFmt, roundId)
@@ -128,7 +128,6 @@ func (s *treeSigningSessionsStore) Delete(roundId string) error {
 		close(s.sigsCh)
 		s.sigsCh = nil
 	}
-	return nil
 }
 
 func (s *treeSigningSessionsStore) AddNonces(ctx context.Context, roundId string, pubkey string, nonces tree.TreeNonces) error {
