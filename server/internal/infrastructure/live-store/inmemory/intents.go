@@ -53,7 +53,7 @@ func (m *txRequestStore) Push(request domain.TxRequest, boardingInputs []ports.B
 		for _, pay := range m.requests {
 			for _, pInput := range pay.Inputs {
 				if input.Txid == pInput.Txid && input.VOut == pInput.VOut {
-					return fmt.Errorf("duplicated input, %s:%d already used by tx request %s", input.Txid, input.VOut, pay.Id)
+					return fmt.Errorf("duplicated input, %s already registered by another request", input.String())
 				}
 			}
 		}
@@ -63,7 +63,7 @@ func (m *txRequestStore) Push(request domain.TxRequest, boardingInputs []ports.B
 		for _, request := range m.requests {
 			for _, pBoardingInput := range request.BoardingInputs {
 				if input.Txid == pBoardingInput.Txid && input.VOut == pBoardingInput.VOut {
-					return fmt.Errorf("duplicated boarding input, %s:%d already used by tx request %s", input.Txid, input.VOut, request.Id)
+					return fmt.Errorf("duplicated input, %s already registered by another request", input.String())
 				}
 			}
 		}

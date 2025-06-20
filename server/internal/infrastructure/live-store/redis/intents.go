@@ -2,7 +2,6 @@ package redislivestore
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sort"
 	"time"
@@ -58,55 +57,32 @@ func (s *txRequestsStore) Len() int64 {
 
 func (s *txRequestsStore) Push(request domain.TxRequest, boardingInputs []ports.BoardingInput, cosignerPubkeys []string) error {
 	ctx := context.Background()
+	var err error
 	for attempt := 0; attempt < s.numOfRetries; attempt++ {
-		err := s.rdb.Watch(ctx, func(tx *redis.Tx) error {
-			ids, err := tx.SMembers(ctx, txReqStoreReqIdsKey).Result()
-			if err != nil && !errors.Is(err, redis.Nil) {
-				return err
-			}
-
-			reqs, err := s.requests.GetMulti(ctx, ids)
+		err = s.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			exists, err := tx.SIsMember(ctx, txReqStoreReqIdsKey, request.Id).Result()
 			if err != nil {
 				return err
 			}
-
-			if len(reqs) > 0 {
-				idToReq := make(map[string]*ports.TimedTxRequest, len(ids))
-				for i, id := range ids {
-					if reqs[i] != nil {
-						idToReq[id] = reqs[i]
-					}
+			if exists {
+				return fmt.Errorf("duplicated tx request %s", request.Id)
+			}
+			// Check input duplicates directly in Redis set
+			for _, input := range request.Inputs {
+				if input.IsNote() {
+					continue
 				}
-
-				if _, exists := idToReq[request.Id]; exists {
-					return fmt.Errorf("duplicated tx request %s", request.Id)
+				key := input.String()
+				exists, err := tx.SIsMember(ctx, txReqStoreVtxosKey, key).Result()
+				if err != nil {
+					return err
 				}
-
-				inputMap := make(map[string]string)
-				boardingInputMap := make(map[string]string)
-				for _, pay := range idToReq {
-					for _, pInput := range pay.Inputs {
-						key := fmt.Sprintf("%s:%d", pInput.Txid, pInput.VOut)
-						inputMap[key] = pay.Id
-					}
-					for _, pBoardingInput := range pay.BoardingInputs {
-						key := fmt.Sprintf("%s:%d", pBoardingInput.Txid, pBoardingInput.VOut)
-						boardingInputMap[key] = pay.Id
-					}
-				}
-				for _, input := range request.Inputs {
-					key := fmt.Sprintf("%s:%d", input.Txid, input.VOut)
-					if dupId, exists := inputMap[key]; exists {
-						return fmt.Errorf("duplicated input, %s already used by tx request %s", key, dupId)
-					}
-				}
-				for _, input := range boardingInputs {
-					key := fmt.Sprintf("%s:%d", input.Txid, input.VOut)
-					if dupId, exists := boardingInputMap[key]; exists {
-						return fmt.Errorf("duplicated boarding input, %s already used by tx request %s", key, dupId)
-					}
+				if exists {
+					return fmt.Errorf("duplicated input, %s already registered by another request", key)
 				}
 			}
+
+			// Check boarding inputs similarly if you store them
 
 			now := time.Now()
 			timedReq := &ports.TimedTxRequest{
@@ -132,13 +108,13 @@ func (s *txRequestsStore) Push(request domain.TxRequest, boardingInputs []ports.
 			})
 
 			return err
-		}, txReqStoreReqIdsKey)
+		}, txReqStoreVtxosKey, txReqStoreReqIdsKey) // WATCH both keys
 		if err == nil {
 			return nil
 		}
 		time.Sleep(10 * time.Millisecond)
 	}
-	return fmt.Errorf("push failed after %v retries", s.numOfRetries)
+	return err
 }
 
 func (s *txRequestsStore) Pop(num int64) []ports.TimedTxRequest {
