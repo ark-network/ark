@@ -196,7 +196,7 @@ func (g *TxGraph) Leaves() []*psbt.Packet {
 	return leaves
 }
 
-// Find returns the tx graph where root is equal to the given txid
+// Find returns the tx in the graph that matches the provided txid
 func (g *TxGraph) Find(txid string) *TxGraph {
 	if g.Root.UnsignedTx.TxID() == txid {
 		return g
