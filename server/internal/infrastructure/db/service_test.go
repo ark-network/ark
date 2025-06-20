@@ -369,7 +369,7 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 		}
 		ctx := context.Background()
 
-		for _, f := range fixtures[:1] {
+		for _, f := range fixtures {
 			svc.Events().ClearRegisteredHandlers()
 
 			wg := sync.WaitGroup{}
