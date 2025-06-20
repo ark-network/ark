@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"os"
 	"reflect"
 	"sort"
 	"sync"
@@ -132,13 +133,13 @@ var (
 
 func TestMain(m *testing.M) {
 	m.Run()
-	// _ = os.Remove("test.db")
+	_ = os.Remove("test.db")
 }
 
 func TestService(t *testing.T) {
 	dbDir := t.TempDir()
-	// pgDns := "postgresql://root:secret@127.0.0.1:5432/projection?sslmode=disable"
-	// pgEventDns := "postgresql://root:secret@127.0.0.1:5432/event?sslmode=disable"
+	pgDns := "postgresql://root:secret@127.0.0.1:5432/projection?sslmode=disable"
+	pgEventDns := "postgresql://root:secret@127.0.0.1:5432/event?sslmode=disable"
 	tests := []struct {
 		name   string
 		config db.ServiceConfig
@@ -161,16 +162,15 @@ func TestService(t *testing.T) {
 				DataStoreConfig:  []interface{}{dbDir},
 			},
 		},
-		// TODO revert once migration is done
-		// {
-		// 	name: "repo_manager_with_postgres_stores",
-		// 	config: db.ServiceConfig{
-		// 		EventStoreType:   "postgres",
-		// 		DataStoreType:    "postgres",
-		// 		EventStoreConfig: []interface{}{pgEventDns},
-		// 		DataStoreConfig:  []interface{}{pgDns},
-		// 	},
-		// },
+		{
+			name: "repo_manager_with_postgres_stores",
+			config: db.ServiceConfig{
+				EventStoreType:   "postgres",
+				DataStoreType:    "postgres",
+				EventStoreConfig: []interface{}{pgEventDns},
+				DataStoreConfig:  []interface{}{pgDns},
+			},
+		},
 	}
 
 	for _, tt := range tests {

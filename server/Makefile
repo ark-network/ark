@@ -87,7 +87,7 @@ psql:
 
 # pgmigrate: creates pg migration file (e.g. make FILE=init pgmigrate)
 pgmigrate:
-	@docker run --rm -v /internal/infrastructure/db/postgres/migration:/migration migrate/migrate create -ext sql -dir /migration $(FILE)
+	@docker run --rm -v ./internal/infrastructure/db/postgres/migration:/migration migrate/migrate create -ext sql -dir /migration $(FILE)
 
 # pgsqlc: generate sql code for postgres
 pgsqlc:

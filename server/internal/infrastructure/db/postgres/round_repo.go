@@ -3,12 +3,14 @@ package pgdb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/infrastructure/db/postgres/sqlc/queries"
+	"github.com/sqlc-dev/pqtype"
 )
 
 type roundRepository struct {
@@ -335,10 +337,18 @@ func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid s
 	for _, tx := range rows {
 		pos := int(tx.Position)
 		chunks = extendArray(chunks, pos)
+
+		children := make(map[uint32]string)
+		if tx.Children.Valid {
+			if err := json.Unmarshal(tx.Children.RawMessage, &children); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal children: %w", err)
+			}
+		}
+
 		chunks[pos] = tree.TxGraphChunk{
 			Txid:     tx.Txid,
 			Tx:       tx.Tx,
-			Children: map[uint32]string{}, // TODO children
+			Children: children,
 		}
 	}
 
@@ -364,10 +374,18 @@ func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) 
 	for _, tx := range rows {
 		pos := int(tx.Position)
 		chunks = extendArray(chunks, pos)
+
+		children := make(map[uint32]string)
+		if tx.Children.Valid {
+			if err := json.Unmarshal(tx.Children.RawMessage, &children); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal children: %w", err)
+			}
+		}
+
 		chunks[pos] = tree.TxGraphChunk{
 			Txid:     tx.Txid,
 			Tx:       tx.Tx,
-			Children: map[uint32]string{}, // TODO children
+			Children: children,
 		}
 	}
 
@@ -521,17 +539,32 @@ func rowsToRounds(rows []combinedRow) ([]*domain.Round, error) {
 				}
 			case "connector":
 				round.Connectors = extendArray(round.Connectors, int(position.Int32))
+
+				children := make(map[uint32]string)
+				if v.tx.Children.Valid {
+					if err := json.Unmarshal(v.tx.Children.RawMessage, &children); err != nil {
+						return nil, fmt.Errorf("failed to unmarshal children: %w", err)
+					}
+				}
+
 				round.Connectors[int(position.Int32)] = tree.TxGraphChunk{
 					Txid:     v.tx.Txid.String,
 					Tx:       v.tx.Tx.String,
-					Children: map[uint32]string{}, // TODO children
+					Children: children,
 				}
 			case "tree":
 				round.VtxoTree = extendArray(round.VtxoTree, int(position.Int32))
+
+				children := make(map[uint32]string)
+				if v.tx.Children.Valid {
+					if err := json.Unmarshal(v.tx.Children.RawMessage, &children); err != nil {
+						return nil, fmt.Errorf("failed to unmarshal children: %w", err)
+					}
+				}
 				round.VtxoTree[int(position.Int32)] = tree.TxGraphChunk{
 					Txid:     v.tx.Txid.String,
 					Tx:       v.tx.Tx.String,
-					Children: map[uint32]string{}, // TODO children
+					Children: children,
 				}
 			}
 		}
@@ -575,7 +608,14 @@ func createUpsertTransactionParams(chunk tree.TxGraphChunk, roundID string, txTy
 
 	if txType == "connector" || txType == "tree" {
 		params.Txid = chunk.Txid
-		// TODO : children
+		children, err := json.Marshal(chunk.Children)
+		if err != nil {
+			return queries.UpsertTransactionParams{}
+		}
+		params.Children = pqtype.NullRawMessage{
+			RawMessage: children,
+			Valid:      true,
+		}
 	}
 
 	return params
