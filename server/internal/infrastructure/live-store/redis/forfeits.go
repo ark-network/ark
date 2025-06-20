@@ -31,7 +31,7 @@ func NewForfeitTxsStore(rdb *redis.Client, builder ports.TxBuilder) ports.Forfei
 	}
 }
 
-func (s *forfeitTxsStore) Init(connectors *tree.TxGraph, requests []domain.TxRequest) error {
+func (s *forfeitTxsStore) Init(connectors []tree.TxGraphChunk, requests []domain.TxRequest) error {
 	ctx := context.Background()
 	vtxosToSign := make([]domain.Vtxo, 0)
 	for _, request := range requests {
@@ -51,12 +51,12 @@ func (s *forfeitTxsStore) Init(connectors *tree.TxGraph, requests []domain.TxReq
 	connIndex := make(map[string]domain.Outpoint)
 	if len(vtxosToSign) > 0 {
 		connectorsOutpoints := make([]domain.Outpoint, 0)
-		leaves := connectors.Leaves()
+		leaves := tree.TxGraphChunkList(connectors).Leaves()
 		if len(leaves) == 0 {
 			return fmt.Errorf("no connectors found")
 		}
 		for _, leaf := range leaves {
-			connectorsOutpoints = append(connectorsOutpoints, domain.Outpoint{Txid: leaf.UnsignedTx.TxID(), VOut: 0})
+			connectorsOutpoints = append(connectorsOutpoints, domain.Outpoint{Txid: leaf.Txid, VOut: 0})
 		}
 		sort.Slice(vtxosToSign, func(i, j int) bool { return vtxosToSign[i].String() < vtxosToSign[j].String() })
 		if len(vtxosToSign) > len(connectorsOutpoints) {
@@ -98,7 +98,7 @@ func (s *forfeitTxsStore) Sign(txs []string) error {
 	if err != nil {
 		return err
 	}
-	var connectors *tree.TxGraph
+	var connectors []tree.TxGraphChunk
 	if err := json.Unmarshal(connBytes, &connectors); err != nil {
 		return err
 	}

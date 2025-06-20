@@ -289,10 +289,10 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (txid, signedSweepTx
 }
 
 func (b *txBuilder) VerifyForfeitTxs(
-	vtxos []domain.Vtxo, connectors *tree.TxGraph,
+	vtxos []domain.Vtxo, connectors []tree.TxGraphChunk,
 	forfeitTxs []string, connectorIndex map[string]domain.Outpoint,
 ) (map[domain.VtxoKey]string, error) {
-	connectorsLeaves := connectors.Leaves()
+	connectorsLeaves := tree.TxGraphChunkList(connectors).Leaves()
 	if len(connectorsLeaves) == 0 {
 		return nil, fmt.Errorf("invalid connectors tree")
 	}
@@ -367,8 +367,13 @@ func (b *txBuilder) VerifyForfeitTxs(
 		}
 
 		var connectorOutput *wire.TxOut
-		for _, connectorTx := range connectorsLeaves {
-			if connectorTx.UnsignedTx.TxID() == connectorInput.PreviousOutPoint.Hash.String() {
+		for _, connector := range connectorsLeaves {
+			if connector.Txid == connectorInput.PreviousOutPoint.Hash.String() {
+				connectorTx, err := psbt.NewFromRawBytes(strings.NewReader(connector.Tx), true)
+				if err != nil {
+					return nil, err
+				}
+
 				if len(connectorTx.UnsignedTx.TxOut) <= int(connectorInput.PreviousOutPoint.Index) {
 					return nil, fmt.Errorf("invalid connector tx")
 				}

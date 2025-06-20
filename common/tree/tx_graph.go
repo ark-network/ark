@@ -25,6 +25,18 @@ type TxGraphChunk struct {
 	Children map[uint32]string
 }
 
+type TxGraphChunkList []TxGraphChunk
+
+func (c TxGraphChunkList) Leaves() []TxGraphChunk {
+	leaves := make([]TxGraphChunk, 0)
+	for _, child := range c {
+		if len(child.Children) == 0 {
+			leaves = append(leaves, child)
+		}
+	}
+	return leaves
+}
+
 // NewTxGraph creates a new TxGraph from a list of TxGraphChunk
 func NewTxGraph(chunks []TxGraphChunk) (*TxGraph, error) {
 	if len(chunks) == 0 {

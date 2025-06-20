@@ -1817,7 +1817,14 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 	}
 	log.Debugf("round tx created for round %s", roundId)
 
-	if err := s.liveStore.ForfeitTxs().Init(connectors, txRequests); err != nil {
+	connectorsChunks, err := connectors.Serialize()
+	if err != nil {
+		s.liveStore.CurrentRound().Fail(fmt.Errorf("failed to serialize connectors: %s", err))
+		log.WithError(err).Warn("failed to serialize connectors")
+		return
+	}
+
+	if err := s.liveStore.ForfeitTxs().Init(connectorsChunks, txRequests); err != nil {
 		s.liveStore.CurrentRound().Fail(fmt.Errorf("failed to initialize forfeit txs: %s", err))
 		log.WithError(err).Warn("failed to initialize forfeit txs")
 		return
@@ -1986,13 +1993,6 @@ func (s *covenantlessService) startFinalization(roundTiming roundTiming, request
 			log.WithError(err).Warn("failed to serialize vtxo tree")
 			return
 		}
-	}
-
-	connectorsChunks, err := connectors.Serialize()
-	if err != nil {
-		s.liveStore.CurrentRound().Fail(fmt.Errorf("failed to serialize connectors: %s", err))
-		log.WithError(err).Warn("failed to serialize connectors")
-		return
 	}
 
 	round := s.liveStore.CurrentRound().Get()

@@ -47,7 +47,7 @@ type TxBuilder interface {
 	// VerifyForfeitTxs verifies a list of forfeit txs against a set of VTXOs and
 	// connectors.
 	VerifyForfeitTxs(
-		vtxos []domain.Vtxo, connectors *tree.TxGraph, txs []string,
+		vtxos []domain.Vtxo, connectors []tree.TxGraphChunk, txs []string,
 		connectorIndex map[string]domain.Outpoint,
 	) (valid map[domain.VtxoKey]string, err error)
 	BuildSweepTx(inputs []SweepInput) (txid string, signedSweepTx string, err error)

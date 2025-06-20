@@ -142,11 +142,11 @@ func runLiveStoreTests(t *testing.T, store ports.LiveStore) {
 	})
 
 	t.Run("ForfeitTxsStore", func(t *testing.T) {
-		connectors, requests, err := parseForfeitTxsFixture(connectorsJSON, requestsJSON)
+		connectorsChunks, requests, err := parseForfeitTxsFixture(connectorsJSON, requestsJSON)
 		require.NoError(t, err)
 
 		// Init
-		err = store.ForfeitTxs().Init(connectors, requests)
+		err = store.ForfeitTxs().Init(connectorsChunks, requests)
 		require.NoError(t, err)
 
 		// Sign
@@ -338,7 +338,7 @@ func parseTxRequestsFixtures(fixtureJSON string) (*TxRequestsPushFixture, error)
 	return &fixture, nil
 }
 
-func parseForfeitTxsFixture(connectorsJSON, requestsJSON string) (*tree.TxGraph, []domain.TxRequest, error) {
+func parseForfeitTxsFixture(connectorsJSON, requestsJSON string) ([]tree.TxGraphChunk, []domain.TxRequest, error) {
 	connectorsChunks := make([]tree.TxGraphChunk, 0)
 	if err := json.Unmarshal([]byte(connectorsJSON), &connectorsChunks); err != nil {
 		return nil, nil, err
@@ -349,12 +349,7 @@ func parseForfeitTxsFixture(connectorsJSON, requestsJSON string) (*tree.TxGraph,
 		return nil, nil, err
 	}
 
-	connectorsGraph, err := tree.NewTxGraph(connectorsChunks)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return connectorsGraph, requests, nil
+	return connectorsChunks, requests, nil
 }
 
 func parseOffchainTxFixture(txJSON string) (domain.OffchainTx, error) {
@@ -370,7 +365,7 @@ type mockedTxBuilder struct {
 	mock.Mock
 }
 
-func (m *mockedTxBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors *tree.TxGraph, txs []string, connectorIndex map[string]domain.Outpoint) (valid map[domain.VtxoKey]string, err error) {
+func (m *mockedTxBuilder) VerifyForfeitTxs(vtxos []domain.Vtxo, connectors []tree.TxGraphChunk, txs []string, connectorIndex map[string]domain.Outpoint) (valid map[domain.VtxoKey]string, err error) {
 	args := m.Called(vtxos, connectors, txs, connectorIndex)
 	return args.Get(0).(map[domain.VtxoKey]string), args.Error(1)
 }

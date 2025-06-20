@@ -234,11 +234,7 @@ func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
 	expireAt := round.ExpiryTimestamp()
 
 	vtxos := make([]domain.Vtxo, 0)
-	for _, chunk := range round.VtxoTree {
-		if len(chunk.Children) > 0 {
-			continue // not leaf
-		}
-
+	for _, chunk := range tree.TxGraphChunkList(round.VtxoTree).Leaves() {
 		tx, err := psbt.NewFromRawBytes(strings.NewReader(chunk.Tx), true)
 		if err != nil {
 			log.WithError(err).Warn("failed to parse tx")
