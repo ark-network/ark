@@ -255,7 +255,7 @@ func (a *restClient) SubmitTreeNonces(
 	ctx context.Context, roundID, cosignerPubkey string,
 	nonces tree.TreeNonces,
 ) error {
-	sigsJSON, err := nonces.MarshalJSON()
+	noncesJSON, err := json.Marshal(nonces)
 	if err != nil {
 		return err
 	}
@@ -263,7 +263,7 @@ func (a *restClient) SubmitTreeNonces(
 	body := &models.V1SubmitTreeNoncesRequest{
 		RoundID:    roundID,
 		Pubkey:     cosignerPubkey,
-		TreeNonces: string(sigsJSON),
+		TreeNonces: string(noncesJSON),
 	}
 
 	if _, err := a.svc.ArkServiceSubmitTreeNonces(
@@ -279,7 +279,7 @@ func (a *restClient) SubmitTreeSignatures(
 	ctx context.Context, roundID, cosignerPubkey string,
 	signatures tree.TreePartialSigs,
 ) error {
-	sigsJSON, err := signatures.MarshalJSON()
+	signaturesJSON, err := json.Marshal(signatures)
 	if err != nil {
 		return err
 	}
@@ -287,7 +287,7 @@ func (a *restClient) SubmitTreeSignatures(
 	body := &models.V1SubmitTreeSignaturesRequest{
 		RoundID:        roundID,
 		Pubkey:         cosignerPubkey,
-		TreeSignatures: string(sigsJSON),
+		TreeSignatures: string(signaturesJSON),
 	}
 
 	if _, err := a.svc.ArkServiceSubmitTreeSignatures(
@@ -403,7 +403,7 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEve
 				case resp.Result.RoundSigningNoncesGenerated != nil:
 					e := resp.Result.RoundSigningNoncesGenerated
 					nonces := make(tree.TreeNonces)
-					if err := nonces.UnmarshalJSON([]byte(e.TreeNonces)); err != nil {
+					if err := json.Unmarshal([]byte(e.TreeNonces), &nonces); err != nil {
 						_err = err
 						break
 					}

@@ -36,15 +36,6 @@ type RoundFinalized struct {
 	Txid string
 }
 
-func (e RoundSigningNoncesGenerated) SerializeNonces() (string, error) {
-	serialized, err := e.Nonces.MarshalJSON()
-	if err != nil {
-		return "", err
-	}
-
-	return string(serialized), nil
-}
-
 type BatchTree struct {
 	domain.RoundEvent
 	Topic      []string

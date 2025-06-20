@@ -631,7 +631,7 @@ func (h *handler) listenToEvents() {
 					},
 				})
 			case application.RoundSigningNoncesGenerated:
-				serialized, err := e.SerializeNonces()
+				serialized, err := json.Marshal(e.Nonces)
 				if err != nil {
 					logrus.WithError(err).Error("failed to serialize nonces")
 					continue
@@ -641,7 +641,7 @@ func (h *handler) listenToEvents() {
 					Event: &arkv1.GetEventStreamResponse_RoundSigningNoncesGenerated{
 						RoundSigningNoncesGenerated: &arkv1.RoundSigningNoncesGeneratedEvent{
 							Id:         e.Id,
-							TreeNonces: serialized,
+							TreeNonces: string(serialized),
 						},
 					},
 				})

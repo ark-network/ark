@@ -1,6 +1,7 @@
 package grpcclient
 
 import (
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -88,7 +89,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 	if ee := e.GetRoundSigningNoncesGenerated(); ee != nil {
 		nonces := make(tree.TreeNonces)
 
-		if err := nonces.UnmarshalJSON([]byte(ee.GetTreeNonces())); err != nil {
+		if err := json.Unmarshal([]byte(ee.GetTreeNonces()), &nonces); err != nil {
 			return nil, err
 		}
 		return client.RoundSigningNoncesGeneratedEvent{
