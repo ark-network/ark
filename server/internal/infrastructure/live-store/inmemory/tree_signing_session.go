@@ -52,8 +52,14 @@ func (s *treeSigningSessionsStore) Get(roundId string) (*ports.MusigSigningSessi
 func (s *treeSigningSessionsStore) Delete(roundId string) {
 	s.lock.Lock()
 	defer s.lock.Unlock()
-	close(s.nonceCollectedCh[roundId])
-	close(s.sigsCollectedCh[roundId])
+
+	if _, exists := s.nonceCollectedCh[roundId]; exists {
+		close(s.nonceCollectedCh[roundId])
+	}
+	if _, exists := s.sigsCollectedCh[roundId]; exists {
+		close(s.sigsCollectedCh[roundId])
+	}
+
 	delete(s.nonceCollectedCh, roundId)
 	delete(s.sigsCollectedCh, roundId)
 	delete(s.sessions, roundId)
@@ -72,13 +78,15 @@ func (s *treeSigningSessionsStore) AddNonces(
 	if _, ok := session.Cosigners[pubkey]; !ok {
 		return fmt.Errorf(`cosigner %s not found for round "%s"`, pubkey, roundId)
 	}
+	if _, exists := s.nonceCollectedCh[roundId]; !exists {
+		return fmt.Errorf("nonce channel not initialized for round %s", roundId)
+	}
 
 	s.sessions[roundId].Nonces[pubkey] = nonces
 
 	if len(s.sessions[roundId].Nonces) == s.sessions[roundId].NbCosigners-1 {
 		s.nonceCollectedCh[roundId] <- struct{}{}
 	}
-
 	return nil
 }
 
@@ -94,6 +102,9 @@ func (s *treeSigningSessionsStore) AddSignatures(
 	}
 	if _, ok := session.Cosigners[pubkey]; !ok {
 		return fmt.Errorf(`cosigner %s not found for round "%s"`, pubkey, roundId)
+	}
+	if _, exists := s.sigsCollectedCh[roundId]; !exists {
+		return fmt.Errorf("signature channel not initialized for round %s", roundId)
 	}
 
 	s.sessions[roundId].Signatures[pubkey] = sigs
