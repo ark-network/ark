@@ -46,7 +46,7 @@ func CraftSharedOutput(
 // BuildVtxoTree creates all the tree's transactions and returns the vtxo tree
 // radix is hardcoded to 2
 func BuildVtxoTree(
-	initialInput *wire.OutPoint,
+	rootInput *wire.OutPoint,
 	receivers []Leaf,
 	sweepTapTreeRoot []byte,
 	vtxoTreeExpiry common.RelativeLocktime,
@@ -56,7 +56,7 @@ func BuildVtxoTree(
 		return nil, err
 	}
 
-	return nodeToGraph(root, initialInput, &vtxoTreeExpiry)
+	return root.graph(rootInput, &vtxoTreeExpiry)
 }
 
 // CraftConnectorsOutput returns the taproot script and the amount of the root shared output of a connectors tree
@@ -87,7 +87,7 @@ func CraftConnectorsOutput(
 // BuildConnectorsTree creates all the tree's transactions and returns the vtxo tree
 // radix is hardcoded to 4
 func BuildConnectorsTree(
-	initialInput *wire.OutPoint,
+	rootInput *wire.OutPoint,
 	receivers []Leaf,
 ) (*TxGraph, error) {
 	root, err := createTxTree(receivers, nil, connectorsTreeRadix)
@@ -95,34 +95,7 @@ func BuildConnectorsTree(
 		return nil, err
 	}
 
-	return nodeToGraph(root, initialInput, nil)
-}
-
-func nodeToGraph(n node, initialInput *wire.OutPoint, expiry *common.RelativeLocktime) (*TxGraph, error) {
-	tx, err := getTx(n, initialInput, expiry)
-	if err != nil {
-		return nil, err
-	}
-
-	graph := &TxGraph{
-		Root:     tx,
-		Children: make(map[uint32]*TxGraph),
-	}
-
-	children := n.getChildren()
-	for i, child := range children {
-		childGraph, err := nodeToGraph(child, &wire.OutPoint{
-			Hash:  tx.UnsignedTx.TxHash(),
-			Index: uint32(i),
-		}, expiry)
-		if err != nil {
-			return nil, err
-		}
-
-		graph.Children[uint32(i)] = childGraph
-	}
-
-	return graph, nil
+	return root.graph(rootInput, nil)
 }
 
 type node interface {
@@ -131,6 +104,7 @@ type node interface {
 	getChildren() []node
 	getCosigners() []*secp256k1.PublicKey
 	getInputScript() []byte
+	graph(input *wire.OutPoint, expiry *common.RelativeLocktime) (*TxGraph, error)
 }
 
 type leaf struct {
@@ -159,6 +133,17 @@ func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
 	return []*wire.TxOut{
 		l.output,
 		AnchorOutput(),
+	}, nil
+}
+
+func (l *leaf) graph(initialInput *wire.OutPoint, expiry *common.RelativeLocktime) (*TxGraph, error) {
+	tx, err := getTx(l, initialInput, expiry)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TxGraph{
+		Root: tx,
 	}, nil
 }
 
@@ -201,6 +186,33 @@ func (b *branch) getOutputs() ([]*wire.TxOut, error) {
 	}
 
 	return append(outputs, AnchorOutput()), nil
+}
+
+func (b *branch) graph(initialInput *wire.OutPoint, expiry *common.RelativeLocktime) (*TxGraph, error) {
+	tx, err := getTx(b, initialInput, expiry)
+	if err != nil {
+		return nil, err
+	}
+
+	graph := &TxGraph{
+		Root:     tx,
+		Children: make(map[uint32]*TxGraph),
+	}
+
+	children := b.getChildren()
+	for i, child := range children {
+		childGraph, err := child.graph(&wire.OutPoint{
+			Hash:  tx.UnsignedTx.TxHash(),
+			Index: uint32(i),
+		}, expiry)
+		if err != nil {
+			return nil, err
+		}
+
+		graph.Children[uint32(i)] = childGraph
+	}
+
+	return graph, nil
 }
 
 func getTx(
