@@ -10,7 +10,6 @@ genrest:
 	@echo "Generating rest client from stub..."
 	@mkdir -p $(ark_client_dir) $(indexer_client_dir)
 	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/service.swagger.json -t $(ark_client_dir) --client-package=arkservice
-	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/explorer.swagger.json -t $(ark_client_dir) --client-package=explorerservice
 	@swagger generate client -f ../../api-spec/openapi/swagger/ark/v1/indexer.swagger.json -t $(indexer_client_dir) --client-package=indexerservice
 
 ## test: runs unit tests

@@ -1,12 +1,16 @@
 package types
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strconv"
 	"time"
 
 	"github.com/ark-network/ark/common"
+	"github.com/btcsuite/btcd/btcec/v2/schnorr"
+	"github.com/btcsuite/btcd/btcutil"
+	"github.com/btcsuite/btcd/txscript"
+	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 )
 
@@ -47,20 +51,45 @@ type VtxoKey struct {
 }
 
 func (v VtxoKey) String() string {
-	return fmt.Sprintf("%s:%s", v.Txid, strconv.Itoa(int(v.VOut)))
+	return fmt.Sprintf("%s:%d", v.Txid, v.VOut)
 }
 
 type Vtxo struct {
 	VtxoKey
-	PubKey    string
-	Amount    uint64
-	RoundTxid string
-	ExpiresAt time.Time
-	CreatedAt time.Time
-	RedeemTx  string
-	Pending   bool
-	SpentBy   string
-	Spent     bool
+	Script         string
+	Amount         uint64
+	CommitmentTxid string
+	ExpiresAt      time.Time
+	CreatedAt      time.Time
+	Preconfirmed   bool
+	Swept          bool
+	Redeemed       bool
+	Spent          bool
+	SpentBy        string
+}
+
+func (v Vtxo) IsRecoverable() bool {
+	return v.Swept && !v.Spent
+}
+
+func (v Vtxo) Address(server *secp256k1.PublicKey, net common.Network) (string, error) {
+	pubkeyBytes, err := hex.DecodeString(v.Script)
+	if err != nil {
+		return "", err
+	}
+
+	pubkey, err := schnorr.ParsePubKey(pubkeyBytes)
+	if err != nil {
+		return "", err
+	}
+
+	a := &common.Address{
+		HRP:        net.Addr,
+		Server:     server,
+		VtxoTapKey: pubkey,
+	}
+
+	return a.Encode()
 }
 
 type VtxoEventType int
@@ -91,13 +120,13 @@ const (
 type TxType string
 
 type TransactionKey struct {
-	BoardingTxid string
-	RoundTxid    string
-	RedeemTxid   string
+	BoardingTxid   string
+	CommitmentTxid string
+	ArkTxid        string
 }
 
 func (t TransactionKey) String() string {
-	return fmt.Sprintf("%s%s%s", t.BoardingTxid, t.RoundTxid, t.RedeemTxid)
+	return fmt.Sprintf("%s%s%s", t.BoardingTxid, t.CommitmentTxid, t.ArkTxid)
 }
 
 type Transaction struct {
@@ -107,18 +136,6 @@ type Transaction struct {
 	Settled   bool
 	CreatedAt time.Time
 	Hex       string
-}
-
-func (t Transaction) IsRound() bool {
-	return t.RoundTxid != ""
-}
-
-func (t Transaction) IsBoarding() bool {
-	return t.BoardingTxid != ""
-}
-
-func (t Transaction) IsOOR() bool {
-	return t.RedeemTxid != ""
 }
 
 func (t Transaction) String() string {
@@ -165,4 +182,49 @@ type Utxo struct {
 
 func (u *Utxo) Sequence() (uint32, error) {
 	return common.BIP68Sequence(u.Delay)
+}
+
+type Receiver struct {
+	To     string
+	Amount uint64
+}
+
+func (r Receiver) IsOnchain() bool {
+	_, err := btcutil.DecodeAddress(r.To, nil)
+	return err == nil
+}
+
+func (o Receiver) ToTxOut() (*wire.TxOut, bool, error) {
+	var pkScript []byte
+	isOnchain := false
+
+	arkAddress, err := common.DecodeAddress(o.To)
+	if err != nil {
+		// decode onchain address
+		btcAddress, err := btcutil.DecodeAddress(o.To, nil)
+		if err != nil {
+			return nil, false, err
+		}
+
+		pkScript, err = txscript.PayToAddrScript(btcAddress)
+		if err != nil {
+			return nil, false, err
+		}
+
+		isOnchain = true
+	} else {
+		pkScript, err = common.P2TRScript(arkAddress.VtxoTapKey)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	if len(pkScript) == 0 {
+		return nil, false, fmt.Errorf("invalid address")
+	}
+
+	return &wire.TxOut{
+		Value:    int64(o.Amount),
+		PkScript: pkScript,
+	}, isOnchain, nil
 }

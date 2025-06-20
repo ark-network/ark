@@ -96,63 +96,18 @@ func (outpoint txOutpoint) GetIndex() uint32 {
 }
 
 const (
-	RoundTransaction  TransactionEventType = "round_tx"
-	RedeemTransaction TransactionEventType = "redeem_tx"
+	CommitmentTxType TransactionEventType = "commitment_tx"
+	ArkTxType        TransactionEventType = "ark_tx"
 )
 
 type TransactionEventType string
 
-type TransactionEvent interface {
-	Type() TransactionEventType
-	GetSpentVtxos() []domain.Vtxo
-	GetSpendableVtxos() []domain.Vtxo
-	GetTxId() string
-}
-
-type RoundTransactionEvent struct {
-	RoundTxid      string
+type TransactionEvent struct {
+	Type           TransactionEventType
 	SpentVtxos     []domain.Vtxo
 	SpendableVtxos []domain.Vtxo
+	Txid           string
 	TxHex          string
-}
-
-func (r RoundTransactionEvent) Type() TransactionEventType {
-	return RoundTransaction
-}
-
-func (r RoundTransactionEvent) GetTxId() string {
-	return r.RoundTxid
-}
-
-func (r RoundTransactionEvent) GetSpentVtxos() []domain.Vtxo {
-	return r.SpentVtxos
-}
-
-func (r RoundTransactionEvent) GetSpendableVtxos() []domain.Vtxo {
-	return r.SpendableVtxos
-}
-
-type RedeemTransactionEvent struct {
-	RedeemTxid     string
-	SpentVtxos     []domain.Vtxo
-	SpendableVtxos []domain.Vtxo
-	TxHex          string
-}
-
-func (a RedeemTransactionEvent) Type() TransactionEventType {
-	return RedeemTransaction
-}
-
-func (r RedeemTransactionEvent) GetTxId() string {
-	return r.RedeemTxid
-}
-
-func (r RedeemTransactionEvent) GetSpentVtxos() []domain.Vtxo {
-	return r.SpentVtxos
-}
-
-func (r RedeemTransactionEvent) GetSpendableVtxos() []domain.Vtxo {
-	return r.SpendableVtxos
 }
 
 type TxRequestInfo struct {

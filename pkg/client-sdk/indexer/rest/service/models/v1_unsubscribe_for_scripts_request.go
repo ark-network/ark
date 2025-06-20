@@ -17,7 +17,7 @@ import (
 // swagger:model v1UnsubscribeForScriptsRequest
 type V1UnsubscribeForScriptsRequest struct {
 
-	// if empty, unsubscribe all scripts
+	// If empty, unsubscribe all scripts
 	Scripts []string `json:"scripts"`
 
 	// subscription Id

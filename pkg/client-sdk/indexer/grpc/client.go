@@ -8,7 +8,9 @@ import (
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/indexer"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
@@ -141,7 +143,7 @@ func (a *grpcClient) GetVtxoTree(
 	nodes := make([]indexer.TxNode, 0, len(resp.GetVtxoTree()))
 	for _, node := range resp.GetVtxoTree() {
 		nodes = append(nodes, indexer.TxNode{
-			Tx:       node.GetTx(),
+			Txid:     node.GetTxid(),
 			Children: node.GetChildren(),
 		})
 	}
@@ -150,6 +152,39 @@ func (a *grpcClient) GetVtxoTree(
 		Tree: nodes,
 		Page: parsePage(resp.GetPage()),
 	}, nil
+}
+
+func (a *grpcClient) GetFullVtxoTree(
+	ctx context.Context, batchOutpoint indexer.Outpoint, opts ...indexer.RequestOption,
+) ([]tree.TxGraphChunk, error) {
+	resp, err := a.GetVtxoTree(ctx, batchOutpoint, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	var allTxs indexer.TxNodes = resp.Tree
+	for resp.Page != nil && resp.Page.Next != resp.Page.Total {
+		opt := indexer.RequestOption{}
+		opt.WithPage(&indexer.PageRequest{
+			Index: resp.Page.Next,
+		})
+		resp, err = a.GetVtxoTree(ctx, batchOutpoint, opts...)
+		if err != nil {
+			return nil, err
+		}
+		allTxs = append(allTxs, resp.Tree...)
+	}
+
+	txids := allTxs.Txids()
+	txResp, err := a.GetVirtualTxs(ctx, txids)
+	if err != nil {
+		return nil, err
+	}
+	txMap := make(map[string]string)
+	for i, tx := range txResp.Txs {
+		txMap[txids[i]] = tx
+	}
+	return allTxs.ToTree(txMap), nil
 }
 
 func (a *grpcClient) GetVtxoTreeLeaves(
@@ -244,7 +279,7 @@ func (a *grpcClient) GetConnectors(
 	connectors := make([]indexer.TxNode, 0, len(resp.GetConnectors()))
 	for _, connector := range resp.GetConnectors() {
 		connectors = append(connectors, indexer.TxNode{
-			Tx:       connector.GetTx(),
+			Txid:     connector.GetTxid(),
 			Children: connector.GetChildren(),
 		})
 	}
@@ -258,46 +293,24 @@ func (a *grpcClient) GetConnectors(
 func (a *grpcClient) GetVtxos(
 	ctx context.Context, opts ...indexer.GetVtxosRequestOption,
 ) (*indexer.VtxosResponse, error) {
-	var page *arkv1.IndexerPageRequest
-	var spendableOnly, spentOnly bool
 	if len(opts) <= 0 {
 		return nil, fmt.Errorf("missing opts")
 	}
 	opt := opts[0]
+
+	var page *arkv1.IndexerPageRequest
 	if opt.GetPage() != nil {
 		page = &arkv1.IndexerPageRequest{
 			Size:  opt.GetPage().Size,
 			Index: opt.GetPage().Index,
 		}
 	}
-	spendableOnly = opt.GetSpendableOnly()
-	spentOnly = opt.GetSpentOnly()
-	if spentOnly && spentOnly == spendableOnly {
-		return nil, status.Errorf(codes.InvalidArgument, "spendableOnly and spentOnly cannot be both true")
-	}
-	if len(opt.GetOutpoints()) > 0 {
-		resp, err := a.svc.GetVtxosByOutpoint(ctx, &arkv1.GetVtxosByOutpointRequest{
-			Outpoints: opt.GetOutpoints(),
-			Page:      page,
-		})
-		if err != nil {
-			return nil, err
-		}
-		vtxos := make([]indexer.Vtxo, 0, len(resp.GetVtxos()))
-		for _, vtxo := range resp.GetVtxos() {
-			vtxos = append(vtxos, newIndexerVtxo(vtxo))
-		}
-
-		return &indexer.VtxosResponse{
-			Vtxos: vtxos,
-			Page:  parsePage(resp.GetPage()),
-		}, nil
-	}
 
 	req := &arkv1.GetVtxosRequest{
 		Addresses:     opt.GetAddresses(),
-		SpendableOnly: spendableOnly,
-		SpentOnly:     spentOnly,
+		Outpoints:     opt.GetOutpoints(),
+		SpendableOnly: opt.GetSpendableOnly(),
+		SpentOnly:     opt.GetSpentOnly(),
 		Page:          page,
 	}
 
@@ -306,7 +319,7 @@ func (a *grpcClient) GetVtxos(
 		return nil, err
 	}
 
-	vtxos := make([]indexer.Vtxo, 0, len(resp.GetVtxos()))
+	vtxos := make([]types.Vtxo, 0, len(resp.GetVtxos()))
 	for _, vtxo := range resp.GetVtxos() {
 		vtxos = append(vtxos, newIndexerVtxo(vtxo))
 	}
@@ -366,7 +379,7 @@ func (a *grpcClient) GetTransactionHistory(
 	for _, record := range resp.GetHistory() {
 		history = append(history, indexer.TxHistoryRecord{
 			CommitmentTxid: record.GetCommitmentTxid(),
-			VirtualTxid:    record.GetVirtualTxid(),
+			ArkTxid:        record.GetVirtualTxid(),
 			Type:           indexer.TxType(record.GetType()),
 			Amount:         record.GetAmount(),
 			CreatedAt:      record.GetCreatedAt(),
@@ -538,6 +551,11 @@ func (a *grpcClient) UnsubscribeForScripts(ctx context.Context, subscriptionId s
 	return err
 }
 
+func (a *grpcClient) Close() {
+	// nolint
+	a.conn.Close()
+}
+
 func parsePage(page *arkv1.IndexerPageResponse) *indexer.PageResponse {
 	if page == nil {
 		return nil
@@ -564,28 +582,29 @@ func (c txChain) parse() []indexer.ChainTx {
 	return txs
 }
 
-func newIndexerVtxos(vtxos []*arkv1.IndexerVtxo) []indexer.Vtxo {
-	res := make([]indexer.Vtxo, 0, len(vtxos))
+func newIndexerVtxos(vtxos []*arkv1.IndexerVtxo) []types.Vtxo {
+	res := make([]types.Vtxo, 0, len(vtxos))
 	for _, vtxo := range vtxos {
 		res = append(res, newIndexerVtxo(vtxo))
 	}
 	return res
 }
 
-func newIndexerVtxo(vtxo *arkv1.IndexerVtxo) indexer.Vtxo {
-	return indexer.Vtxo{
-		Outpoint: indexer.Outpoint{
+func newIndexerVtxo(vtxo *arkv1.IndexerVtxo) types.Vtxo {
+	return types.Vtxo{
+		VtxoKey: types.VtxoKey{
 			Txid: vtxo.GetOutpoint().GetTxid(),
 			VOut: vtxo.GetOutpoint().GetVout(),
 		},
-		CreatedAt:      vtxo.GetCreatedAt(),
-		ExpiresAt:      vtxo.GetExpiresAt(),
-		Amount:         vtxo.GetAmount(),
 		Script:         vtxo.GetScript(),
-		IsLeaf:         vtxo.GetIsLeaf(),
-		IsSwept:        vtxo.GetIsSwept(),
-		IsSpent:        vtxo.GetIsSpent(),
-		SpentBy:        vtxo.GetSpentBy(),
 		CommitmentTxid: vtxo.GetCommitmentTxid(),
+		Amount:         vtxo.GetAmount(),
+		CreatedAt:      time.Unix(vtxo.GetCreatedAt(), 0),
+		ExpiresAt:      time.Unix(vtxo.GetExpiresAt(), 0),
+		Preconfirmed:   vtxo.GetIsPreconfirmed(),
+		Swept:          vtxo.GetIsSwept(),
+		Spent:          vtxo.GetIsSpent(),
+		Redeemed:       vtxo.GetIsRedeemed(),
+		SpentBy:        vtxo.GetSpentBy(),
 	}
 }

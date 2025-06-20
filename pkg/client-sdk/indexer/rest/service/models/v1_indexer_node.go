@@ -20,9 +20,6 @@ type V1IndexerNode struct {
 	// vout -> txid
 	Children map[string]string `json:"children,omitempty"`
 
-	// tx
-	Tx string `json:"tx,omitempty"`
-
 	// txid
 	Txid string `json:"txid,omitempty"`
 }

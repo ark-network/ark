@@ -45,7 +45,7 @@ type V1GetInfoResponse struct {
 	// -1 means no limit (default), 0 means boarding not allowed
 	UtxoMaxAmount string `json:"utxoMaxAmount,omitempty"`
 
-	// -1 means native dust limit (default)
+	// utxo min amount
 	UtxoMinAmount string `json:"utxoMinAmount,omitempty"`
 
 	// version
@@ -54,7 +54,7 @@ type V1GetInfoResponse struct {
 	// -1 means no limit (default)
 	VtxoMaxAmount string `json:"vtxoMaxAmount,omitempty"`
 
-	// -1 means native dust limit (default)
+	// vtxo min amount
 	VtxoMinAmount string `json:"vtxoMinAmount,omitempty"`
 
 	// vtxo tree expiry

@@ -88,12 +88,12 @@ func (o *ArkServiceSubmitSignedForfeitTxsOK) Code() int {
 
 func (o *ArkServiceSubmitSignedForfeitTxsOK) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/submitForfeitTxs][%d] arkServiceSubmitSignedForfeitTxsOK %s", 200, payload)
+	return fmt.Sprintf("[POST /v1/batch/submitForfeitTxs][%d] arkServiceSubmitSignedForfeitTxsOK %s", 200, payload)
 }
 
 func (o *ArkServiceSubmitSignedForfeitTxsOK) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/submitForfeitTxs][%d] arkServiceSubmitSignedForfeitTxsOK %s", 200, payload)
+	return fmt.Sprintf("[POST /v1/batch/submitForfeitTxs][%d] arkServiceSubmitSignedForfeitTxsOK %s", 200, payload)
 }
 
 func (o *ArkServiceSubmitSignedForfeitTxsOK) GetPayload() models.V1SubmitSignedForfeitTxsResponse {
@@ -160,12 +160,12 @@ func (o *ArkServiceSubmitSignedForfeitTxsDefault) Code() int {
 
 func (o *ArkServiceSubmitSignedForfeitTxsDefault) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/submitForfeitTxs][%d] ArkService_SubmitSignedForfeitTxs default %s", o._statusCode, payload)
+	return fmt.Sprintf("[POST /v1/batch/submitForfeitTxs][%d] ArkService_SubmitSignedForfeitTxs default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceSubmitSignedForfeitTxsDefault) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/submitForfeitTxs][%d] ArkService_SubmitSignedForfeitTxs default %s", o._statusCode, payload)
+	return fmt.Sprintf("[POST /v1/batch/submitForfeitTxs][%d] ArkService_SubmitSignedForfeitTxs default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceSubmitSignedForfeitTxsDefault) GetPayload() *models.RPCStatus {

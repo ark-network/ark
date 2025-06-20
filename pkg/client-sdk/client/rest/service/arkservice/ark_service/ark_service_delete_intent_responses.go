@@ -88,12 +88,12 @@ func (o *ArkServiceDeleteIntentOK) Code() int {
 
 func (o *ArkServiceDeleteIntentOK) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/deleteIntent][%d] arkServiceDeleteIntentOK %s", 200, payload)
+	return fmt.Sprintf("[POST /v1/batch/deleteIntent][%d] arkServiceDeleteIntentOK %s", 200, payload)
 }
 
 func (o *ArkServiceDeleteIntentOK) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/deleteIntent][%d] arkServiceDeleteIntentOK %s", 200, payload)
+	return fmt.Sprintf("[POST /v1/batch/deleteIntent][%d] arkServiceDeleteIntentOK %s", 200, payload)
 }
 
 func (o *ArkServiceDeleteIntentOK) GetPayload() models.V1DeleteIntentResponse {
@@ -160,12 +160,12 @@ func (o *ArkServiceDeleteIntentDefault) Code() int {
 
 func (o *ArkServiceDeleteIntentDefault) Error() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/deleteIntent][%d] ArkService_DeleteIntent default %s", o._statusCode, payload)
+	return fmt.Sprintf("[POST /v1/batch/deleteIntent][%d] ArkService_DeleteIntent default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceDeleteIntentDefault) String() string {
 	payload, _ := json.Marshal(o.Payload)
-	return fmt.Sprintf("[POST /v1/round/deleteIntent][%d] ArkService_DeleteIntent default %s", o._statusCode, payload)
+	return fmt.Sprintf("[POST /v1/batch/deleteIntent][%d] ArkService_DeleteIntent default %s", o._statusCode, payload)
 }
 
 func (o *ArkServiceDeleteIntentDefault) GetPayload() *models.RPCStatus {

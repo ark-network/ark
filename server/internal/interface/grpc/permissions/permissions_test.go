@@ -45,11 +45,11 @@ func TestWhitelistedMethods(t *testing.T) {
 		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.WalletInitializerService_ServiceDesc.ServiceName, m.StreamName))
 	}
 
-	for _, m := range arkv1.ExplorerService_ServiceDesc.Methods {
-		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.ExplorerService_ServiceDesc.ServiceName, m.MethodName))
+	for _, m := range arkv1.IndexerService_ServiceDesc.Methods {
+		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.IndexerService_ServiceDesc.ServiceName, m.MethodName))
 	}
-	for _, m := range arkv1.ExplorerService_ServiceDesc.Streams {
-		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.ExplorerService_ServiceDesc.ServiceName, m.StreamName))
+	for _, m := range arkv1.IndexerService_ServiceDesc.Streams {
+		allMethods = append(allMethods, fmt.Sprintf("/%s/%s", arkv1.IndexerService_ServiceDesc.ServiceName, m.StreamName))
 	}
 
 	allMethods = append(allMethods, fmt.Sprintf("/%s/%s", grpchealth.Health_ServiceDesc.ServiceName, "Check"))

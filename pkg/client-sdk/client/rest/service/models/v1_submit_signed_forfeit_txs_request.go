@@ -17,11 +17,11 @@ import (
 // swagger:model v1SubmitSignedForfeitTxsRequest
 type V1SubmitSignedForfeitTxsRequest struct {
 
+	// The user has to sign also the commitment tx if he registered a boarding UTXO.
+	SignedCommitmentTx string `json:"signedCommitmentTx,omitempty"`
+
 	// Forfeit txs signed by the user.
 	SignedForfeitTxs []string `json:"signedForfeitTxs"`
-
-	// The user has to sign also the round tx if he registerd a boarding UTXO.
-	SignedRoundTx string `json:"signedRoundTx,omitempty"`
 }
 
 // Validate validates this v1 submit signed forfeit txs request

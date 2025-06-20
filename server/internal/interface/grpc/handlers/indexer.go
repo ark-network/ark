@@ -217,21 +217,38 @@ func (e *indexerService) GetConnectors(ctx context.Context, request *arkv1.GetCo
 }
 
 func (e *indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosRequest) (*arkv1.GetVtxosResponse, error) {
-	pubkeys, err := parseArkAddresses(request.GetAddresses())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
 	page, err := parsePage(request.GetPage())
 	if err != nil {
 		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 	if request.GetSpendableOnly() && request.GetSpentOnly() {
-		return nil, status.Error(codes.InvalidArgument, "spendable and spent only can't be true at the same time")
+		return nil, status.Error(codes.InvalidArgument, "spendable and spent filters are mutually exclusive")
+	}
+	pubkeys, err := parseArkAddresses(request.GetAddresses())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	outpoints, err := parseOutpoints(request.GetOutpoints())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
 	}
 
-	resp, err := e.indexerSvc.GetVtxos(
-		ctx, pubkeys, request.GetSpendableOnly(), request.GetSpentOnly(), page,
-	)
+	if len(outpoints) == 0 && len(pubkeys) == 0 {
+		return nil, status.Error(codes.InvalidArgument, "missing outpoints or addresses filter")
+	}
+	if len(outpoints) > 0 && len(pubkeys) > 0 {
+		return nil, status.Error(codes.InvalidArgument, "outpoints and addresses filters are mutually exclusive")
+	}
+
+	var resp *application.GetVtxosResp
+	if len(pubkeys) > 0 {
+		resp, err = e.indexerSvc.GetVtxos(
+			ctx, pubkeys, request.GetSpendableOnly(), request.GetSpentOnly(), page,
+		)
+	}
+	if len(outpoints) > 0 {
+		resp, err = e.indexerSvc.GetVtxosByOutpoint(ctx, outpoints, page)
+	}
 	if err != nil {
 		return nil, status.Errorf(codes.Internal, "failed to get vtxos: %v", err)
 	}
@@ -242,34 +259,6 @@ func (e *indexerService) GetVtxos(ctx context.Context, request *arkv1.GetVtxosRe
 	}
 
 	return &arkv1.GetVtxosResponse{
-		Vtxos: vtxos,
-		Page:  protoPage(resp.Page),
-	}, nil
-}
-
-func (e *indexerService) GetVtxosByOutpoint(
-	ctx context.Context, request *arkv1.GetVtxosByOutpointRequest,
-) (*arkv1.GetVtxosByOutpointResponse, error) {
-	outpoints, err := parseOutpoints(request.GetOutpoints())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-	page, err := parsePage(request.GetPage())
-	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, err.Error())
-	}
-
-	resp, err := e.indexerSvc.GetVtxosByOutpoint(ctx, outpoints, page)
-	if err != nil {
-		return nil, status.Errorf(codes.Internal, "failed to get vtxos by outpoints: %v", err)
-	}
-
-	vtxos := make([]*arkv1.IndexerVtxo, len(resp.Vtxos))
-	for i, vtxo := range resp.Vtxos {
-		vtxos[i] = newIndexerVtxo(vtxo)
-	}
-
-	return &arkv1.GetVtxosByOutpointResponse{
 		Vtxos: vtxos,
 		Page:  protoPage(resp.Page),
 	}, nil
@@ -512,10 +501,10 @@ func (h *indexerService) listenToTxEvents() {
 		allSpendableVtxos := make(map[string][]*arkv1.IndexerVtxo)
 		allSpentVtxos := make(map[string][]*arkv1.IndexerVtxo)
 
-		for _, vtxo := range event.GetSpendableVtxos() {
+		for _, vtxo := range event.SpendableVtxos {
 			allSpendableVtxos[vtxo.PubKey] = append(allSpendableVtxos[vtxo.PubKey], newIndexerVtxo(vtxo))
 		}
-		for _, vtxo := range event.GetSpentVtxos() {
+		for _, vtxo := range event.SpentVtxos {
 			allSpentVtxos[vtxo.PubKey] = append(allSpentVtxos[vtxo.PubKey], newIndexerVtxo(vtxo))
 		}
 
@@ -537,7 +526,7 @@ func (h *indexerService) listenToTxEvents() {
 			if len(spendableVtxos) > 0 || len(spentVtxos) > 0 {
 				go func() {
 					l.ch <- &arkv1.GetSubscriptionResponse{
-						Txid:       event.GetTxId(),
+						Txid:       event.Txid,
 						Scripts:    involvedScripts,
 						NewVtxos:   spendableVtxos,
 						SpentVtxos: spentVtxos,
@@ -563,9 +552,6 @@ func parseTxid(txid string) (string, error) {
 }
 
 func parseOutpoints(outpoints []string) ([]application.Outpoint, error) {
-	if len(outpoints) == 0 {
-		return nil, fmt.Errorf("missing outpoints")
-	}
 	outs := make([]application.Outpoint, 0, len(outpoints))
 	for _, outpoint := range outpoints {
 		parts := strings.Split(outpoint, ":")
@@ -650,9 +636,6 @@ func protoPage(page application.PageResp) *arkv1.IndexerPageResponse {
 }
 
 func parseArkAddresses(addresses []string) ([]string, error) {
-	if len(addresses) == 0 {
-		return nil, fmt.Errorf("missing addresses")
-	}
 	pubkeys := make([]string, 0, len(addresses))
 	for _, address := range addresses {
 		pubkey, err := parseArkAddress(address)
@@ -704,8 +687,9 @@ func newIndexerVtxo(vtxo domain.Vtxo) *arkv1.IndexerVtxo {
 		ExpiresAt:      vtxo.ExpireAt,
 		Amount:         vtxo.Amount,
 		Script:         vtxo.PubKey,
-		IsLeaf:         vtxo.RedeemTx == "",
+		IsPreconfirmed: vtxo.RedeemTx != "",
 		IsSwept:        vtxo.Swept,
+		IsRedeemed:     vtxo.Redeemed,
 		IsSpent:        vtxo.Spent,
 		SpentBy:        vtxo.SpentBy,
 		CommitmentTxid: vtxo.CommitmentTxid,

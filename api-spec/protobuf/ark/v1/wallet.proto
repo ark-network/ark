@@ -52,6 +52,12 @@ service WalletService {
       get: "/v1/admin/wallet/balance"
     };
   }
+  rpc Withdraw(WithdrawRequest) returns (WithdrawResponse) {
+    option (google.api.http) = {
+      post: "/v1/admin/wallet/withdraw"
+      body: "*"
+    };
+  }
 }
 
 message GenSeedRequest {}
@@ -102,4 +108,13 @@ message Balance {
 message GetBalanceResponse {
   Balance main_account = 1;
   Balance connectors_account = 2;
+}
+
+message WithdrawRequest {
+  string address = 1;
+  uint64 amount = 2;
+}
+
+message WithdrawResponse {
+  string txid = 1;
 }

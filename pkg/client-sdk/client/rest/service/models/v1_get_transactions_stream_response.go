@@ -18,22 +18,22 @@ import (
 // swagger:model v1GetTransactionsStreamResponse
 type V1GetTransactionsStreamResponse struct {
 
-	// redeem
-	Redeem *V1RedeemTransaction `json:"redeem,omitempty"`
+	// ark tx
+	ArkTx *V1TxNotification `json:"arkTx,omitempty"`
 
-	// round
-	Round *V1RoundTransaction `json:"round,omitempty"`
+	// commitment tx
+	CommitmentTx *V1TxNotification `json:"commitmentTx,omitempty"`
 }
 
 // Validate validates this v1 get transactions stream response
 func (m *V1GetTransactionsStreamResponse) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateRedeem(formats); err != nil {
+	if err := m.validateArkTx(formats); err != nil {
 		res = append(res, err)
 	}
 
-	if err := m.validateRound(formats); err != nil {
+	if err := m.validateCommitmentTx(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -43,17 +43,17 @@ func (m *V1GetTransactionsStreamResponse) Validate(formats strfmt.Registry) erro
 	return nil
 }
 
-func (m *V1GetTransactionsStreamResponse) validateRedeem(formats strfmt.Registry) error {
-	if swag.IsZero(m.Redeem) { // not required
+func (m *V1GetTransactionsStreamResponse) validateArkTx(formats strfmt.Registry) error {
+	if swag.IsZero(m.ArkTx) { // not required
 		return nil
 	}
 
-	if m.Redeem != nil {
-		if err := m.Redeem.Validate(formats); err != nil {
+	if m.ArkTx != nil {
+		if err := m.ArkTx.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("redeem")
+				return ve.ValidateName("arkTx")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("redeem")
+				return ce.ValidateName("arkTx")
 			}
 			return err
 		}
@@ -62,17 +62,17 @@ func (m *V1GetTransactionsStreamResponse) validateRedeem(formats strfmt.Registry
 	return nil
 }
 
-func (m *V1GetTransactionsStreamResponse) validateRound(formats strfmt.Registry) error {
-	if swag.IsZero(m.Round) { // not required
+func (m *V1GetTransactionsStreamResponse) validateCommitmentTx(formats strfmt.Registry) error {
+	if swag.IsZero(m.CommitmentTx) { // not required
 		return nil
 	}
 
-	if m.Round != nil {
-		if err := m.Round.Validate(formats); err != nil {
+	if m.CommitmentTx != nil {
+		if err := m.CommitmentTx.Validate(formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("round")
+				return ve.ValidateName("commitmentTx")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("round")
+				return ce.ValidateName("commitmentTx")
 			}
 			return err
 		}
@@ -85,11 +85,11 @@ func (m *V1GetTransactionsStreamResponse) validateRound(formats strfmt.Registry)
 func (m *V1GetTransactionsStreamResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateRedeem(ctx, formats); err != nil {
+	if err := m.contextValidateArkTx(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
-	if err := m.contextValidateRound(ctx, formats); err != nil {
+	if err := m.contextValidateCommitmentTx(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -99,19 +99,19 @@ func (m *V1GetTransactionsStreamResponse) ContextValidate(ctx context.Context, f
 	return nil
 }
 
-func (m *V1GetTransactionsStreamResponse) contextValidateRedeem(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1GetTransactionsStreamResponse) contextValidateArkTx(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.Redeem != nil {
+	if m.ArkTx != nil {
 
-		if swag.IsZero(m.Redeem) { // not required
+		if swag.IsZero(m.ArkTx) { // not required
 			return nil
 		}
 
-		if err := m.Redeem.ContextValidate(ctx, formats); err != nil {
+		if err := m.ArkTx.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("redeem")
+				return ve.ValidateName("arkTx")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("redeem")
+				return ce.ValidateName("arkTx")
 			}
 			return err
 		}
@@ -120,19 +120,19 @@ func (m *V1GetTransactionsStreamResponse) contextValidateRedeem(ctx context.Cont
 	return nil
 }
 
-func (m *V1GetTransactionsStreamResponse) contextValidateRound(ctx context.Context, formats strfmt.Registry) error {
+func (m *V1GetTransactionsStreamResponse) contextValidateCommitmentTx(ctx context.Context, formats strfmt.Registry) error {
 
-	if m.Round != nil {
+	if m.CommitmentTx != nil {
 
-		if swag.IsZero(m.Round) { // not required
+		if swag.IsZero(m.CommitmentTx) { // not required
 			return nil
 		}
 
-		if err := m.Round.ContextValidate(ctx, formats); err != nil {
+		if err := m.CommitmentTx.ContextValidate(ctx, formats); err != nil {
 			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("round")
+				return ve.ValidateName("commitmentTx")
 			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("round")
+				return ce.ValidateName("commitmentTx")
 			}
 			return err
 		}

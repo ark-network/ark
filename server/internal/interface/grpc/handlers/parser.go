@@ -6,10 +6,8 @@ import (
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
 	"github.com/ark-network/ark/common"
-	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/application"
 	"github.com/ark-network/ark/server/internal/core/domain"
-	"github.com/ark-network/ark/server/internal/core/ports"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil"
 )
@@ -34,67 +32,6 @@ func parseArkAddress(addr string) (string, error) {
 	return hex.EncodeToString(schnorr.SerializePubKey(a.VtxoTapKey)), nil
 }
 
-func parseInputs(ins []*arkv1.Input) ([]ports.Input, error) {
-	if len(ins) <= 0 {
-		return nil, fmt.Errorf("missing inputs")
-	}
-
-	inputs := make([]ports.Input, 0, len(ins))
-	for _, input := range ins {
-		if input.GetOutpoint() == nil {
-			return nil, fmt.Errorf("missing input outpoint")
-		}
-		if input.GetTaprootTree() == nil {
-			return nil, fmt.Errorf("missing input taproot tree")
-		}
-		inputs = append(inputs, ports.Input{
-			VtxoKey: domain.VtxoKey{
-				Txid: input.GetOutpoint().GetTxid(),
-				VOut: input.GetOutpoint().GetVout(),
-			},
-			Tapscripts: input.GetTaprootTree().GetScripts(),
-		})
-	}
-
-	return inputs, nil
-}
-
-func parseReceiver(out *arkv1.Output) (domain.Receiver, error) {
-	decodedAddr, err := common.DecodeAddress(out.GetAddress())
-	if err != nil {
-		// onchain address
-		return domain.Receiver{
-			Amount:         out.GetAmount(),
-			OnchainAddress: out.GetAddress(),
-		}, nil
-	}
-
-	return domain.Receiver{
-		Amount: out.GetAmount(),
-		PubKey: hex.EncodeToString(schnorr.SerializePubKey(decodedAddr.VtxoTapKey)),
-	}, nil
-}
-
-func parseReceivers(outs []*arkv1.Output) ([]domain.Receiver, error) {
-	receivers := make([]domain.Receiver, 0, len(outs))
-	for _, out := range outs {
-		if out.GetAmount() == 0 {
-			return nil, fmt.Errorf("missing output amount")
-		}
-		if len(out.GetAddress()) <= 0 {
-			return nil, fmt.Errorf("missing output destination")
-		}
-
-		rcv, err := parseReceiver(out)
-		if err != nil {
-			return nil, err
-		}
-
-		receivers = append(receivers, rcv)
-	}
-	return receivers, nil
-}
-
 // From app type to interface type
 
 type vtxoList []domain.Vtxo
@@ -107,16 +44,16 @@ func (v vtxoList) toProto() []*arkv1.Vtxo {
 				Txid: vv.Txid,
 				Vout: vv.VOut,
 			},
-			Amount:    vv.Amount,
-			RoundTxid: vv.CommitmentTxid,
-			Spent:     vv.Spent,
-			ExpireAt:  vv.ExpireAt,
-			SpentBy:   vv.SpentBy,
-			Swept:     vv.Swept,
-			RedeemTx:  vv.RedeemTx,
-			IsPending: len(vv.RedeemTx) > 0,
-			Pubkey:    vv.PubKey,
-			CreatedAt: vv.CreatedAt,
+			Amount:         vv.Amount,
+			CommitmentTxid: vv.CommitmentTxid,
+			Spent:          vv.Spent,
+			ExpiresAt:      vv.ExpireAt,
+			SpentBy:        vv.SpentBy,
+			Swept:          vv.Swept,
+			Preconfirmed:   len(vv.RedeemTx) > 0,
+			Redeemed:       vv.Redeemed,
+			Script:         vv.PubKey,
+			CreatedAt:      vv.CreatedAt,
 		})
 	}
 
@@ -136,77 +73,21 @@ func (c connectorsIndex) toProto() map[string]*arkv1.Outpoint {
 	return proto
 }
 
-type txGraphChunks []tree.TxGraphChunk
+type txEvent application.TransactionEvent
 
-func (t txGraphChunks) toProto() []*arkv1.TxGraphChunk {
-	chunks := make([]*arkv1.TxGraphChunk, 0, len(t))
-	for _, chunk := range t {
-		chunkProto := &arkv1.TxGraphChunk{
-			Tx:       chunk.Tx,
-			Children: chunk.Children,
-		}
-
-		chunks = append(chunks, chunkProto)
-	}
-	return chunks
-}
-
-type stage domain.Stage
-
-func (s stage) toProto() arkv1.RoundStage {
-	if s.Failed {
-		return arkv1.RoundStage_ROUND_STAGE_FAILED
-	}
-
-	switch s.Code {
-	case int(domain.RoundRegistrationStage):
-		return arkv1.RoundStage_ROUND_STAGE_REGISTRATION
-	case int(domain.RoundFinalizationStage):
-		if s.Ended {
-			return arkv1.RoundStage_ROUND_STAGE_FINALIZED
-		}
-		return arkv1.RoundStage_ROUND_STAGE_FINALIZATION
-	default:
-		return arkv1.RoundStage_ROUND_STAGE_UNSPECIFIED
+func (t txEvent) toProto() *arkv1.TxNotification {
+	return &arkv1.TxNotification{
+		Txid:           t.Txid,
+		SpentVtxos:     vtxoList(t.SpentVtxos).toProto(),
+		SpendableVtxos: vtxoList(t.SpendableVtxos).toProto(),
+		Hex:            t.TxHex,
 	}
 }
 
-type roundTxEvent application.RoundTransactionEvent
+type intentsInfo []application.TxRequestInfo
 
-func (e roundTxEvent) toProto() *arkv1.RoundTransaction {
-	return &arkv1.RoundTransaction{
-		Txid:           e.RoundTxid,
-		SpentVtxos:     vtxoList(e.SpentVtxos).toProto(),
-		SpendableVtxos: vtxoList(e.SpendableVtxos).toProto(),
-		Hex:            e.TxHex,
-	}
-}
-
-type redeemTxEvent application.RedeemTransactionEvent
-
-func (e redeemTxEvent) toProto() *arkv1.RedeemTransaction {
-	return &arkv1.RedeemTransaction{
-		Txid:           e.RedeemTxid,
-		SpentVtxos:     vtxoList(e.SpentVtxos).toProto(),
-		SpendableVtxos: vtxoList(e.SpendableVtxos).toProto(),
-		Hex:            e.TxHex,
-	}
-}
-
-type forfeitTxs []domain.ForfeitTx
-
-func (f forfeitTxs) toProto() []string {
-	list := make([]string, 0, len(f))
-	for _, forfeitTx := range f {
-		list = append(list, forfeitTx.Tx)
-	}
-	return list
-}
-
-type txReqsInfo []application.TxRequestInfo
-
-func (i txReqsInfo) toProto() []*arkv1.TxRequestInfo {
-	list := make([]*arkv1.TxRequestInfo, 0, len(i))
+func (i intentsInfo) toProto() []*arkv1.IntentInfo {
+	list := make([]*arkv1.IntentInfo, 0, len(i))
 	for _, req := range i {
 		receivers := make([]*arkv1.Output, 0, len(req.Receivers))
 		for _, receiver := range req.Receivers {
@@ -216,25 +97,25 @@ func (i txReqsInfo) toProto() []*arkv1.TxRequestInfo {
 			})
 		}
 
-		inputs := make([]*arkv1.RequestInput, 0, len(req.Inputs))
+		inputs := make([]*arkv1.IntentInput, 0, len(req.Inputs))
 		for _, input := range req.Inputs {
-			inputs = append(inputs, &arkv1.RequestInput{
+			inputs = append(inputs, &arkv1.IntentInput{
 				Txid:   input.Txid,
 				Vout:   input.VOut,
 				Amount: input.Amount,
 			})
 		}
 
-		boardingInputs := make([]*arkv1.RequestInput, 0, len(req.BoardingInputs))
+		boardingInputs := make([]*arkv1.IntentInput, 0, len(req.BoardingInputs))
 		for _, input := range req.BoardingInputs {
-			boardingInputs = append(boardingInputs, &arkv1.RequestInput{
+			boardingInputs = append(boardingInputs, &arkv1.IntentInput{
 				Txid:   input.Txid,
 				Vout:   input.VOut,
 				Amount: input.Amount,
 			})
 		}
 
-		list = append(list, &arkv1.TxRequestInfo{
+		list = append(list, &arkv1.IntentInfo{
 			Id:                  req.Id,
 			CreatedAt:           req.CreatedAt.Unix(),
 			Receivers:           receivers,

@@ -33,7 +33,7 @@ func NewTransactionStore(
 	}
 	badgerDb, err := createDB(dir, logger)
 	if err != nil {
-		return nil, fmt.Errorf("failed to open round events store: %s", err)
+		return nil, fmt.Errorf("failed to open transaction store: %s", err)
 	}
 	return &txStore{
 		db:      badgerDb,

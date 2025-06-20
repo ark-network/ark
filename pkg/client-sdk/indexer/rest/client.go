@@ -12,11 +12,13 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/pkg/client-sdk/client"
 	"github.com/ark-network/ark/pkg/client-sdk/indexer"
 	"github.com/ark-network/ark/pkg/client-sdk/indexer/rest/service/indexerservice"
 	"github.com/ark-network/ark/pkg/client-sdk/indexer/rest/service/indexerservice/indexer_service"
 	"github.com/ark-network/ark/pkg/client-sdk/indexer/rest/service/models"
+	"github.com/ark-network/ark/pkg/client-sdk/types"
 	httptransport "github.com/go-openapi/runtime/client"
 	"github.com/go-openapi/strfmt"
 	"google.golang.org/grpc/codes"
@@ -165,7 +167,7 @@ func (a *restClient) GetVtxoTree(
 			children[uint32(vout)] = v
 		}
 		nodes = append(nodes, indexer.TxNode{
-			Tx:       node.Tx,
+			Txid:     node.Txid,
 			Children: children,
 		})
 	}
@@ -174,6 +176,39 @@ func (a *restClient) GetVtxoTree(
 		Tree: nodes,
 		Page: parsePage(resp.Payload.Page),
 	}, nil
+}
+
+func (a *restClient) GetFullVtxoTree(
+	ctx context.Context, batchOutpoint indexer.Outpoint, opts ...indexer.RequestOption,
+) ([]tree.TxGraphChunk, error) {
+	resp, err := a.GetVtxoTree(ctx, batchOutpoint, opts...)
+	if err != nil {
+		return nil, err
+	}
+
+	var allTxs indexer.TxNodes = resp.Tree
+	for resp.Page != nil && resp.Page.Next != resp.Page.Total {
+		opt := indexer.RequestOption{}
+		opt.WithPage(&indexer.PageRequest{
+			Index: resp.Page.Next,
+		})
+		resp, err = a.GetVtxoTree(ctx, batchOutpoint, opts...)
+		if err != nil {
+			return nil, err
+		}
+		allTxs = append(allTxs, resp.Tree...)
+	}
+
+	txids := allTxs.Txids()
+	txResp, err := a.GetVirtualTxs(ctx, txids)
+	if err != nil {
+		return nil, err
+	}
+	txMap := make(map[string]string)
+	for i, tx := range txResp.Txs {
+		txMap[txids[i]] = tx
+	}
+	return allTxs.ToTree(txMap), nil
 }
 
 func (a *restClient) GetVtxoTreeLeaves(
@@ -257,7 +292,7 @@ func (a *restClient) GetConnectors(
 		}
 
 		connectors = append(connectors, indexer.TxNode{
-			Tx:       connector.Tx,
+			Txid:     connector.Txid,
 			Children: children,
 		})
 	}
@@ -275,47 +310,15 @@ func (a *restClient) GetVtxos(
 		return nil, fmt.Errorf("missing opts")
 	}
 	opt := opts[0]
-
-	if len(opt.GetOutpoints()) > 0 {
-		params := indexer_service.NewIndexerServiceGetVtxosByOutpointParams().
-			WithOutpoints(opt.GetOutpoints())
-		if page := opt.GetPage(); page != nil {
-			params.WithPageSize(&page.Size).WithPageIndex(&page.Index)
-		}
-		resp, err := a.svc.IndexerServiceGetVtxosByOutpoint(params)
-		if err != nil {
-			return nil, err
-		}
-
-		vtxos := make([]indexer.Vtxo, 0, len(resp.Payload.Vtxos))
-		for _, vtxo := range resp.Payload.Vtxos {
-			vtxo, err := newIndexerVtxo(vtxo)
-			if err != nil {
-				return nil, err
-			}
-			vtxos = append(vtxos, vtxo)
-		}
-		return &indexer.VtxosResponse{
-			Vtxos: vtxos,
-			Page:  parsePage(resp.Payload.Page),
-		}, nil
-	}
-
-	params := indexer_service.NewIndexerServiceGetVtxosParams().
-		WithAddresses(opt.GetAddresses())
-	if page := opt.GetPage(); page != nil {
-		params.WithPageSize(&page.Size).WithPageIndex(&page.Index)
-	}
 	spentOnly := opt.GetSpentOnly()
 	spendableOnly := opt.GetSpendableOnly()
-	if spentOnly && spentOnly == spendableOnly {
-		return nil, status.Errorf(codes.InvalidArgument, "spendableOnly and spentOnly cannot be both true")
-	}
-	if spendableOnly {
-		params.WithSpendableOnly(&spentOnly)
-	}
-	if spentOnly {
-		params.WithSpentOnly(&spentOnly)
+
+	params := indexer_service.NewIndexerServiceGetVtxosParams().
+		WithAddresses(opt.GetAddresses()).WithOutpoints(opt.GetOutpoints()).
+		WithSpentOnly(&spentOnly).WithSpendableOnly(&spendableOnly)
+
+	if page := opt.GetPage(); page != nil {
+		params.WithPageSize(&page.Size).WithPageIndex(&page.Index)
 	}
 
 	resp, err := a.svc.IndexerServiceGetVtxos(params)
@@ -323,13 +326,9 @@ func (a *restClient) GetVtxos(
 		return nil, err
 	}
 
-	vtxos := make([]indexer.Vtxo, 0, len(resp.Payload.Vtxos))
-	for _, vtxo := range resp.Payload.Vtxos {
-		vtxo, err := newIndexerVtxo(vtxo)
-		if err != nil {
-			return nil, err
-		}
-		vtxos = append(vtxos, vtxo)
+	vtxos, err := newIndexerVtxos(resp.Payload.Vtxos)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse vtxos: %s", err)
 	}
 
 	return &indexer.VtxosResponse{
@@ -398,7 +397,7 @@ func (a *restClient) GetTransactionHistory(
 
 		history = append(history, indexer.TxHistoryRecord{
 			CommitmentTxid: record.CommitmentTxid,
-			VirtualTxid:    record.VirtualTxid,
+			ArkTxid:        record.VirtualTxid,
 			Type:           txType,
 			Amount:         amount,
 			CreatedAt:      createdAt,
@@ -493,33 +492,6 @@ func (a *restClient) GetSweptCommitmentTx(ctx context.Context, txid string) ([]s
 	}
 
 	return resp.Payload.SweptBy, nil
-}
-
-func newRestClient(
-	serviceURL string,
-) (indexer_service.ClientService, error) {
-	parsedURL, err := url.Parse(serviceURL)
-	if err != nil {
-		return nil, err
-	}
-
-	schemes := []string{parsedURL.Scheme}
-	host := parsedURL.Host
-	basePath := parsedURL.Path
-
-	if basePath == "" {
-		basePath = indexerservice.DefaultBasePath
-	}
-
-	cfg := &indexerservice.TransportConfig{
-		Host:     host,
-		BasePath: basePath,
-		Schemes:  schemes,
-	}
-
-	transport := httptransport.New(cfg.Host, cfg.BasePath, cfg.Schemes)
-	svc := indexerservice.New(transport, strfmt.Default)
-	return svc.IndexerService, nil
 }
 
 func (a *restClient) GetSubscription(ctx context.Context, subscriptionId string) (<-chan *indexer.ScriptEvent, func(), error) {
@@ -628,6 +600,35 @@ func (a *restClient) UnsubscribeForScripts(ctx context.Context, subscriptionId s
 	return nil
 }
 
+func (a *restClient) Close() {}
+
+func newRestClient(
+	serviceURL string,
+) (indexer_service.ClientService, error) {
+	parsedURL, err := url.Parse(serviceURL)
+	if err != nil {
+		return nil, err
+	}
+
+	schemes := []string{parsedURL.Scheme}
+	host := parsedURL.Host
+	basePath := parsedURL.Path
+
+	if basePath == "" {
+		basePath = indexerservice.DefaultBasePath
+	}
+
+	cfg := &indexerservice.TransportConfig{
+		Host:     host,
+		BasePath: basePath,
+		Schemes:  schemes,
+	}
+
+	transport := httptransport.New(cfg.Host, cfg.BasePath, cfg.Schemes)
+	svc := indexerservice.New(transport, strfmt.Default)
+	return svc.IndexerService, nil
+}
+
 func parsePage(page *models.V1IndexerPageResponse) *indexer.PageResponse {
 	if page == nil {
 		return nil
@@ -679,46 +680,47 @@ func listenToStream(url string, chunkCh chan chunk) {
 	}
 }
 
-func newIndexerVtxos(restVtxos []*models.V1IndexerVtxo) ([]indexer.Vtxo, error) {
-	vtxos := make([]indexer.Vtxo, 0, len(restVtxos))
+func newIndexerVtxos(restVtxos []*models.V1IndexerVtxo) ([]types.Vtxo, error) {
+	vtxos := make([]types.Vtxo, 0, len(restVtxos))
 	for _, vtxo := range restVtxos {
 		vtxo, err := newIndexerVtxo(vtxo)
 		if err != nil {
 			return nil, err
 		}
-		vtxos = append(vtxos, vtxo)
+		vtxos = append(vtxos, *vtxo)
 	}
 	return vtxos, nil
 }
 
-func newIndexerVtxo(vtxo *models.V1IndexerVtxo) (indexer.Vtxo, error) {
+func newIndexerVtxo(vtxo *models.V1IndexerVtxo) (*types.Vtxo, error) {
 	createdAt, err := strconv.ParseInt(vtxo.CreatedAt, 10, 64)
 	if err != nil {
-		return indexer.Vtxo{}, err
+		return nil, err
 	}
 
 	expiresAt, err := strconv.ParseInt(vtxo.ExpiresAt, 10, 64)
 	if err != nil {
-		return indexer.Vtxo{}, err
+		return nil, err
 	}
 
 	amount, err := strconv.ParseUint(vtxo.Amount, 10, 64)
 	if err != nil {
-		return indexer.Vtxo{}, err
+		return nil, err
 	}
-	return indexer.Vtxo{
-		Outpoint: indexer.Outpoint{
+	return &types.Vtxo{
+		VtxoKey: types.VtxoKey{
 			Txid: vtxo.Outpoint.Txid,
 			VOut: uint32(vtxo.Outpoint.Vout),
 		},
-		CreatedAt:      createdAt,
-		ExpiresAt:      expiresAt,
-		Amount:         amount,
 		Script:         vtxo.Script,
-		IsLeaf:         vtxo.IsLeaf,
-		IsSwept:        vtxo.IsSwept,
-		IsSpent:        vtxo.IsSpent,
-		SpentBy:        vtxo.SpentBy,
 		CommitmentTxid: vtxo.CommitmentTxid,
+		Amount:         amount,
+		CreatedAt:      time.Unix(createdAt, 0),
+		ExpiresAt:      time.Unix(expiresAt, 0),
+		Preconfirmed:   vtxo.IsPreconfirmed,
+		Swept:          vtxo.IsSwept,
+		Redeemed:       vtxo.IsRedeemed,
+		Spent:          vtxo.IsSpent,
+		SpentBy:        vtxo.SpentBy,
 	}, nil
 }
