@@ -228,7 +228,7 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.BatchEve
 	ctx, cancel := context.WithCancel(ctx)
 	eventsCh := make(chan client.BatchEventChannel)
 	chunkCh := make(chan chunk)
-	url := fmt.Sprintf("%s/v1/events", c.serverURL)
+	url := fmt.Sprintf("%s/v1/batch/events", c.serverURL)
 
 	go listenToStream(url, chunkCh)
 
@@ -399,7 +399,7 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 	ctx, cancel := context.WithCancel(ctx)
 	eventsCh := make(chan client.TransactionEvent)
 	chunkCh := make(chan chunk)
-	url := fmt.Sprintf("%s/v1/transactions", c.serverURL)
+	url := fmt.Sprintf("%s/v1/txs", c.serverURL)
 
 	go listenToStream(url, chunkCh)
 
