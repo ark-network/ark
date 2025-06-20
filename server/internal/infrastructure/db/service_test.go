@@ -97,9 +97,8 @@ var (
 			},
 		},
 		{
-			Txid:     randomString(32),
-			Tx:       randomTx(),
-			Children: map[uint32]string{},
+			Txid: randomString(32),
+			Tx:   randomTx(),
 		},
 	}
 
