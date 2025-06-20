@@ -198,12 +198,18 @@ func (g *TxGraph) Leaves() []*psbt.Packet {
 
 // Find returns the tx graph where root is equal to the given txid
 func (g *TxGraph) Find(txid string) *TxGraph {
-	_, found, err := g.crawl(txid, make([]*psbt.Packet, 0))
-	if err != nil {
-		return nil
+	if g.Root.UnsignedTx.TxID() == txid {
+		return g
 	}
 
-	return found
+	for _, child := range g.Children {
+		found := child.Find(txid)
+		if found != nil {
+			return found
+		}
+	}
+
+	return nil
 }
 
 // Apply executes the given function to all txs in the graph
@@ -239,25 +245,6 @@ func (g *TxGraph) SubGraph(txids []string) (*TxGraph, error) {
 	}
 
 	return g.buildSubGraph(txidSet)
-}
-
-// crawl recursively crawls the graph to find the subgraph starting from root to the given txids
-// it returns the list of txs from the root to the txid and the tx graph where the txid is found
-func (g *TxGraph) crawl(txid string, branch []*psbt.Packet) ([]*psbt.Packet, *TxGraph, error) {
-	branch = append(branch, g.Root)
-
-	if g.Root.UnsignedTx.TxID() == txid {
-		return branch, g, nil
-	}
-
-	for _, child := range g.Children {
-		branch, found, _ := child.crawl(txid, branch)
-		if found != nil {
-			return branch, found, nil
-		}
-	}
-
-	return nil, nil, fmt.Errorf("tx %s not found", txid)
 }
 
 // buildSubGraph recursively builds a subgraph that includes all paths from root to the given txids
