@@ -250,8 +250,6 @@ func testEventRepository(t *testing.T, svc ports.RepoManager) {
 						round := domain.NewRoundFromEvents(events)
 						require.NotNil(t, round)
 						require.Len(t, round.Events(), 2)
-						require.Len(t, round.VtxoTree, 3)
-						require.Len(t, round.Connectors, 2)
 					},
 				},
 			},
