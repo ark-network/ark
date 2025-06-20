@@ -428,6 +428,7 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.RoundEve
 						Topic:      e.Topic,
 						BatchIndex: e.BatchIndex,
 						TxGraphChunk: tree.TxGraphChunk{
+							Txid:     e.Txid,
 							Tx:       e.Tx,
 							Children: children,
 						},

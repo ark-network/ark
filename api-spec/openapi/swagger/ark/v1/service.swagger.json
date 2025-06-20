@@ -516,6 +516,9 @@
           "type": "integer",
           "format": "int32"
         },
+        "txid": {
+          "type": "string"
+        },
         "tx": {
           "type": "string"
         },

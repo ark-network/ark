@@ -103,6 +103,7 @@ func (e event) toRoundEvent() (client.RoundEvent, error) {
 			Topic:      ee.GetTopic(),
 			BatchIndex: ee.GetBatchIndex(),
 			TxGraphChunk: tree.TxGraphChunk{
+				Txid:     ee.GetTxid(),
 				Tx:       ee.GetTx(),
 				Children: ee.GetChildren(),
 			},
