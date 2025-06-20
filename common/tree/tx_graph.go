@@ -1,8 +1,6 @@
 package tree
 
 import (
-	"bytes"
-	"encoding/base64"
 	"fmt"
 	"strings"
 
@@ -99,19 +97,20 @@ func (g *TxGraph) Serialize() ([]TxGraphChunk, error) {
 		chunks = append(chunks, childChunks...)
 	}
 
-	// serialize the current node's root
-	var serializedTx bytes.Buffer
-	if err := g.Root.Serialize(&serializedTx); err != nil {
+	serializedTx, err := g.Root.B64Encode()
+	if err != nil {
 		return nil, err
 	}
+
 	// create a map of child txids
 	childTxids := make(map[uint32]string)
 	for outputIndex, child := range g.Children {
 		childTxids[outputIndex] = child.Root.UnsignedTx.TxID()
 	}
+
 	chunks = append(chunks, TxGraphChunk{
 		Txid:     g.Root.UnsignedTx.TxID(),
-		Tx:       base64.StdEncoding.EncodeToString(serializedTx.Bytes()),
+		Tx:       serializedTx,
 		Children: childTxids,
 	})
 	return chunks, nil
