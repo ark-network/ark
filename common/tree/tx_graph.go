@@ -151,6 +151,14 @@ func (g *TxGraph) Validate() error {
 		return fmt.Errorf("unexpected number of inputs: %d, expected 1", nbOfInputs)
 	}
 
+	// the children map can't be bigger than the number of outputs (excluding the P2A)
+	// a graph can be "partial" and specify only some of the outputs as children,
+	// that's why we allow len(g.Children) to be less than nbOfOutputs-1
+	if len(g.Children) > int(nbOfOutputs-1) {
+		return fmt.Errorf("unexpected number of children: %d, expected maximum %d", len(g.Children), nbOfOutputs-1)
+	}
+
+	// nbOfOutputs <= len(g.Children)
 	for outputIndex, child := range g.Children {
 		if outputIndex >= nbOfOutputs {
 			return fmt.Errorf("output index %d is out of bounds (nb of outputs: %d)", outputIndex, nbOfOutputs)
