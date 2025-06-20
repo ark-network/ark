@@ -203,9 +203,8 @@ func (g *TxGraph) Find(txid string) *TxGraph {
 	}
 
 	for _, child := range g.Children {
-		found := child.Find(txid)
-		if found != nil {
-			return found
+		if f := child.Find(txid); f != nil {
+			return f
 		}
 	}
 
