@@ -35,32 +35,6 @@ const (
 	virtualTxid = txida
 )
 
-func randomTx() string {
-	hash, _ := chainhash.NewHashFromStr(randomString(32))
-
-	ptx, _ := psbt.New(
-		[]*wire.OutPoint{
-			{
-				Hash:  *hash,
-				Index: 0,
-			},
-		},
-		[]*wire.TxOut{
-			{
-				Value: 1000000,
-			},
-		},
-		3,
-		0,
-		[]uint32{
-			wire.MaxTxInSequenceNum,
-		},
-	)
-
-	b64, _ := ptx.B64Encode()
-	return b64
-}
-
 var (
 	vtxoTree = []tree.TxGraphChunk{
 		{
@@ -902,6 +876,32 @@ func randomString(len int) string {
 	// nolint
 	rand.Read(buf)
 	return hex.EncodeToString(buf)
+}
+
+func randomTx() string {
+	hash, _ := chainhash.NewHashFromStr(randomString(32))
+
+	ptx, _ := psbt.New(
+		[]*wire.OutPoint{
+			{
+				Hash:  *hash,
+				Index: 0,
+			},
+		},
+		[]*wire.TxOut{
+			{
+				Value: 1000000,
+			},
+		},
+		3,
+		0,
+		[]uint32{
+			wire.MaxTxInSequenceNum,
+		},
+	)
+
+	b64, _ := ptx.B64Encode()
+	return b64
 }
 
 type sortVtxos []domain.Vtxo
