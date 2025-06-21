@@ -6,6 +6,8 @@ package queries
 
 import (
 	"database/sql"
+
+	"github.com/sqlc-dev/pqtype"
 )
 
 type CheckpointTx struct {
@@ -83,9 +85,7 @@ type RoundCommitmentTxVw struct {
 	RoundID            string
 	Type               string
 	Position           int32
-	TreeLevel          sql.NullInt32
-	ParentTxid         sql.NullString
-	IsLeaf             sql.NullBool
+	Children           pqtype.NullRawMessage
 }
 
 type RoundRequestVw struct {
@@ -94,25 +94,21 @@ type RoundRequestVw struct {
 }
 
 type RoundTxVw struct {
-	Txid       sql.NullString
-	Tx         sql.NullString
-	RoundID    sql.NullString
-	Type       sql.NullString
-	Position   sql.NullInt32
-	TreeLevel  sql.NullInt32
-	ParentTxid sql.NullString
-	IsLeaf     sql.NullBool
+	Txid     sql.NullString
+	Tx       sql.NullString
+	RoundID  sql.NullString
+	Type     sql.NullString
+	Position sql.NullInt32
+	Children pqtype.NullRawMessage
 }
 
 type Tx struct {
-	Txid       string
-	Tx         string
-	RoundID    string
-	Type       string
-	Position   int32
-	TreeLevel  sql.NullInt32
-	ParentTxid sql.NullString
-	IsLeaf     sql.NullBool
+	Txid     string
+	Tx       string
+	RoundID  string
+	Type     string
+	Position int32
+	Children pqtype.NullRawMessage
 }
 
 type TxRequest struct {

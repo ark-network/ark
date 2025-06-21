@@ -1,9 +1,8 @@
 package grpcclient
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -120,18 +119,15 @@ func (a *grpcClient) ConfirmRegistration(ctx context.Context, intentID string) e
 func (a *grpcClient) SubmitTreeNonces(
 	ctx context.Context, batchId, cosignerPubkey string, nonces tree.TreeNonces,
 ) error {
-	var nonceBuffer bytes.Buffer
-
-	if err := nonces.Encode(&nonceBuffer); err != nil {
+	sigsJSON, err := json.Marshal(nonces)
+	if err != nil {
 		return err
 	}
-
-	serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
 
 	req := &arkv1.SubmitTreeNoncesRequest{
 		BatchId:    batchId,
 		Pubkey:     cosignerPubkey,
-		TreeNonces: serializedNonces,
+		TreeNonces: string(sigsJSON),
 	}
 
 	if _, err := a.svc.SubmitTreeNonces(ctx, req); err != nil {
@@ -144,18 +140,15 @@ func (a *grpcClient) SubmitTreeNonces(
 func (a *grpcClient) SubmitTreeSignatures(
 	ctx context.Context, batchId, cosignerPubkey string, signatures tree.TreePartialSigs,
 ) error {
-	var sigsBuffer bytes.Buffer
-
-	if err := signatures.Encode(&sigsBuffer); err != nil {
+	sigsJSON, err := json.Marshal(signatures)
+	if err != nil {
 		return err
 	}
-
-	serializedSigs := hex.EncodeToString(sigsBuffer.Bytes())
 
 	req := &arkv1.SubmitTreeSignaturesRequest{
 		BatchId:        batchId,
 		Pubkey:         cosignerPubkey,
-		TreeSignatures: serializedSigs,
+		TreeSignatures: string(sigsJSON),
 	}
 
 	if _, err := a.svc.SubmitTreeSignatures(ctx, req); err != nil {

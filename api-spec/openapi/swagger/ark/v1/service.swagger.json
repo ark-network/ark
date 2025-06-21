@@ -630,31 +630,6 @@
         }
       }
     },
-    "v1Node": {
-      "type": "object",
-      "properties": {
-        "txid": {
-          "type": "string"
-        },
-        "tx": {
-          "type": "string"
-        },
-        "parentTxid": {
-          "type": "string"
-        },
-        "level": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "levelIndex": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "leaf": {
-          "type": "boolean"
-        }
-      }
-    },
     "v1Outpoint": {
       "type": "object",
       "properties": {
@@ -795,13 +770,8 @@
           "type": "integer",
           "format": "int32"
         },
-        "level": {
-          "type": "integer",
-          "format": "int32"
-        },
-        "levelIndex": {
-          "type": "integer",
-          "format": "int32"
+        "txid": {
+          "type": "string"
         },
         "signature": {
           "type": "string"
@@ -841,8 +811,18 @@
           "type": "integer",
           "format": "int32"
         },
-        "treeTx": {
-          "$ref": "#/definitions/v1Node"
+        "txid": {
+          "type": "string"
+        },
+        "tx": {
+          "type": "string"
+        },
+        "children": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "title": "output index -\u003e child txid"
         }
       }
     },

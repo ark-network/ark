@@ -86,7 +86,7 @@ type ClientService interface {
 }
 
 /*
-IndexerServiceGetCommitmentTx indexer service get commitment tx API
+IndexerServiceGetCommitmentTx gets commitment tx returns information about a specific commitment transaction identified by the provided txid
 */
 func (a *Client) IndexerServiceGetCommitmentTx(params *IndexerServiceGetCommitmentTxParams, opts ...ClientOption) (*IndexerServiceGetCommitmentTxOK, error) {
 	// TODO: Validate the params before sending
@@ -123,7 +123,7 @@ func (a *Client) IndexerServiceGetCommitmentTx(params *IndexerServiceGetCommitme
 }
 
 /*
-IndexerServiceGetCommitmentTxLeaves indexer service get commitment tx leaves API
+IndexerServiceGetCommitmentTxLeaves gets commitment tx leaves returns the list of leaves vtxo outpoints of all batch outputs trees included in the provided commitment transaction the response may include pagination information if the results span multiple pages
 */
 func (a *Client) IndexerServiceGetCommitmentTxLeaves(params *IndexerServiceGetCommitmentTxLeavesParams, opts ...ClientOption) (*IndexerServiceGetCommitmentTxLeavesOK, error) {
 	// TODO: Validate the params before sending
@@ -160,7 +160,7 @@ func (a *Client) IndexerServiceGetCommitmentTxLeaves(params *IndexerServiceGetCo
 }
 
 /*
-IndexerServiceGetConnectors indexer service get connectors API
+IndexerServiceGetConnectors gets connectors returns the tree of connectors for the provided commitment transaction the response includes a list of connector txs with details on the tree posistion and may include pagination information if the results span multiple pages
 */
 func (a *Client) IndexerServiceGetConnectors(params *IndexerServiceGetConnectorsParams, opts ...ClientOption) (*IndexerServiceGetConnectorsOK, error) {
 	// TODO: Validate the params before sending
@@ -197,7 +197,7 @@ func (a *Client) IndexerServiceGetConnectors(params *IndexerServiceGetConnectors
 }
 
 /*
-IndexerServiceGetForfeitTxs indexer service get forfeit txs API
+IndexerServiceGetForfeitTxs gets forfeit txs returns the list of forfeit transactions that were submitted for the provided commitment transaction the response may include pagination information if the results span multiple pages
 */
 func (a *Client) IndexerServiceGetForfeitTxs(params *IndexerServiceGetForfeitTxsParams, opts ...ClientOption) (*IndexerServiceGetForfeitTxsOK, error) {
 	// TODO: Validate the params before sending
@@ -234,7 +234,7 @@ func (a *Client) IndexerServiceGetForfeitTxs(params *IndexerServiceGetForfeitTxs
 }
 
 /*
-IndexerServiceGetSubscription indexer service get subscription API
+IndexerServiceGetSubscription gets subscription is a server side streaming RPC which allows clients to receive real time notifications on transactions related to the subscribed vtxo scripts the subscription can be created or updated by using the subscribe for scripts and unsubscribe for scripts r p cs
 */
 func (a *Client) IndexerServiceGetSubscription(params *IndexerServiceGetSubscriptionParams, opts ...ClientOption) (*IndexerServiceGetSubscriptionOK, error) {
 	// TODO: Validate the params before sending
@@ -271,7 +271,7 @@ func (a *Client) IndexerServiceGetSubscription(params *IndexerServiceGetSubscrip
 }
 
 /*
-IndexerServiceGetSweptCommitmentTx indexer service get swept commitment tx API
+IndexerServiceGetSweptCommitmentTx gets swept commitment tx returns the list of transaction txid that swept each batch output of the specified commitment transaction in most cases the list contains only one txid per batch that means the funds locked in the batch output have been claimed back if any of the leaves of the tree vtxo have been unrolled onchain before the expiration the list will contain many txids in a binary tree with 4 or more leaves 1 unroll causes the server to broadcast 3 txs to sweep the whole tree for example if a whole vtxo tree has been unrolled onchain the list of txids for that batch output is be empty
 */
 func (a *Client) IndexerServiceGetSweptCommitmentTx(params *IndexerServiceGetSweptCommitmentTxParams, opts ...ClientOption) (*IndexerServiceGetSweptCommitmentTxOK, error) {
 	// TODO: Validate the params before sending
@@ -308,7 +308,7 @@ func (a *Client) IndexerServiceGetSweptCommitmentTx(params *IndexerServiceGetSwe
 }
 
 /*
-IndexerServiceGetTransactionHistory indexer service get transaction history API
+IndexerServiceGetTransactionHistory gets transaction history returns the list of transactions for the provided address the tx history can be filtered by defining a start and or end time the response may be paginated if the results span multiple pages
 */
 func (a *Client) IndexerServiceGetTransactionHistory(params *IndexerServiceGetTransactionHistoryParams, opts ...ClientOption) (*IndexerServiceGetTransactionHistoryOK, error) {
 	// TODO: Validate the params before sending
@@ -345,7 +345,7 @@ func (a *Client) IndexerServiceGetTransactionHistory(params *IndexerServiceGetTr
 }
 
 /*
-IndexerServiceGetVirtualTxs indexer service get virtual txs API
+IndexerServiceGetVirtualTxs gets virtual txs returns the virtual transactions in hex format for the specified txids the response may be paginated if the results span multiple pages
 */
 func (a *Client) IndexerServiceGetVirtualTxs(params *IndexerServiceGetVirtualTxsParams, opts ...ClientOption) (*IndexerServiceGetVirtualTxsOK, error) {
 	// TODO: Validate the params before sending
@@ -382,7 +382,7 @@ func (a *Client) IndexerServiceGetVirtualTxs(params *IndexerServiceGetVirtualTxs
 }
 
 /*
-IndexerServiceGetVtxoChain indexer service get vtxo chain API
+IndexerServiceGetVtxoChain gets vtxo chain returns the the chain of ark txs that starts from spending any vtxo leaf and ends with the creation of the provided vtxo outpoint the response may be paginated if the results span multiple pages
 */
 func (a *Client) IndexerServiceGetVtxoChain(params *IndexerServiceGetVtxoChainParams, opts ...ClientOption) (*IndexerServiceGetVtxoChainOK, error) {
 	// TODO: Validate the params before sending
@@ -419,7 +419,7 @@ func (a *Client) IndexerServiceGetVtxoChain(params *IndexerServiceGetVtxoChainPa
 }
 
 /*
-IndexerServiceGetVtxoTree indexer service get vtxo tree API
+IndexerServiceGetVtxoTree gets vtxo tree returns the vtxo tree for the provided batch outpoint the response includes a list of txs with details on the tree posistion and may include pagination information if the results span multiple pages
 */
 func (a *Client) IndexerServiceGetVtxoTree(params *IndexerServiceGetVtxoTreeParams, opts ...ClientOption) (*IndexerServiceGetVtxoTreeOK, error) {
 	// TODO: Validate the params before sending
@@ -456,7 +456,7 @@ func (a *Client) IndexerServiceGetVtxoTree(params *IndexerServiceGetVtxoTreePara
 }
 
 /*
-IndexerServiceGetVtxoTreeLeaves indexer service get vtxo tree leaves API
+IndexerServiceGetVtxoTreeLeaves gets vtxo tree leaves returns the list of leaves vtxo outpoints of the tree s for the provided batch outpoint the response may be paginated if the results span multiple pages
 */
 func (a *Client) IndexerServiceGetVtxoTreeLeaves(params *IndexerServiceGetVtxoTreeLeavesParams, opts ...ClientOption) (*IndexerServiceGetVtxoTreeLeavesOK, error) {
 	// TODO: Validate the params before sending
@@ -493,7 +493,7 @@ func (a *Client) IndexerServiceGetVtxoTreeLeaves(params *IndexerServiceGetVtxoTr
 }
 
 /*
-IndexerServiceGetVtxos indexer service get vtxos API
+IndexerServiceGetVtxos gets vtxos returns the list of vtxos based on the provided filter vtxos can be retrieved either by addresses or by outpoints and optionally filtered by spendable or spent only the response may be paginated if the results span multiple pages
 */
 func (a *Client) IndexerServiceGetVtxos(params *IndexerServiceGetVtxosParams, opts ...ClientOption) (*IndexerServiceGetVtxosOK, error) {
 	// TODO: Validate the params before sending
@@ -530,7 +530,7 @@ func (a *Client) IndexerServiceGetVtxos(params *IndexerServiceGetVtxosParams, op
 }
 
 /*
-IndexerServiceSubscribeForScripts indexer service subscribe for scripts API
+IndexerServiceSubscribeForScripts subscribes for scripts allows to subscribe for tx notifications related to the provided vtxo scripts it can also be used to update an existing subscribtion by adding new scripts to it
 */
 func (a *Client) IndexerServiceSubscribeForScripts(params *IndexerServiceSubscribeForScriptsParams, opts ...ClientOption) (*IndexerServiceSubscribeForScriptsOK, error) {
 	// TODO: Validate the params before sending
@@ -567,7 +567,7 @@ func (a *Client) IndexerServiceSubscribeForScripts(params *IndexerServiceSubscri
 }
 
 /*
-IndexerServiceUnsubscribeForScripts indexer service unsubscribe for scripts API
+IndexerServiceUnsubscribeForScripts unsubscribes for scripts allows to remove scripts from an existing subscription
 */
 func (a *Client) IndexerServiceUnsubscribeForScripts(params *IndexerServiceUnsubscribeForScriptsParams, opts ...ClientOption) (*IndexerServiceUnsubscribeForScriptsOK, error) {
 	// TODO: Validate the params before sending

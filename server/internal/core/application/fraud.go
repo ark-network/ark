@@ -128,7 +128,7 @@ func (s *covenantlessService) broadcastForfeitTx(ctx context.Context, round *dom
 	}
 
 	if len(forfeitTx.UnsignedTx.TxIn) <= 0 {
-		return fmt.Errorf("invalid forfeit tx: %s", forfeitTx.UnsignedTx.TxHash().String())
+		return fmt.Errorf("invalid forfeit tx: %s", forfeitTx.UnsignedTx.TxID())
 	}
 
 	connector := forfeitTx.UnsignedTx.TxIn[0]
@@ -137,7 +137,12 @@ func (s *covenantlessService) broadcastForfeitTx(ctx context.Context, round *dom
 		connector.PreviousOutPoint.Index,
 	}
 
-	if err := s.broadcastConnectorBranch(ctx, round.Connectors, connectorOutpoint); err != nil {
+	connectors, err := tree.NewTxGraph(round.Connectors)
+	if err != nil {
+		return fmt.Errorf("failed to create connector graph: %s", err)
+	}
+
+	if err := s.broadcastConnectorBranch(ctx, connectors, connectorOutpoint); err != nil {
 		return fmt.Errorf("failed to broadcast connector branch: %s", err)
 	}
 
@@ -178,47 +183,54 @@ func (s *covenantlessService) broadcastForfeitTx(ctx context.Context, round *dom
 	return nil
 }
 
-func (s *covenantlessService) broadcastConnectorBranch(ctx context.Context, connectorTree tree.TxTree, connectorOutpoint txOutpoint) error {
+func (s *covenantlessService) broadcastConnectorBranch(ctx context.Context, connectorGraph *tree.TxGraph, connectorOutpoint txOutpoint) error {
 	// compute, sign and broadcast the branch txs until the connector outpoint is created
-	branch, err := connectorTree.Branch(connectorOutpoint.txid)
+	branch, err := connectorGraph.SubGraph([]string{connectorOutpoint.txid})
 	if err != nil {
 		return fmt.Errorf("failed to get branch of connector: %s", err)
 	}
 
-	for _, node := range branch {
-		_, err := s.wallet.GetTransaction(ctx, node.Txid)
+	return branch.Apply(func(g *tree.TxGraph) (bool, error) {
+		txid := g.Root.UnsignedTx.TxID()
+		_, err := s.wallet.GetTransaction(ctx, txid)
 		// if err, it means the tx is offchain, must be broadcasted
 		if err != nil {
-			parent, err := s.wallet.SignTransaction(ctx, node.Tx, true)
+			b64, err := g.Root.B64Encode()
 			if err != nil {
-				return fmt.Errorf("failed to sign tx: %s", err)
+				return false, fmt.Errorf("failed to encode tx: %s", err)
+			}
+
+			parent, err := s.wallet.SignTransaction(ctx, b64, true)
+			if err != nil {
+				return false, fmt.Errorf("failed to sign tx: %s", err)
 			}
 
 			var parentTx wire.MsgTx
 			if err := parentTx.Deserialize(hex.NewDecoder(strings.NewReader(parent))); err != nil {
-				return fmt.Errorf("failed to deserialize tx: %s", err)
+				return false, fmt.Errorf("failed to deserialize tx: %s", err)
 			}
 
 			child, err := s.bumpAnchorTx(ctx, &parentTx)
 			if err != nil {
-				return fmt.Errorf("failed to bump anchor tx: %s", err)
+				return false, fmt.Errorf("failed to bump anchor tx: %s", err)
 			}
 
 			_, err = s.wallet.BroadcastTransaction(ctx, parent, child)
 			if err != nil {
-				return fmt.Errorf("failed to broadcast transaction: %s", err)
+				return false, fmt.Errorf("failed to broadcast transaction: %s", err)
 			}
-			log.Debugf("broadcasted connector branch tx %s", node.Txid)
+			log.Debugf("broadcasted connector branch tx %s", txid)
 
-			if err := s.wallet.WaitForSync(ctx, node.Txid); err != nil {
-				return fmt.Errorf("failed to wait for sync: %s", err)
+			if err := s.wallet.WaitForSync(ctx, txid); err != nil {
+				return false, fmt.Errorf("failed to wait for sync: %s", err)
 			}
 
-			s.waitForConfirmation(ctx, node.Txid)
+			s.waitForConfirmation(ctx, txid)
+			return true, nil
 		}
-	}
 
-	return nil
+		return true, nil
+	})
 }
 
 // bumpAnchorTx is crafting and signing a transaction bumping the fees for a given tx with P2A output

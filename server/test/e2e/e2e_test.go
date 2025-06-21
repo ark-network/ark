@@ -397,7 +397,10 @@ func TestReactToRedemptionOfRefreshedVtxos(t *testing.T) {
 
 	expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
 
-	branch, err := redemption.NewRedeemBranch(expl, vtxoTree, vtxo)
+	graph, err := tree.NewTxGraph(vtxoTree)
+	require.NoError(t, err)
+
+	branch, err := redemption.NewRedeemBranch(expl, graph, vtxo)
 	require.NoError(t, err)
 
 	txs, err := branch.RedeemPath()
@@ -507,7 +510,10 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 
 		expl := explorer.NewExplorer("http://localhost:3000", common.BitcoinRegTest)
 
-		branch, err := redemption.NewRedeemBranch(expl, vtxoTree, vtxo)
+		graph, err := tree.NewTxGraph(vtxoTree)
+		require.NoError(t, err)
+
+		branch, err := redemption.NewRedeemBranch(expl, graph, vtxo)
 		require.NoError(t, err)
 
 		txs, err := branch.RedeemPath()
@@ -803,7 +809,10 @@ func TestReactToRedemptionOfVtxosSpentAsync(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		branch, err := redemption.NewRedeemBranch(explorer, vtxoTree, initialTreeVtxo)
+		graph, err := tree.NewTxGraph(vtxoTree)
+		require.NoError(t, err)
+
+		branch, err := redemption.NewRedeemBranch(explorer, graph, initialTreeVtxo)
 		require.NoError(t, err)
 
 		txs, err := branch.RedeemPath()

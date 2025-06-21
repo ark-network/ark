@@ -5,12 +5,9 @@
 package redislivestore
 
 import (
-	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	log "github.com/sirupsen/logrus"
@@ -97,9 +94,9 @@ func (s *treeSigningSessionsStore) Get(roundId string) (*ports.MusigSigningSessi
 	sigsMap, _ := s.rdb.HGetAll(ctx, sigsKey).Result()
 	sigs := make(map[string]tree.TreePartialSigs)
 	for pub, val := range sigsMap {
-		signatures, err := tree.DecodeSignatures(hex.NewDecoder(strings.NewReader(val)))
-		if err != nil {
-			log.Warnf("get:failed to decode sigs for %s: %v", pub, err)
+		signatures := make(tree.TreePartialSigs)
+		if err := json.Unmarshal([]byte(val), &signatures); err != nil {
+			log.Warnf("get:failed to unmarshal signatures for %s: %v", pub, err)
 			return nil, false
 		}
 		sigs[pub] = signatures
@@ -141,11 +138,7 @@ func (s *treeSigningSessionsStore) AddNonces(ctx context.Context, roundId string
 
 func (s *treeSigningSessionsStore) AddSignatures(ctx context.Context, roundId string, pubkey string, sigs tree.TreePartialSigs) error {
 	sigsKey := fmt.Sprintf(treeSessSigsKeyFmt, roundId)
-	var sigsBuffer bytes.Buffer
-	if err := sigs.Encode(&sigsBuffer); err != nil {
-		return err
-	}
-	val := hex.EncodeToString(sigsBuffer.Bytes())
+	val, _ := json.Marshal(sigs)
 	if err := s.rdb.HSet(ctx, sigsKey, pubkey, val).Err(); err != nil {
 		return err
 	}

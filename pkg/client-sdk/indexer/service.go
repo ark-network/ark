@@ -11,7 +11,7 @@ type Indexer interface {
 	GetCommitmentTx(ctx context.Context, txid string) (*CommitmentTx, error)
 	GetCommitmentTxLeaves(ctx context.Context, txid string, opts ...RequestOption) (*CommitmentTxLeavesResponse, error)
 	GetVtxoTree(ctx context.Context, batchOutpoint Outpoint, opts ...RequestOption) (*VtxoTreeResponse, error)
-	GetFullVtxoTree(ctx context.Context, batchOutpoint Outpoint, opts ...RequestOption) (tree.TxTree, error)
+	GetFullVtxoTree(ctx context.Context, batchOutpoint Outpoint, opts ...RequestOption) ([]tree.TxGraphChunk, error)
 	GetVtxoTreeLeaves(ctx context.Context, batchOutpoint Outpoint, opts ...RequestOption) (*VtxoTreeLeavesResponse, error)
 	GetForfeitTxs(ctx context.Context, txid string, opts ...RequestOption) (*ForfeitTxsResponse, error)
 	GetConnectors(ctx context.Context, txid string, opts ...RequestOption) (*ConnectorsResponse, error)
@@ -95,22 +95,14 @@ type PageResponse struct {
 
 type TxNodes []TxNode
 
-func (t TxNodes) ToTree(txMap map[string]string) tree.TxTree {
-	vtxoTree := make(tree.TxTree, 0)
+func (t TxNodes) ToTree(txMap map[string]string) []tree.TxGraphChunk {
+	vtxoTree := make([]tree.TxGraphChunk, 0)
 	for _, node := range t {
-		if len(vtxoTree) <= int(node.Level) {
-			vtxoTree = extendArray(vtxoTree, int(node.Level))
-		}
-		if len(vtxoTree[node.Level]) <= int(node.LevelIndex) {
-			vtxoTree[node.Level] = extendArray(vtxoTree[node.Level], int(node.LevelIndex))
-		}
-		vtxoTree[node.Level][node.LevelIndex] = tree.Node{
-			Txid:       node.Txid,
-			ParentTxid: node.ParentTxid,
-			Level:      node.Level,
-			LevelIndex: node.LevelIndex,
-			Tx:         txMap[node.Txid],
-		}
+		vtxoTree = append(vtxoTree, tree.TxGraphChunk{
+			Txid:     node.Txid,
+			Tx:       txMap[node.Txid],
+			Children: node.Children,
+		})
 	}
 	return vtxoTree
 }
@@ -124,10 +116,8 @@ func (t TxNodes) Txids() []string {
 }
 
 type TxNode struct {
-	Txid       string
-	ParentTxid string
-	Level      int32
-	LevelIndex int32
+	Txid     string
+	Children map[uint32]string
 }
 
 type Batch struct {

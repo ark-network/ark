@@ -3,6 +3,7 @@ package sqlitedb
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 
@@ -115,25 +116,21 @@ func (r *roundRepository) AddOrUpdateRound(ctx context.Context, round domain.Rou
 				}
 			}
 
-			for level, levelTxs := range round.Connectors {
-				for pos, tx := range levelTxs {
-					if err := querierWithTx.UpsertTransaction(
-						ctx,
-						createUpsertTransactionParams(tx, round.Id, "connector", int64(pos), int64(level)),
-					); err != nil {
-						return fmt.Errorf("failed to upsert connector transaction: %w", err)
-					}
+			for i, chunk := range round.Connectors {
+				if err := querierWithTx.UpsertTransaction(
+					ctx,
+					createUpsertTransactionParams(chunk, round.Id, "connector", int64(i)),
+				); err != nil {
+					return fmt.Errorf("failed to upsert connector transaction: %w", err)
 				}
 			}
 
-			for level, levelTxs := range round.VtxoTree {
-				for pos, tx := range levelTxs {
-					if err := querierWithTx.UpsertTransaction(
-						ctx,
-						createUpsertTransactionParams(tx, round.Id, "tree", int64(pos), int64(level)),
-					); err != nil {
-						return fmt.Errorf("failed to upsert tree transaction: %w", err)
-					}
+			for i, chunk := range round.VtxoTree {
+				if err := querierWithTx.UpsertTransaction(
+					ctx,
+					createUpsertTransactionParams(chunk, round.Id, "tree", int64(i)),
+				); err != nil {
+					return fmt.Errorf("failed to upsert tree transaction: %w", err)
 				}
 			}
 		}
@@ -327,29 +324,31 @@ func (r *roundRepository) GetRoundForfeitTxs(ctx context.Context, roundTxid stri
 	return forfeits, nil
 }
 
-func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid string) (tree.TxTree, error) {
+func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid string) ([]tree.TxGraphChunk, error) {
 	rows, err := r.querier.GetRoundConnectorTreeTxs(ctx, roundTxid)
 	if err != nil {
 		return nil, err
 	}
 
-	vtxoTree := make(tree.TxTree, 0)
+	chunks := make([]tree.TxGraphChunk, 0, len(rows))
 
-	for _, tx := range rows {
-		level := tx.TreeLevel
-		vtxoTree = extendArray(vtxoTree, int(level.Int64))
-		vtxoTree[int(level.Int64)] = extendArray(vtxoTree[int(level.Int64)], int(tx.Position.Int64))
-		if vtxoTree[int(level.Int64)][tx.Position.Int64] == (tree.Node{}) {
-			vtxoTree[int(level.Int64)][tx.Position.Int64] = tree.Node{
-				Tx:         tx.Tx.String,
-				Txid:       tx.Txid.String,
-				ParentTxid: tx.ParentTxid.String,
-				Leaf:       tx.IsLeaf.Bool,
+	for _, row := range rows {
+		pos := int(row.Position.Int64)
+		chunks = extendArray(chunks, pos)
+		children := make(map[uint32]string)
+		if row.Children.Valid {
+			if err := json.Unmarshal([]byte(row.Children.String), &children); err != nil {
+				return nil, err
 			}
+		}
+		chunks[pos] = tree.TxGraphChunk{
+			Txid:     row.Txid.String,
+			Tx:       row.Tx.String,
+			Children: children,
 		}
 	}
 
-	return vtxoTree, nil
+	return chunks, nil
 }
 
 func (r *roundRepository) GetUnsweptRoundsTxid(ctx context.Context) ([]string, error) {
@@ -360,29 +359,31 @@ func (r *roundRepository) GetSweptRoundsConnectorAddress(ctx context.Context) ([
 	return r.querier.SelectSweptRoundsConnectorAddress(ctx)
 }
 
-func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) (tree.TxTree, error) {
+func (r *roundRepository) GetVtxoTreeWithTxid(ctx context.Context, txid string) ([]tree.TxGraphChunk, error) {
 	rows, err := r.querier.SelectTreeTxsWithRoundTxid(ctx, txid)
 	if err != nil {
 		return nil, err
 	}
 
-	vtxoTree := make(tree.TxTree, 0)
+	chunks := make([]tree.TxGraphChunk, 0)
 
-	for _, tx := range rows {
-		level := tx.TreeLevel
-		vtxoTree = extendArray(vtxoTree, int(level.Int64))
-		vtxoTree[int(level.Int64)] = extendArray(vtxoTree[int(level.Int64)], int(tx.Position.Int64))
-		if vtxoTree[int(level.Int64)][tx.Position.Int64] == (tree.Node{}) {
-			vtxoTree[int(level.Int64)][tx.Position.Int64] = tree.Node{
-				Tx:         tx.Tx.String,
-				Txid:       tx.Txid.String,
-				ParentTxid: tx.ParentTxid.String,
-				Leaf:       tx.IsLeaf.Bool,
+	for _, row := range rows {
+		pos := int(row.Position.Int64)
+		chunks = extendArray(chunks, pos)
+		children := make(map[uint32]string)
+		if row.Children.Valid {
+			if err := json.Unmarshal([]byte(row.Children.String), &children); err != nil {
+				return nil, err
 			}
+		}
+		chunks[pos] = tree.TxGraphChunk{
+			Txid:     row.Txid.String,
+			Tx:       row.Tx.String,
+			Children: children,
 		}
 	}
 
-	return vtxoTree, nil
+	return chunks, nil
 }
 
 func (r *roundRepository) GetTxsWithTxids(ctx context.Context, txids []string) ([]string, error) {
@@ -524,38 +525,45 @@ func rowsToRounds(rows []combinedRow) ([]*domain.Round, error) {
 
 		if v.tx.Tx.Valid && v.tx.Type.Valid && v.tx.Position.Valid {
 			position := v.tx.Position
+			pos := int(position.Int64)
 			switch v.tx.Type.String {
 			case "commitment":
 				round.CommitmentTx = v.tx.Tx.String
 			case "forfeit":
-				round.ForfeitTxs = extendArray(round.ForfeitTxs, int(position.Int64))
-				round.ForfeitTxs[position.Int64] = domain.ForfeitTx{
+				round.ForfeitTxs = extendArray(round.ForfeitTxs, pos)
+				round.ForfeitTxs[pos] = domain.ForfeitTx{
 					Txid: v.tx.Txid.String,
 					Tx:   v.tx.Tx.String,
 				}
 			case "connector":
-				level := v.tx.TreeLevel
-				round.Connectors = extendArray(round.Connectors, int(level.Int64))
-				round.Connectors[int(level.Int64)] = extendArray(round.Connectors[int(level.Int64)], int(position.Int64))
-				if round.Connectors[int(level.Int64)][position.Int64] == (tree.Node{}) {
-					round.Connectors[int(level.Int64)][position.Int64] = tree.Node{
-						Tx:         v.tx.Tx.String,
-						Txid:       v.tx.Txid.String,
-						ParentTxid: v.tx.ParentTxid.String,
-						Leaf:       v.tx.IsLeaf.Bool,
+				round.Connectors = extendArray(round.Connectors, pos)
+
+				children := make(map[uint32]string)
+				if v.tx.Children.Valid {
+					if err := json.Unmarshal([]byte(v.tx.Children.String), &children); err != nil {
+						return nil, err
 					}
 				}
+
+				round.Connectors[pos] = tree.TxGraphChunk{
+					Txid:     v.tx.Txid.String,
+					Tx:       v.tx.Tx.String,
+					Children: children,
+				}
 			case "tree":
-				level := v.tx.TreeLevel
-				round.VtxoTree = extendArray(round.VtxoTree, int(level.Int64))
-				round.VtxoTree[int(level.Int64)] = extendArray(round.VtxoTree[int(level.Int64)], int(position.Int64))
-				if round.VtxoTree[int(level.Int64)][position.Int64] == (tree.Node{}) {
-					round.VtxoTree[int(level.Int64)][position.Int64] = tree.Node{
-						Tx:         v.tx.Tx.String,
-						Txid:       v.tx.Txid.String,
-						ParentTxid: v.tx.ParentTxid.String,
-						Leaf:       v.tx.IsLeaf.Bool,
+				round.VtxoTree = extendArray(round.VtxoTree, pos)
+
+				children := make(map[uint32]string)
+				if v.tx.Children.Valid {
+					if err := json.Unmarshal([]byte(v.tx.Children.String), &children); err != nil {
+						return nil, err
 					}
+				}
+
+				round.VtxoTree[pos] = tree.TxGraphChunk{
+					Txid:     v.tx.Txid.String,
+					Tx:       v.tx.Tx.String,
+					Children: children,
 				}
 			}
 		}
@@ -589,27 +597,20 @@ func combinedRowToVtxo(row queries.RequestVtxoVw) domain.Vtxo {
 	}
 }
 
-func createUpsertTransactionParams(tx tree.Node, roundID string, txType string, position int64, treeLevel int64) queries.UpsertTransactionParams {
+func createUpsertTransactionParams(graphChunk tree.TxGraphChunk, roundID string, txType string, position int64) queries.UpsertTransactionParams {
 	params := queries.UpsertTransactionParams{
-		Tx:       tx.Tx,
+		Tx:       graphChunk.Tx,
 		RoundID:  roundID,
 		Type:     txType,
 		Position: position,
+		Txid:     graphChunk.Txid,
 	}
 
-	if txType == "connector" || txType == "tree" {
-		params.Txid = tx.Txid
-		params.TreeLevel = sql.NullInt64{
-			Int64: treeLevel,
-			Valid: true,
-		}
-		params.ParentTxid = sql.NullString{
-			String: tx.ParentTxid,
+	if txType == "tree" || txType == "connector" {
+		str, _ := json.Marshal(graphChunk.Children)
+		params.Children = sql.NullString{
+			String: string(str),
 			Valid:  true,
-		}
-		params.IsLeaf = sql.NullBool{
-			Bool:  tx.Leaf,
-			Valid: true,
 		}
 	}
 

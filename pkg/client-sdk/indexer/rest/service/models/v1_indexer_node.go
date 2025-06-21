@@ -17,14 +17,8 @@ import (
 // swagger:model v1IndexerNode
 type V1IndexerNode struct {
 
-	// level
-	Level int32 `json:"level,omitempty"`
-
-	// level index
-	LevelIndex int32 `json:"levelIndex,omitempty"`
-
-	// parent txid
-	ParentTxid string `json:"parentTxid,omitempty"`
+	// vout -> txid
+	Children map[string]string `json:"children,omitempty"`
 
 	// txid
 	Txid string `json:"txid,omitempty"`

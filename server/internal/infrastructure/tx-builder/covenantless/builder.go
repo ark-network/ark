@@ -42,7 +42,7 @@ func (b *txBuilder) GetTxID(tx string) (string, error) {
 		return "", err
 	}
 
-	return ptx.UnsignedTx.TxHash().String(), nil
+	return ptx.UnsignedTx.TxID(), nil
 }
 
 func (b *txBuilder) VerifyTapscriptPartialSigs(tx string) (bool, string, error) {
@@ -289,10 +289,10 @@ func (b *txBuilder) BuildSweepTx(inputs []ports.SweepInput) (txid, signedSweepTx
 }
 
 func (b *txBuilder) VerifyForfeitTxs(
-	vtxos []domain.Vtxo, connectors tree.TxTree,
+	vtxos []domain.Vtxo, connectors []tree.TxGraphChunk,
 	forfeitTxs []string, connectorIndex map[string]domain.Outpoint,
 ) (map[domain.VtxoKey]string, error) {
-	connectorsLeaves := connectors.Leaves()
+	connectorsLeaves := tree.TxGraphChunkList(connectors).Leaves()
 	if len(connectorsLeaves) == 0 {
 		return nil, fmt.Errorf("invalid connectors tree")
 	}
@@ -367,9 +367,9 @@ func (b *txBuilder) VerifyForfeitTxs(
 		}
 
 		var connectorOutput *wire.TxOut
-		for _, leaf := range connectorsLeaves {
-			if leaf.Txid == connectorInput.PreviousOutPoint.Hash.String() {
-				connectorTx, err := psbt.NewFromRawBytes(strings.NewReader(leaf.Tx), true)
+		for _, connector := range connectorsLeaves {
+			if connector.Txid == connectorInput.PreviousOutPoint.Hash.String() {
+				connectorTx, err := psbt.NewFromRawBytes(strings.NewReader(connector.Tx), true)
 				if err != nil {
 					return nil, err
 				}
@@ -473,7 +473,7 @@ func (b *txBuilder) BuildRoundTx(
 	boardingInputs []ports.BoardingInput,
 	connectorAddresses []string,
 	cosignersPublicKeys [][]string,
-) (string, tree.TxTree, string, tree.TxTree, error) {
+) (string, *tree.TxGraph, string, *tree.TxGraph, error) {
 	var sharedOutputScript []byte
 	var sharedOutputAmount int64
 
@@ -576,7 +576,7 @@ func (b *txBuilder) BuildRoundTx(
 		return "", nil, "", nil, err
 	}
 
-	vtxoTree := make(tree.TxTree, 0)
+	var vtxoTree *tree.TxGraph
 
 	if !requests.HaveOnlyOnchainOutput() {
 		initialOutpoint := &wire.OutPoint{
@@ -596,13 +596,8 @@ func (b *txBuilder) BuildRoundTx(
 		return roundTx, vtxoTree, nextConnectorAddress, nil, nil
 	}
 
-	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(roundTx), true)
-	if err != nil {
-		return "", nil, "", nil, err
-	}
-
 	rootConnectorsOutpoint := &wire.OutPoint{
-		Hash:  partialTx.UnsignedTx.TxHash(),
+		Hash:  ptx.UnsignedTx.TxHash(),
 		Index: 1,
 	}
 
@@ -617,21 +612,16 @@ func (b *txBuilder) BuildRoundTx(
 	return roundTx, vtxoTree, nextConnectorAddress, connectors, nil
 }
 
-func (b *txBuilder) GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.RelativeLocktime, sweepInput ports.SweepInput, err error) {
-	partialTx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
-	if err != nil {
-		return nil, nil, err
+func (b *txBuilder) GetSweepInput(graph *tree.TxGraph) (vtxoTreeExpiry *common.RelativeLocktime, sweepInput ports.SweepInput, err error) {
+	if len(graph.Root.UnsignedTx.TxIn) != 1 {
+		return nil, nil, fmt.Errorf("invalid node psbt, expect 1 input, got %d", len(graph.Root.UnsignedTx.TxIn))
 	}
 
-	if len(partialTx.Inputs) != 1 {
-		return nil, nil, fmt.Errorf("invalid node pset, expect 1 input, got %d", len(partialTx.Inputs))
-	}
-
-	input := partialTx.UnsignedTx.TxIn[0]
+	input := graph.Root.UnsignedTx.TxIn[0]
 	txid := input.PreviousOutPoint.Hash
 	index := input.PreviousOutPoint.Index
 
-	sweepLeaf, internalKey, vtxoTreeExpiry, err := b.extractSweepLeaf(partialTx.Inputs[0])
+	sweepLeaf, internalKey, vtxoTreeExpiry, err := b.extractSweepLeaf(graph.Root.Inputs[0])
 	if err != nil {
 		return nil, nil, err
 	}
@@ -657,38 +647,6 @@ func (b *txBuilder) GetSweepInput(node tree.Node) (vtxoTreeExpiry *common.Relati
 	}
 
 	return vtxoTreeExpiry, sweepInput, nil
-}
-
-func (b *txBuilder) FindLeaves(vtxoTree tree.TxTree, fromtxid string, vout uint32) ([]tree.Node, error) {
-	allLeaves := vtxoTree.Leaves()
-	foundLeaves := make([]tree.Node, 0)
-
-	for _, leaf := range allLeaves {
-		branch, err := vtxoTree.Branch(leaf.Txid)
-		if err != nil {
-			return nil, err
-		}
-
-		for _, node := range branch {
-			ptx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
-			if err != nil {
-				return nil, err
-			}
-
-			if len(ptx.Inputs) <= 0 {
-				return nil, fmt.Errorf("no input in the pset")
-			}
-
-			parentInput := ptx.UnsignedTx.TxIn[0].PreviousOutPoint
-
-			if parentInput.Hash.String() == fromtxid && parentInput.Index == vout {
-				foundLeaves = append(foundLeaves, leaf)
-				break
-			}
-		}
-	}
-
-	return foundLeaves, nil
 }
 
 func (b *txBuilder) createRoundTx(
@@ -1015,7 +973,7 @@ func (b *txBuilder) VerifyAndCombinePartialTx(dest string, src string) (string, 
 		return "", err
 	}
 
-	if sourceTx.UnsignedTx.TxHash().String() != roundTx.UnsignedTx.TxHash().String() {
+	if sourceTx.UnsignedTx.TxID() != roundTx.UnsignedTx.TxID() {
 		return "", fmt.Errorf("txids do not match")
 	}
 

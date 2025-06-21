@@ -80,7 +80,7 @@ type ClientService interface {
 }
 
 /*
-ArkServiceConfirmRegistration ark service confirm registration API
+ArkServiceConfirmRegistration confirms registration allows a client that has been selected for the next batch to confirm its participation by revealing the intent id
 */
 func (a *Client) ArkServiceConfirmRegistration(params *ArkServiceConfirmRegistrationParams, opts ...ClientOption) (*ArkServiceConfirmRegistrationOK, error) {
 	// TODO: Validate the params before sending
@@ -117,7 +117,7 @@ func (a *Client) ArkServiceConfirmRegistration(params *ArkServiceConfirmRegistra
 }
 
 /*
-ArkServiceDeleteIntent ark service delete intent API
+ArkServiceDeleteIntent deletes intent removes a previously registered intent from the server the client should provide the b IP 322 signature and message including any of the vtxos used in the registered intent to prove its ownership the server should delete the intent and return success
 */
 func (a *Client) ArkServiceDeleteIntent(params *ArkServiceDeleteIntentParams, opts ...ClientOption) (*ArkServiceDeleteIntentOK, error) {
 	// TODO: Validate the params before sending
@@ -154,7 +154,7 @@ func (a *Client) ArkServiceDeleteIntent(params *ArkServiceDeleteIntentParams, op
 }
 
 /*
-ArkServiceFinalizeTx ark service finalize tx API
+ArkServiceFinalizeTx finalizes tx is the last lef of the process of spending vtxos offchain and allows a client to submit the fully signed checkpoint txs for the provided ark txid the server verifies the signed checkpoint transactions and returns success if everything is valid
 */
 func (a *Client) ArkServiceFinalizeTx(params *ArkServiceFinalizeTxParams, opts ...ClientOption) (*ArkServiceFinalizeTxOK, error) {
 	// TODO: Validate the params before sending
@@ -191,7 +191,7 @@ func (a *Client) ArkServiceFinalizeTx(params *ArkServiceFinalizeTxParams, opts .
 }
 
 /*
-ArkServiceGetEventStream ark service get event stream API
+ArkServiceGetEventStream gets event stream is a server side streaming RPC that allows clients to receive a stream of events related to batch processing clients should use this stream as soon as they are ready to join a batch and can listen for various events such as batch start batch finalization and other related activities the server pushes these events to the client in real time as soon as its ready to move to the next phase of the batch processing
 */
 func (a *Client) ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams, opts ...ClientOption) (*ArkServiceGetEventStreamOK, error) {
 	// TODO: Validate the params before sending
@@ -228,7 +228,7 @@ func (a *Client) ArkServiceGetEventStream(params *ArkServiceGetEventStreamParams
 }
 
 /*
-ArkServiceGetInfo ark service get info API
+ArkServiceGetInfo gets info returns information and parameters of the server
 */
 func (a *Client) ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...ClientOption) (*ArkServiceGetInfoOK, error) {
 	// TODO: Validate the params before sending
@@ -265,7 +265,7 @@ func (a *Client) ArkServiceGetInfo(params *ArkServiceGetInfoParams, opts ...Clie
 }
 
 /*
-ArkServiceGetTransactionsStream ark service get transactions stream API
+ArkServiceGetTransactionsStream gets transactions stream is a server side streaming RPC that allows clients to receive notifications in real time about any commitment tx or ark tx processed and finalized by the server n o t e the stream doesn t have history support therefore returns only txs from the moment it s opened until it s closed
 */
 func (a *Client) ArkServiceGetTransactionsStream(params *ArkServiceGetTransactionsStreamParams, opts ...ClientOption) (*ArkServiceGetTransactionsStreamOK, error) {
 	// TODO: Validate the params before sending
@@ -302,7 +302,7 @@ func (a *Client) ArkServiceGetTransactionsStream(params *ArkServiceGetTransactio
 }
 
 /*
-ArkServiceRegisterIntent ark service register intent API
+ArkServiceRegisterIntent registers intent allows to register a new intent that will be eventually selected by the server for a particular batch the client should provide a b IP 322 message with the intent information and the server should respond with an intent id
 */
 func (a *Client) ArkServiceRegisterIntent(params *ArkServiceRegisterIntentParams, opts ...ClientOption) (*ArkServiceRegisterIntentOK, error) {
 	// TODO: Validate the params before sending
@@ -339,7 +339,7 @@ func (a *Client) ArkServiceRegisterIntent(params *ArkServiceRegisterIntentParams
 }
 
 /*
-ArkServiceSubmitSignedForfeitTxs ark service submit signed forfeit txs API
+ArkServiceSubmitSignedForfeitTxs submits signed forfeit txs allows a client to submit signed forfeit transactions and or signed commitment transaction in case of onboarding the server should verify the signed txs and return success
 */
 func (a *Client) ArkServiceSubmitSignedForfeitTxs(params *ArkServiceSubmitSignedForfeitTxsParams, opts ...ClientOption) (*ArkServiceSubmitSignedForfeitTxsOK, error) {
 	// TODO: Validate the params before sending
@@ -376,7 +376,7 @@ func (a *Client) ArkServiceSubmitSignedForfeitTxs(params *ArkServiceSubmitSigned
 }
 
 /*
-ArkServiceSubmitTreeNonces ark service submit tree nonces API
+ArkServiceSubmitTreeNonces submits tree nonces allows a cosigner to submit the tree nonces for the musig2 session of a given batch the client should provide the batch id the cosigner public key and the tree nonces the server should verify the cosigner public key and the nonces and store them for later aggregation once nonces from all clients are collected
 */
 func (a *Client) ArkServiceSubmitTreeNonces(params *ArkServiceSubmitTreeNoncesParams, opts ...ClientOption) (*ArkServiceSubmitTreeNoncesOK, error) {
 	// TODO: Validate the params before sending
@@ -413,7 +413,7 @@ func (a *Client) ArkServiceSubmitTreeNonces(params *ArkServiceSubmitTreeNoncesPa
 }
 
 /*
-ArkServiceSubmitTreeSignatures ark service submit tree signatures API
+ArkServiceSubmitTreeSignatures submits tree signatures allows a cosigner to submit the tree signatures for the musig2 session of a given batch the client should provide the batch id the cosigner public key and the tree signatures the server should verify the cosigner public key and the signatures and store them for later aggregation once signatures from all clients are collected
 */
 func (a *Client) ArkServiceSubmitTreeSignatures(params *ArkServiceSubmitTreeSignaturesParams, opts ...ClientOption) (*ArkServiceSubmitTreeSignaturesOK, error) {
 	// TODO: Validate the params before sending
@@ -450,7 +450,7 @@ func (a *Client) ArkServiceSubmitTreeSignatures(params *ArkServiceSubmitTreeSign
 }
 
 /*
-ArkServiceSubmitTx ark service submit tx API
+ArkServiceSubmitTx submits tx is the first leg of the process of spending vtxos offchain and allows a client to submit a signed ark transaction and the unsigned checkpoint transactions the server should verify the signed transactions and return the fully signed ark tx and the signed checkpoint txs
 */
 func (a *Client) ArkServiceSubmitTx(params *ArkServiceSubmitTxParams, opts ...ClientOption) (*ArkServiceSubmitTxOK, error) {
 	// TODO: Validate the params before sending

@@ -1,6 +1,7 @@
 package application
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"sync"
@@ -9,6 +10,7 @@ import (
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 	"github.com/ark-network/ark/server/internal/core/ports"
+	"github.com/btcsuite/btcd/btcutil/psbt"
 	log "github.com/sirupsen/logrus"
 )
 
@@ -63,12 +65,17 @@ func (s *sweeper) start() error {
 		progress := 0.0
 
 		for _, txid := range unsweptRounds {
-			vtxoTree, err := s.repoManager.Rounds().GetVtxoTreeWithTxid(ctx, txid)
+			graphChunks, err := s.repoManager.Rounds().GetVtxoTreeWithTxid(ctx, txid)
 			if err != nil {
 				return err
 			}
 
-			task := s.createTask(txid, vtxoTree)
+			graph, err := tree.NewTxGraph(graphChunks)
+			if err != nil {
+				return err
+			}
+
+			task := s.createTask(txid, graph)
 			task()
 
 			newProgress := (1.0 / float64(len(unsweptRounds))) + progress
@@ -97,33 +104,30 @@ func (s *sweeper) removeTask(treeRootTxid string) {
 
 // schedule set up a task to be executed once at the given timestamp
 func (s *sweeper) schedule(
-	expirationTimestamp int64, roundTxid string, vtxoTree tree.TxTree,
+	expirationTimestamp int64, roundTxid string, graph *tree.TxGraph,
 ) error {
-	if len(vtxoTree) <= 0 { // skip
+	if graph == nil { // skip
 		log.Debugf("skipping sweep scheduling (round tx %s), empty vtxo tree", roundTxid)
 		return nil
 	}
 
-	root, err := vtxoTree.Root()
-	if err != nil {
-		return err
-	}
+	rootTxid := graph.Root.UnsignedTx.TxID()
 
-	if _, scheduled := s.scheduledTasks[root.Txid]; scheduled {
+	if _, scheduled := s.scheduledTasks[rootTxid]; scheduled {
 		return nil
 	}
 
-	task := s.createTask(roundTxid, vtxoTree)
+	task := s.createTask(roundTxid, graph)
 
 	if err := s.scheduler.ScheduleTaskOnce(expirationTimestamp, task); err != nil {
 		return err
 	}
 
 	s.locker.Lock()
-	s.scheduledTasks[root.Txid] = struct{}{}
+	s.scheduledTasks[rootTxid] = struct{}{}
 	s.locker.Unlock()
 
-	if err := s.updateVtxoExpirationTime(vtxoTree, expirationTimestamp); err != nil {
+	if err := s.updateVtxoExpirationTime(graph, expirationTimestamp); err != nil {
 		log.WithError(err).Error("error while updating vtxo expiration time")
 	}
 
@@ -134,18 +138,14 @@ func (s *sweeper) schedule(
 // it tries to craft a sweep tx containing the onchain outputs of the given vtxo tree
 // if some parts of the tree have been broadcasted in the meantine, it will schedule the next taskes for the remaining parts of the tree
 func (s *sweeper) createTask(
-	roundTxid string, vtxoTree tree.TxTree,
+	roundTxid string, vtxoTree *tree.TxGraph,
 ) func() {
 	return func() {
 		ctx := context.Background()
-		root, err := vtxoTree.Root()
-		if err != nil {
-			log.WithError(err).Error("error while getting root node")
-			return
-		}
+		rootTxid := vtxoTree.Root.UnsignedTx.TxID()
 
-		s.removeTask(root.Txid)
-		log.Tracef("sweeper: %s", root.Txid)
+		s.removeTask(rootTxid)
+		log.Tracef("sweeper: %s", rootTxid)
 
 		sweepInputs := make([]ports.SweepInput, 0)
 		vtxoKeys := make([]domain.VtxoKey, 0) // vtxos associated to the sweep inputs
@@ -196,20 +196,19 @@ func (s *sweeper) createTask(
 					}
 				} else {
 					// if it's not a vtxo, find all the vtxos leaves reachable from that input
-					vtxosLeaves, err := s.builder.FindLeaves(vtxoTree, input.GetHash().String(), input.GetIndex())
+					vtxosLeaves, err := findLeaves(vtxoTree, input.GetHash().String(), input.GetIndex())
 					if err != nil {
 						log.WithError(err).Error("error while finding vtxos leaves")
 						continue
 					}
 
 					for _, leaf := range vtxosLeaves {
-						vtxo, err := extractVtxoOutpoint(leaf)
-						if err != nil {
-							log.Error(err)
-							continue
+						vtxo := domain.VtxoKey{
+							Txid: leaf.UnsignedTx.TxID(),
+							VOut: 0,
 						}
 
-						sweepableVtxos = append(sweepableVtxos, *vtxo)
+						sweepableVtxos = append(sweepableVtxos, vtxo)
 					}
 
 					if len(sweepableVtxos) <= 0 {
@@ -318,7 +317,7 @@ func (s *sweeper) createTask(
 }
 
 func (s *sweeper) updateVtxoExpirationTime(
-	tree tree.TxTree,
+	tree *tree.TxGraph,
 	expirationTime int64,
 ) error {
 	leaves := tree.Leaves()
@@ -336,8 +335,8 @@ func (s *sweeper) updateVtxoExpirationTime(
 	return s.repoManager.Vtxos().UpdateExpireAt(context.Background(), vtxos, expirationTime)
 }
 
-func computeSubTrees(vtxoTree tree.TxTree, inputs []ports.SweepInput) ([]tree.TxTree, error) {
-	subTrees := make(map[string]tree.TxTree, 0)
+func computeSubTrees(vtxoTree *tree.TxGraph, inputs []ports.SweepInput) ([]*tree.TxGraph, error) {
+	subTrees := make(map[string]*tree.TxGraph, 0)
 
 	// for each sweepable input, create a sub vtxo tree
 	// it allows to skip the part of the tree that has been broadcasted in the next task
@@ -348,17 +347,14 @@ func computeSubTrees(vtxoTree tree.TxTree, inputs []ports.SweepInput) ([]tree.Tx
 			continue
 		}
 
-		root, err := subTree.Root()
-		if err != nil {
-			log.WithError(err).Error("error while getting root node")
-			continue
+		if subTree != nil {
+			rootTxid := subTree.Root.UnsignedTx.TxID()
+			subTrees[rootTxid] = subTree
 		}
-
-		subTrees[root.Txid] = subTree
 	}
 
 	// filter out the sub trees, remove the ones that are included in others
-	filteredSubTrees := make([]tree.TxTree, 0)
+	filteredSubTrees := make([]*tree.TxGraph, 0)
 	for i, subTree := range subTrees {
 		notIncludedInOtherTrees := true
 
@@ -386,55 +382,63 @@ func computeSubTrees(vtxoTree tree.TxTree, inputs []ports.SweepInput) ([]tree.Tx
 	return filteredSubTrees, nil
 }
 
-func computeSubTree(vtxoTree tree.TxTree, newRoot string) (tree.TxTree, error) {
-	for _, level := range vtxoTree {
-		for _, node := range level {
-			if node.Txid == newRoot || node.ParentTxid == newRoot {
-				newTree := make(tree.TxTree, 0)
-				newTree = append(newTree, []tree.Node{node})
-
-				children := vtxoTree.Children(node.Txid)
-				for len(children) > 0 {
-					newTree = append(newTree, children)
-					newChildren := make([]tree.Node, 0)
-					for _, child := range children {
-						newChildren = append(newChildren, vtxoTree.Children(child.Txid)...)
-					}
-					children = newChildren
-				}
-
-				return newTree, nil
-			}
-		}
+func computeSubTree(vtxoTree *tree.TxGraph, newRoot string) (*tree.TxGraph, error) {
+	// Find the subgraph starting from the newRoot
+	foundGraph := vtxoTree.Find(newRoot)
+	if foundGraph != nil {
+		return foundGraph, nil
 	}
 
-	return nil, fmt.Errorf("failed to create subtree, new root not found")
+	// If not found, return nil (no subtree to create)
+	return nil, nil
 }
 
-func containsTree(tr0 tree.TxTree, tr1 tree.TxTree) (bool, error) {
-	tr1Root, err := tr1.Root()
-	if err != nil {
-		return false, err
+func containsTree(tr0 *tree.TxGraph, tr1 *tree.TxGraph) (bool, error) {
+	if tr0 == nil || tr1 == nil {
+		return false, nil
 	}
 
-	for _, level := range tr0 {
-		for _, node := range level {
-			if node.Txid == tr1Root.Txid {
-				return true, nil
-			}
-		}
-	}
+	tr1RootTxid := tr1.Root.UnsignedTx.TxID()
 
-	return false, nil
+	// Check if tr1's root exists in tr0
+	found := tr0.Find(tr1RootTxid)
+	return found != nil, nil
 }
 
-// assuming the pset is a leaf in the vtxo tree, returns the vtxo outpoint
-func extractVtxoOutpoint(leaf tree.Node) (*domain.VtxoKey, error) {
-	if !leaf.Leaf {
-		return nil, fmt.Errorf("node is not a leaf")
+func findLeaves(graph *tree.TxGraph, fromtxid string, vout uint32) ([]*psbt.Packet, error) {
+	var foundParent *tree.TxGraph
+
+	if err := graph.Apply(func(g *tree.TxGraph) (bool, error) {
+		parent := g.Root.UnsignedTx.TxIn[0].PreviousOutPoint
+		if parent.Hash.String() == fromtxid && parent.Index == vout {
+			foundParent = g
+			return false, nil
+		}
+
+		return true, nil
+	}); err != nil {
+		return nil, err
 	}
-	return &domain.VtxoKey{
-		Txid: leaf.Txid,
-		VOut: 0,
-	}, nil
+
+	if foundParent == nil {
+		return nil, fmt.Errorf("no tx %s found in the graph", fromtxid)
+	}
+
+	return foundParent.Leaves(), nil
+}
+
+func extractVtxoOutpoint(leaf *psbt.Packet) (*domain.VtxoKey, error) {
+	// Find the first non-anchor output
+	for i, out := range leaf.UnsignedTx.TxOut {
+		if bytes.Equal(out.PkScript, tree.ANCHOR_PKSCRIPT) {
+			continue
+		}
+
+		return &domain.VtxoKey{
+			Txid: leaf.UnsignedTx.TxID(),
+			VOut: uint32(i),
+		}, nil
+	}
+
+	return nil, fmt.Errorf("no non-anchor output found in leaf")
 }

@@ -7,7 +7,6 @@ import (
 	"github.com/ark-network/ark/common"
 	"github.com/btcsuite/btcd/btcec/v2/schnorr"
 	"github.com/btcsuite/btcd/btcutil/psbt"
-	"github.com/btcsuite/btcd/chaincfg/chainhash"
 	"github.com/btcsuite/btcd/txscript"
 	"github.com/btcsuite/btcd/wire"
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
@@ -47,17 +46,17 @@ func CraftSharedOutput(
 // BuildVtxoTree creates all the tree's transactions and returns the vtxo tree
 // radix is hardcoded to 2
 func BuildVtxoTree(
-	initialInput *wire.OutPoint,
+	rootInput *wire.OutPoint,
 	receivers []Leaf,
 	sweepTapTreeRoot []byte,
 	vtxoTreeExpiry common.RelativeLocktime,
-) (TxTree, error) {
+) (*TxGraph, error) {
 	root, err := createTxTree(receivers, sweepTapTreeRoot, vtxoTreeRadix)
 	if err != nil {
 		return nil, err
 	}
 
-	return toTxTree(root, initialInput, &vtxoTreeExpiry)
+	return root.graph(rootInput, &vtxoTreeExpiry)
 }
 
 // CraftConnectorsOutput returns the taproot script and the amount of the root shared output of a connectors tree
@@ -88,65 +87,15 @@ func CraftConnectorsOutput(
 // BuildConnectorsTree creates all the tree's transactions and returns the vtxo tree
 // radix is hardcoded to 4
 func BuildConnectorsTree(
-	initialInput *wire.OutPoint,
+	rootInput *wire.OutPoint,
 	receivers []Leaf,
-) (TxTree, error) {
+) (*TxGraph, error) {
 	root, err := createTxTree(receivers, nil, connectorsTreeRadix)
 	if err != nil {
 		return nil, err
 	}
 
-	return toTxTree(root, initialInput, nil)
-}
-
-// toTxTree converts a node root to VtxoTree matrix
-func toTxTree(root node, initialInput *wire.OutPoint, expiry *common.RelativeLocktime) (TxTree, error) {
-	vtxoTree := make(TxTree, 0)
-
-	ins := []*wire.OutPoint{initialInput}
-	nodes := []node{root}
-
-	level := int32(0)
-
-	for len(nodes) > 0 {
-		nextNodes := make([]node, 0)
-		nextInputsArgs := make([]*wire.OutPoint, 0)
-
-		treeLevel := make([]Node, 0)
-
-		for i, node := range nodes {
-			treeNode, err := getTreeNode(node, ins[i], expiry, level, int32(i))
-			if err != nil {
-				return nil, err
-			}
-
-			nodeTxHash, err := chainhash.NewHashFromStr(treeNode.Txid)
-			if err != nil {
-				return nil, err
-			}
-
-			treeLevel = append(treeLevel, treeNode)
-
-			children := node.getChildren()
-
-			for i, child := range children {
-				nextNodes = append(nextNodes, child)
-
-				nextInputsArgs = append(nextInputsArgs, &wire.OutPoint{
-					Hash:  *nodeTxHash,
-					Index: uint32(i),
-				})
-			}
-		}
-
-		level++
-
-		vtxoTree = append(vtxoTree, treeLevel)
-		nodes = append([]node{}, nextNodes...)
-		ins = append([]*wire.OutPoint{}, nextInputsArgs...)
-	}
-
-	return vtxoTree, nil
+	return root.graph(rootInput, nil)
 }
 
 type node interface {
@@ -154,34 +103,66 @@ type node interface {
 	getOutputs() ([]*wire.TxOut, error)
 	getChildren() []node
 	getCosigners() []*secp256k1.PublicKey
+	getInputScript() []byte
+	graph(input *wire.OutPoint, expiry *common.RelativeLocktime) (*TxGraph, error)
 }
 
 type leaf struct {
-	amount    int64
-	pkScript  []byte
-	cosigners []*secp256k1.PublicKey
+	output      *wire.TxOut
+	inputScript []byte
+	cosigners   []*secp256k1.PublicKey
 }
 
-type branch struct {
-	cosigners []*secp256k1.PublicKey
-	pkScript  []byte
-	children  []node
-}
-
-func (b *branch) getCosigners() []*secp256k1.PublicKey {
-	return b.cosigners
+func (l *leaf) getInputScript() []byte {
+	return l.inputScript
 }
 
 func (l *leaf) getCosigners() []*secp256k1.PublicKey {
 	return l.cosigners
 }
 
-func (b *branch) getChildren() []node {
-	return b.children
-}
-
 func (l *leaf) getChildren() []node {
 	return []node{}
+}
+
+func (l *leaf) getAmount() int64 {
+	return l.output.Value
+}
+
+func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
+	return []*wire.TxOut{
+		l.output,
+		AnchorOutput(),
+	}, nil
+}
+
+func (l *leaf) graph(initialInput *wire.OutPoint, expiry *common.RelativeLocktime) (*TxGraph, error) {
+	tx, err := getTx(l, initialInput, expiry)
+	if err != nil {
+		return nil, err
+	}
+
+	return &TxGraph{
+		Root: tx,
+	}, nil
+}
+
+type branch struct {
+	inputScript []byte
+	cosigners   []*secp256k1.PublicKey
+	children    []node
+}
+
+func (b *branch) getInputScript() []byte {
+	return b.inputScript
+}
+
+func (b *branch) getCosigners() []*secp256k1.PublicKey {
+	return b.cosigners
+}
+
+func (b *branch) getChildren() []node {
+	return b.children
 }
 
 func (b *branch) getAmount() int64 {
@@ -194,59 +175,44 @@ func (b *branch) getAmount() int64 {
 	return amount
 }
 
-func (l *leaf) getAmount() int64 {
-	return l.amount
-}
-
-func (l *leaf) getOutputs() ([]*wire.TxOut, error) {
-	return []*wire.TxOut{
-		{
-			Value:    l.amount,
-			PkScript: l.pkScript,
-		},
-		AnchorOutput(),
-	}, nil
-}
-
 func (b *branch) getOutputs() ([]*wire.TxOut, error) {
 	outputs := make([]*wire.TxOut, 0)
 
 	for _, child := range b.children {
 		outputs = append(outputs, &wire.TxOut{
 			Value:    child.getAmount(),
-			PkScript: b.pkScript,
+			PkScript: child.getInputScript(),
 		})
 	}
 
 	return append(outputs, AnchorOutput()), nil
 }
 
-func getTreeNode(
-	n node,
-	input *wire.OutPoint,
-	expiry *common.RelativeLocktime,
-	level, levelIndex int32,
-) (Node, error) {
-	partialTx, err := getTx(n, input, expiry)
+func (b *branch) graph(initialInput *wire.OutPoint, expiry *common.RelativeLocktime) (*TxGraph, error) {
+	tx, err := getTx(b, initialInput, expiry)
 	if err != nil {
-		return Node{}, err
+		return nil, err
 	}
 
-	txid := partialTx.UnsignedTx.TxHash().String()
-
-	tx, err := partialTx.B64Encode()
-	if err != nil {
-		return Node{}, err
+	graph := &TxGraph{
+		Root:     tx,
+		Children: make(map[uint32]*TxGraph),
 	}
 
-	return Node{
-		Txid:       txid,
-		Tx:         tx,
-		ParentTxid: input.Hash.String(),
-		Level:      level,
-		LevelIndex: levelIndex,
-		Leaf:       len(n.getChildren()) == 0,
-	}, nil
+	children := b.getChildren()
+	for i, child := range children {
+		childGraph, err := child.graph(&wire.OutPoint{
+			Hash:  tx.UnsignedTx.TxHash(),
+			Index: uint32(i),
+		}, expiry)
+		if err != nil {
+			return nil, err
+		}
+
+		graph.Children[uint32(i)] = childGraph
+	}
+
+	return graph, nil
 }
 
 func getTx(
@@ -327,10 +293,20 @@ func createTxTree(
 			return nil, fmt.Errorf("no cosigners for %s", r.Script)
 		}
 
+		aggregatedKey, err := AggregateKeys(cosigners, tapTreeRoot)
+		if err != nil {
+			return nil, fmt.Errorf("failed to aggregate keys: %w", err)
+		}
+
+		inputScript, err := common.P2TRScript(aggregatedKey.FinalKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create script pubkey: %w", err)
+		}
+
 		leafNode := &leaf{
-			amount:    int64(r.Amount),
-			pkScript:  pkScript,
-			cosigners: cosigners,
+			output:      &wire.TxOut{Value: int64(r.Amount), PkScript: pkScript},
+			inputScript: inputScript,
+			cosigners:   cosigners,
 		}
 		nodes = append(nodes, leafNode)
 	}
@@ -381,15 +357,15 @@ func createUpperLevel(nodes []node, tapTreeRoot []byte, radix int) ([]node, erro
 			return nil, err
 		}
 
-		pkScript, err := common.P2TRScript(aggregatedKey.FinalKey)
+		inputPkScript, err := common.P2TRScript(aggregatedKey.FinalKey)
 		if err != nil {
 			return nil, err
 		}
 
 		branchNode := &branch{
-			pkScript:  pkScript,
-			cosigners: cosigners,
-			children:  children,
+			inputScript: inputPkScript,
+			cosigners:   cosigners,
+			children:    children,
 		}
 
 		groups = append(groups, branchNode)

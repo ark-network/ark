@@ -1,9 +1,8 @@
 package grpcclient
 
 import (
-	"encoding/hex"
+	"encoding/json"
 	"fmt"
-	"strings"
 	"time"
 
 	arkv1 "github.com/ark-network/ark/api-spec/protobuf/gen/ark/v1"
@@ -70,8 +69,9 @@ func (e event) toBatchEvent() (any, error) {
 	}
 
 	if ee := e.GetTreeNoncesAggregated(); ee != nil {
-		nonces, err := tree.DecodeNonces(hex.NewDecoder(strings.NewReader(ee.GetTreeNonces())))
-		if err != nil {
+		nonces := make(tree.TreeNonces)
+
+		if err := json.Unmarshal([]byte(ee.GetTreeNonces()), &nonces); err != nil {
 			return nil, err
 		}
 		return client.TreeNoncesAggregatedEvent{
@@ -81,19 +81,14 @@ func (e event) toBatchEvent() (any, error) {
 	}
 
 	if ee := e.GetTreeTx(); ee != nil {
-		treeTx := ee.GetTreeTx()
-
 		return client.TreeTxEvent{
 			Id:         ee.GetId(),
 			Topic:      ee.GetTopic(),
 			BatchIndex: ee.GetBatchIndex(),
-			Node: tree.Node{
-				Txid:       treeTx.GetTxid(),
-				Tx:         treeTx.GetTx(),
-				ParentTxid: treeTx.GetParentTxid(),
-				Level:      treeTx.GetLevel(),
-				LevelIndex: treeTx.GetLevelIndex(),
-				Leaf:       treeTx.GetLeaf(),
+			TxGraphChunk: tree.TxGraphChunk{
+				Txid:     ee.GetTxid(),
+				Tx:       ee.GetTx(),
+				Children: ee.GetChildren(),
 			},
 		}, nil
 	}
@@ -103,8 +98,7 @@ func (e event) toBatchEvent() (any, error) {
 			Id:         ee.GetId(),
 			Topic:      ee.GetTopic(),
 			BatchIndex: ee.GetBatchIndex(),
-			Level:      ee.GetLevel(),
-			LevelIndex: ee.GetLevelIndex(),
+			Txid:       ee.GetTxid(),
 			Signature:  ee.GetSignature(),
 		}, nil
 	}

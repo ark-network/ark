@@ -442,10 +442,9 @@ func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
 		return nil
 	}
 
-	leaves := round.VtxoTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
-	for _, node := range leaves {
-		tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+	for _, chunk := range tree.TxGraphChunkList(round.VtxoTree).Leaves() {
+		tx, err := psbt.NewFromRawBytes(strings.NewReader(chunk.Tx), true)
 		if err != nil {
 			log.WithError(err).Warn("failed to parse tx")
 			continue
@@ -464,7 +463,7 @@ func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
 
 			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
 			vtxos = append(vtxos, domain.Vtxo{
-				VtxoKey:        domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+				VtxoKey:        domain.VtxoKey{Txid: tx.UnsignedTx.TxID(), VOut: uint32(i)},
 				PubKey:         vtxoPubkey,
 				Amount:         uint64(out.Value),
 				CommitmentTxid: round.Txid,

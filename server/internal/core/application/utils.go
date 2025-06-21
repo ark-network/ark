@@ -26,69 +26,58 @@ func findSweepableOutputs(
 	walletSvc ports.WalletService,
 	txbuilder ports.TxBuilder,
 	schedulerUnit ports.TimeUnit,
-	vtxoTree tree.TxTree,
+	graph *tree.TxGraph,
 ) (map[int64][]ports.SweepInput, error) {
 	sweepableOutputs := make(map[int64][]ports.SweepInput)
 	blocktimeCache := make(map[string]int64) // txid -> blocktime / blockheight
-	nodesToCheck := vtxoTree[0]              // init with the root
 
-	for len(nodesToCheck) > 0 {
-		newNodesToCheck := make([]tree.Node, 0)
+	if err := graph.Apply(func(g *tree.TxGraph) (bool, error) {
+		isConfirmed, height, blocktime, err := walletSvc.IsTransactionConfirmed(ctx, g.Root.UnsignedTx.TxID())
+		if err != nil {
+			return false, err
+		}
 
-		for _, node := range nodesToCheck {
-			isConfirmed, height, blocktime, err := walletSvc.IsTransactionConfirmed(ctx, node.Txid)
-			if err != nil {
-				return nil, err
-			}
+		if !isConfirmed {
+			parentTxid := g.Root.UnsignedTx.TxIn[0].PreviousOutPoint.Hash.String()
 
-			var expirationTime int64
-			var sweepInput ports.SweepInput
-
-			if !isConfirmed {
-				if _, ok := blocktimeCache[node.ParentTxid]; !ok {
-					isConfirmed, height, blocktime, err := walletSvc.IsTransactionConfirmed(ctx, node.ParentTxid)
-					if !isConfirmed || err != nil {
-						return nil, fmt.Errorf("tx %s not found", node.ParentTxid)
-					}
-
-					if schedulerUnit == ports.BlockHeight {
-						blocktimeCache[node.ParentTxid] = height
-					} else {
-						blocktimeCache[node.ParentTxid] = blocktime
-					}
+			if _, ok := blocktimeCache[parentTxid]; !ok {
+				isConfirmed, height, blocktime, err := walletSvc.IsTransactionConfirmed(ctx, parentTxid)
+				if !isConfirmed || err != nil {
+					return false, fmt.Errorf("tx %s not found", parentTxid)
 				}
 
-				var vtxoTreeExpiry *common.RelativeLocktime
-				vtxoTreeExpiry, sweepInput, err = txbuilder.GetSweepInput(node)
-				if err != nil {
-					return nil, err
-				}
-				expirationTime = blocktimeCache[node.ParentTxid] + int64(vtxoTreeExpiry.Value)
-			} else {
-				// cache the blocktime for future use
 				if schedulerUnit == ports.BlockHeight {
-					blocktimeCache[node.Txid] = height
+					blocktimeCache[parentTxid] = height
 				} else {
-					blocktimeCache[node.Txid] = blocktime
+					blocktimeCache[parentTxid] = blocktime
 				}
-
-				// if the tx is onchain, it means that the input is spent
-				// add the children to the nodes in order to check them during the next iteration
-				// We will return the error below, but are we going to schedule the tasks for the "children roots"?
-				if !node.Leaf {
-					children := vtxoTree.Children(node.Txid)
-					newNodesToCheck = append(newNodesToCheck, children...)
-				}
-				continue
 			}
 
+			vtxoTreeExpiry, sweepInput, err := txbuilder.GetSweepInput(g)
+			if err != nil {
+				return false, err
+			}
+
+			expirationTime := blocktimeCache[parentTxid] + int64(vtxoTreeExpiry.Value)
 			if _, ok := sweepableOutputs[expirationTime]; !ok {
 				sweepableOutputs[expirationTime] = make([]ports.SweepInput, 0)
 			}
 			sweepableOutputs[expirationTime] = append(sweepableOutputs[expirationTime], sweepInput)
+			// we don't need to check the children, we already found a sweepable output
+			return false, nil
 		}
 
-		nodesToCheck = newNodesToCheck
+		// cache the blocktime for future use
+		if schedulerUnit == ports.BlockHeight {
+			blocktimeCache[g.Root.UnsignedTx.TxID()] = height
+		} else {
+			blocktimeCache[g.Root.UnsignedTx.TxID()] = blocktime
+		}
+
+		// if the tx is onchain, it means that the input is spent, we need to check the children
+		return true, nil
+	}); err != nil {
+		return nil, err
 	}
 
 	return sweepableOutputs, nil
@@ -121,7 +110,7 @@ func decodeTx(offchainTx domain.OffchainTx) (string, []domain.VtxoKey, []domain.
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("failed to parse partial tx: %s", err)
 	}
-	txid := ptx.UnsignedTx.TxHash().String()
+	txid := ptx.UnsignedTx.TxID()
 
 	outs := make([]domain.Vtxo, 0, len(ptx.UnsignedTx.TxOut))
 	for outIndex, out := range ptx.UnsignedTx.TxOut {
@@ -245,10 +234,9 @@ func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
 	createdAt := now.Unix()
 	expireAt := round.ExpiryTimestamp()
 
-	leaves := round.VtxoTree.Leaves()
 	vtxos := make([]domain.Vtxo, 0)
-	for _, node := range leaves {
-		tx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
+	for _, chunk := range tree.TxGraphChunkList(round.VtxoTree).Leaves() {
+		tx, err := psbt.NewFromRawBytes(strings.NewReader(chunk.Tx), true)
 		if err != nil {
 			log.WithError(err).Warn("failed to parse tx")
 			continue
@@ -266,7 +254,7 @@ func getNewVtxosFromRound(round *domain.Round) []domain.Vtxo {
 
 			vtxoPubkey := hex.EncodeToString(schnorr.SerializePubKey(vtxoTapKey))
 			vtxos = append(vtxos, domain.Vtxo{
-				VtxoKey:        domain.VtxoKey{Txid: node.Txid, VOut: uint32(i)},
+				VtxoKey:        domain.VtxoKey{Txid: tx.UnsignedTx.TxID(), VOut: uint32(i)},
 				PubKey:         vtxoPubkey,
 				Amount:         uint64(out.Value),
 				CommitmentTxid: round.Txid,

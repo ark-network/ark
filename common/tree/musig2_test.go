@@ -1,8 +1,8 @@
 package tree_test
 
 import (
-	"bytes"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"testing"
 
@@ -74,41 +74,50 @@ func TestBuildAndSignVtxoTree(t *testing.T) {
 
 func checkNoncesRoundtrip(t *testing.T) func(nonces tree.TreeNonces) {
 	return func(nonces tree.TreeNonces) {
-		var encodedNonces bytes.Buffer
-		err := nonces.Encode(&encodedNonces)
+		// Marshal to JSON
+		jsonData, err := json.Marshal(nonces)
 		require.NoError(t, err)
 
-		decodedNonces, err := tree.DecodeNonces(&encodedNonces)
+		// Unmarshal from JSON
+		decodedNonces := make(tree.TreeNonces)
+		err = json.Unmarshal(jsonData, &decodedNonces)
 		require.NoError(t, err)
-		for i, nonceRow := range nonces {
-			for j, nonce := range nonceRow {
-				require.Equal(t, nonce, decodedNonces[i][j])
-			}
+
+		// Compare the nonces
+		for txid, nonce := range nonces {
+			decodedNonce, exists := decodedNonces[txid]
+			require.True(t, exists)
+			require.Equal(t, nonce.PubNonce, decodedNonce.PubNonce)
 		}
 	}
 }
 
 func checkSigsRoundtrip(t *testing.T) func(sigs tree.TreePartialSigs) {
 	return func(sigs tree.TreePartialSigs) {
-		var encodedSig bytes.Buffer
-		err := sigs.Encode(&encodedSig)
+		// Marshal to JSON
+		jsonData, err := json.Marshal(sigs)
 		require.NoError(t, err)
-		decodedSig, err := tree.DecodeSignatures(&encodedSig)
+
+		// Unmarshal from JSON
+		decodedSigs := make(tree.TreePartialSigs)
+		err = json.Unmarshal(jsonData, &decodedSigs)
 		require.NoError(t, err)
-		for i, sigRow := range sigs {
-			for j, sig := range sigRow {
-				if sig == nil {
-					require.Nil(t, decodedSig[i][j])
-				} else {
-					require.Equal(t, sig.S, decodedSig[i][j].S)
-				}
+
+		// Compare the signatures
+		for txid, sig := range sigs {
+			decodedSig, exists := decodedSigs[txid]
+			require.True(t, exists)
+			if sig == nil {
+				require.Nil(t, decodedSig)
+			} else {
+				require.Equal(t, sig.S, decodedSig.S)
 			}
 		}
 	}
 }
 
 func makeCosigners(
-	keys []*btcec.PrivateKey, sharedOutAmount int64, vtxoTree tree.TxTree,
+	keys []*btcec.PrivateKey, sharedOutAmount int64, vtxoTree *tree.TxGraph,
 ) (map[string]tree.SignerSession, error) {
 	signers := make(map[string]tree.SignerSession)
 	for _, prvkey := range keys {
@@ -166,7 +175,7 @@ func makeAggregatedNonces(
 func makeAggregatedSignatures(
 	signers map[string]tree.SignerSession, coordinator tree.CoordinatorSession,
 	checkSigsRoundtrip func(tree.TreePartialSigs),
-) (tree.TxTree, error) {
+) (*tree.TxGraph, error) {
 	for pk, session := range signers {
 		buf, err := hex.DecodeString(pk)
 		if err != nil {
@@ -190,14 +199,14 @@ func makeAggregatedSignatures(
 	return coordinator.SignTree()
 }
 
-type testCase struct {
+type vtxoTreeTestCase struct {
 	name      string
 	receivers []tree.Leaf
 	privKeys  []*btcec.PrivateKey
 }
 
-func makeTestVectors() ([]testCase, error) {
-	vectors := make([]testCase, 0, len(receiverCounts))
+func makeTestVectors() ([]vtxoTreeTestCase, error) {
+	vectors := make([]vtxoTreeTestCase, 0, len(receiverCounts))
 	for _, count := range receiverCounts {
 		testCase, err := generateMockedReceivers(count)
 		if err != nil {
@@ -208,13 +217,13 @@ func makeTestVectors() ([]testCase, error) {
 	return vectors, nil
 }
 
-func generateMockedReceivers(num int) (testCase, error) {
+func generateMockedReceivers(num int) (vtxoTreeTestCase, error) {
 	receivers := make([]tree.Leaf, 0, num)
 	privKeys := make([]*btcec.PrivateKey, 0, num)
 	for i := 0; i < num; i++ {
 		prvkey, err := btcec.NewPrivateKey()
 		if err != nil {
-			return testCase{}, err
+			return vtxoTreeTestCase{}, err
 		}
 		receivers = append(receivers, tree.Leaf{
 			Script: "0000000000000000000000000000000000000000000000000000000000000002",
@@ -226,7 +235,7 @@ func generateMockedReceivers(num int) (testCase, error) {
 		})
 		privKeys = append(privKeys, prvkey)
 	}
-	return testCase{
+	return vtxoTreeTestCase{
 		name:      fmt.Sprintf("%d receivers", num),
 		receivers: receivers,
 		privKeys:  privKeys,

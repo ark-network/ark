@@ -96,15 +96,3 @@ func (o *GetTxHistoryRequestOption) WithEndTime(endTime time.Time) {
 func (o *GetTxHistoryRequestOption) GetEndTime() time.Time {
 	return o.endTime
 }
-
-func extendArray[T any](arr []T, position int) []T {
-	if arr == nil {
-		return make([]T, position+1)
-	}
-
-	if len(arr) <= position {
-		return append(arr, make([]T, position-len(arr)+1)...)
-	}
-
-	return arr
-}

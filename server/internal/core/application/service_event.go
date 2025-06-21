@@ -6,9 +6,6 @@
 package application
 
 import (
-	"bytes"
-	"encoding/hex"
-
 	"github.com/ark-network/ark/common/tree"
 	"github.com/ark-network/ark/server/internal/core/domain"
 )
@@ -39,29 +36,18 @@ type RoundFinalized struct {
 	Txid string
 }
 
-func (e RoundSigningNoncesGenerated) SerializeNonces() (string, error) {
-	var serialized bytes.Buffer
-
-	if err := e.Nonces.Encode(&serialized); err != nil {
-		return "", err
-	}
-
-	return hex.EncodeToString(serialized.Bytes()), nil
-}
-
 type BatchTree struct {
 	domain.RoundEvent
 	Topic      []string
 	BatchIndex int32
-	Node       tree.Node
+	Chunk      tree.TxGraphChunk
 }
 
 type BatchTreeSignature struct {
 	domain.RoundEvent
 	Topic      []string
 	BatchIndex int32
-	Level      int32
-	LevelIndex int32
+	Txid       string
 	Signature  string
 }
 

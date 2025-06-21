@@ -163,13 +163,7 @@ type VtxoTreeLeavesResp struct {
 	Page   PageResp
 }
 
-type Node struct {
-	Txid       string
-	Tx         string
-	ParentTxid string
-	Level      int32
-	LevelIndex int32
-}
+type Node = tree.TxGraphChunk
 
 type ForfeitTxsResp struct {
 	Txs  []string

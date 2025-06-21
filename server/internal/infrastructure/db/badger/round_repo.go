@@ -114,7 +114,7 @@ func (r *roundRepository) GetRoundForfeitTxs(ctx context.Context, roundTxid stri
 	return nil, nil
 }
 
-func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid string) (tree.TxTree, error) {
+func (r *roundRepository) GetRoundConnectorTree(ctx context.Context, roundTxid string) ([]tree.TxGraphChunk, error) {
 	// TODO implement
 	return nil, nil
 }
@@ -162,7 +162,7 @@ func (r *roundRepository) GetRoundsIds(ctx context.Context, startedAfter int64, 
 
 func (r *roundRepository) GetVtxoTreeWithTxid(
 	ctx context.Context, txid string,
-) (tree.TxTree, error) {
+) ([]tree.TxGraphChunk, error) {
 	round, err := r.GetRoundWithTxid(ctx, txid)
 	if err != nil {
 		return nil, err
@@ -270,21 +270,17 @@ func (r *roundRepository) addTxs(
 			}
 		}
 
-		for _, levelTxs := range round.Connectors {
-			for _, tx := range levelTxs {
-				txs[tx.Txid] = Tx{
-					Txid: tx.Txid,
-					Tx:   tx.Tx,
-				}
+		for _, chunk := range round.Connectors {
+			txs[chunk.Txid] = Tx{
+				Txid: chunk.Txid,
+				Tx:   chunk.Tx,
 			}
 		}
 
-		for _, levelTxs := range round.VtxoTree {
-			for _, tx := range levelTxs {
-				txs[tx.Txid] = Tx{
-					Txid: tx.Txid,
-					Tx:   tx.Tx,
-				}
+		for _, chunk := range round.VtxoTree {
+			txs[chunk.Txid] = Tx{
+				Txid: chunk.Txid,
+				Tx:   chunk.Tx,
 			}
 		}
 	}

@@ -47,8 +47,8 @@ type Round struct {
 	Txid               string
 	CommitmentTx       string
 	ForfeitTxs         []ForfeitTx
-	VtxoTree           tree.TxTree
-	Connectors         tree.TxTree
+	VtxoTree           []tree.TxGraphChunk
+	Connectors         []tree.TxGraphChunk
 	ConnectorAddress   string
 	Version            uint
 	Swept              bool // true if all the vtxos are vtxo.Swept or vtxo.Redeemed
@@ -125,8 +125,8 @@ func (r *Round) RegisterTxRequests(txRequests []TxRequest) ([]Event, error) {
 
 func (r *Round) StartFinalization(
 	connectorAddress string,
-	connectors tree.TxTree,
-	vtxoTree tree.TxTree,
+	connectors []tree.TxGraphChunk,
+	vtxoTree []tree.TxGraphChunk,
 	txid string,
 	roundTx string,
 	connectorsIndex map[string]Outpoint,

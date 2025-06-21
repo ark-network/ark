@@ -20,7 +20,7 @@ func (s *service) DecodeTx(tx string) (string, []ports.TxIn, []ports.TxOut, erro
 		return "", nil, nil, fmt.Errorf("failed to parse partial tx: %s", err)
 	}
 
-	txid := ptx.UnsignedTx.TxHash().String()
+	txid := ptx.UnsignedTx.TxID()
 	ins := make([]ports.TxIn, 0, len(ptx.UnsignedTx.TxIn))
 	for _, input := range ptx.UnsignedTx.TxIn {
 		ins = append(ins, ports.TxIn{

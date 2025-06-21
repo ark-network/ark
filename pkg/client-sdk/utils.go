@@ -616,81 +616,31 @@ func finalizeWithNotes(notesWitnesses map[int][]byte) func(ptx *psbt.Packet) err
 	}
 }
 
-func extendArray[T any](arr []T, position int) []T {
-	if arr == nil {
-		return make([]T, position+1)
-	}
-
-	if len(arr) <= position {
-		return append(arr, make([]T, position-len(arr)+1)...)
-	}
-
-	return arr
-}
-
-func handleBatchTree(
-	event client.TreeTxEvent,
-	vtxoTree, connectorsTree tree.TxTree,
-) (tree.TxTree, tree.TxTree) {
-	if event.BatchIndex == 0 {
-		vtxoTree = handleBatchTreeNode(event.Node, vtxoTree)
-	} else {
-		connectorsTree = handleBatchTreeNode(event.Node, connectorsTree)
-	}
-	return vtxoTree, connectorsTree
-}
-
-func handleBatchTreeNode(node tree.Node, tree tree.TxTree) tree.TxTree {
-	level := int(node.Level)
-	index := int(node.LevelIndex)
-	tree = extendArray(tree, level)
-	tree[level] = extendArray(tree[level], index)
-	tree[level][index] = node
-	return tree
-}
-
 func handleBatchTreeSignature(
-	event client.TreeSignatureEvent, vtxoTree tree.TxTree,
-) (tree.TxTree, error) {
+	event client.TreeSignatureEvent, graph *tree.TxGraph,
+) error {
 	if event.BatchIndex != 0 {
-		return nil, fmt.Errorf("batch index %d is not 0", event.BatchIndex)
+		return fmt.Errorf("batch index %d is not 0", event.BatchIndex)
 	}
 
 	decodedSig, err := hex.DecodeString(event.Signature)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decode signature: %s", err)
+		return fmt.Errorf("failed to decode signature: %s", err)
 	}
 
 	sig, err := schnorr.ParseSignature(decodedSig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to parse signature: %s", err)
+		return fmt.Errorf("failed to parse signature: %s", err)
 	}
 
-	level := int(event.Level)
-	levelIndex := int(event.LevelIndex)
+	return graph.Apply(func(g *tree.TxGraph) (bool, error) {
+		if g.Root.UnsignedTx.TxID() != event.Txid {
+			return true, nil
+		}
 
-	if len(vtxoTree) <= level {
-		return nil, fmt.Errorf("level %d not found in vtxo tree", level)
-	}
-
-	if len(vtxoTree[level]) <= levelIndex {
-		return nil, fmt.Errorf("level %d index %d not found in vtxo tree", level, levelIndex)
-	}
-
-	ptx, err := psbt.NewFromRawBytes(strings.NewReader(vtxoTree[level][levelIndex].Tx), true)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create ptx: %s", err)
-	}
-
-	ptx.Inputs[0].TaprootKeySpendSig = sig.Serialize()
-
-	encodedTx, err := ptx.B64Encode()
-	if err != nil {
-		return nil, fmt.Errorf("failed to encode tx: %s", err)
-	}
-
-	vtxoTree[level][levelIndex].Tx = encodedTx
-	return vtxoTree, nil
+		g.Root.Inputs[0].TaprootKeySpendSig = sig.Serialize()
+		return false, nil
+	})
 }
 
 func checkSettleOptionsType(o interface{}) (*SettleOptions, error) {

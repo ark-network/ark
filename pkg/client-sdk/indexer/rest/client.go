@@ -158,11 +158,17 @@ func (a *restClient) GetVtxoTree(
 
 	nodes := make([]indexer.TxNode, 0, len(resp.Payload.VtxoTree))
 	for _, node := range resp.Payload.VtxoTree {
+		children := make(map[uint32]string)
+		for k, v := range node.Children {
+			vout, err := strconv.ParseUint(k, 10, 32)
+			if err != nil {
+				return nil, err
+			}
+			children[uint32(vout)] = v
+		}
 		nodes = append(nodes, indexer.TxNode{
-			Txid:       node.Txid,
-			ParentTxid: node.ParentTxid,
-			Level:      node.Level,
-			LevelIndex: node.LevelIndex,
+			Txid:     node.Txid,
+			Children: children,
 		})
 	}
 
@@ -174,7 +180,7 @@ func (a *restClient) GetVtxoTree(
 
 func (a *restClient) GetFullVtxoTree(
 	ctx context.Context, batchOutpoint indexer.Outpoint, opts ...indexer.RequestOption,
-) (tree.TxTree, error) {
+) ([]tree.TxGraphChunk, error) {
 	resp, err := a.GetVtxoTree(ctx, batchOutpoint, opts...)
 	if err != nil {
 		return nil, err
@@ -276,11 +282,18 @@ func (a *restClient) GetConnectors(
 
 	connectors := make([]indexer.TxNode, 0, len(resp.Payload.Connectors))
 	for _, connector := range resp.Payload.Connectors {
+		children := make(map[uint32]string)
+		for k, v := range connector.Children {
+			vout, err := strconv.ParseUint(k, 10, 32)
+			if err != nil {
+				return nil, err
+			}
+			children[uint32(vout)] = v
+		}
+
 		connectors = append(connectors, indexer.TxNode{
-			Txid:       connector.Txid,
-			ParentTxid: connector.ParentTxid,
-			Level:      connector.Level,
-			LevelIndex: connector.LevelIndex,
+			Txid:     connector.Txid,
+			Children: children,
 		})
 	}
 

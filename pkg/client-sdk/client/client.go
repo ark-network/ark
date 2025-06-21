@@ -97,18 +97,17 @@ type TreeNoncesAggregatedEvent struct {
 }
 
 type TreeTxEvent struct {
-	Id         string
-	Topic      []string
-	BatchIndex int32
-	Node       tree.Node
+	Id           string
+	Topic        []string
+	BatchIndex   int32
+	TxGraphChunk tree.TxGraphChunk
 }
 
 type TreeSignatureEvent struct {
 	Id         string
 	Topic      []string
 	BatchIndex int32
-	Level      int32
-	LevelIndex int32
+	Txid       string
 	Signature  string
 }
 

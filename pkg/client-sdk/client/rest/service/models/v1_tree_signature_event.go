@@ -23,17 +23,14 @@ type V1TreeSignatureEvent struct {
 	// id
 	ID string `json:"id,omitempty"`
 
-	// level
-	Level int32 `json:"level,omitempty"`
-
-	// level index
-	LevelIndex int32 `json:"levelIndex,omitempty"`
-
 	// signature
 	Signature string `json:"signature,omitempty"`
 
 	// topic
 	Topic []string `json:"topic"`
+
+	// txid
+	Txid string `json:"txid,omitempty"`
 }
 
 // Validate validates this v1 tree signature event

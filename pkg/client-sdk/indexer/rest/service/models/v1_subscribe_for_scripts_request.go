@@ -20,7 +20,7 @@ type V1SubscribeForScriptsRequest struct {
 	// scripts
 	Scripts []string `json:"scripts"`
 
-	// if set, update an existing subscription
+	// If set, update an existing subscription
 	SubscriptionID string `json:"subscriptionId,omitempty"`
 }
 

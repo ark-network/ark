@@ -4,14 +4,12 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
@@ -176,21 +174,18 @@ func (a *restClient) ConfirmRegistration(ctx context.Context, intentID string) e
 func (a *restClient) SubmitTreeNonces(
 	ctx context.Context, batchId, cosignerPubkey string, nonces tree.TreeNonces,
 ) error {
-	var nonceBuffer bytes.Buffer
-
-	if err := nonces.Encode(&nonceBuffer); err != nil {
+	noncesJSON, err := json.Marshal(nonces)
+	if err != nil {
 		return err
 	}
-
-	serializedNonces := hex.EncodeToString(nonceBuffer.Bytes())
 
 	body := &models.V1SubmitTreeNoncesRequest{
 		BatchID:    batchId,
 		Pubkey:     cosignerPubkey,
-		TreeNonces: serializedNonces,
+		TreeNonces: string(noncesJSON),
 	}
 
-	_, err := a.svc.ArkServiceSubmitTreeNonces(
+	_, err = a.svc.ArkServiceSubmitTreeNonces(
 		ark_service.NewArkServiceSubmitTreeNoncesParams().WithBody(body),
 	)
 	return err
@@ -199,21 +194,18 @@ func (a *restClient) SubmitTreeNonces(
 func (a *restClient) SubmitTreeSignatures(
 	ctx context.Context, batchId, cosignerPubkey string, signatures tree.TreePartialSigs,
 ) error {
-	var sigsBuffer bytes.Buffer
-
-	if err := signatures.Encode(&sigsBuffer); err != nil {
+	signaturesJSON, err := json.Marshal(signatures)
+	if err != nil {
 		return err
 	}
-
-	serializedSigs := hex.EncodeToString(sigsBuffer.Bytes())
 
 	body := &models.V1SubmitTreeSignaturesRequest{
 		BatchID:        batchId,
 		Pubkey:         cosignerPubkey,
-		TreeSignatures: serializedSigs,
+		TreeSignatures: string(signaturesJSON),
 	}
 
-	_, err := a.svc.ArkServiceSubmitTreeSignatures(
+	_, err = a.svc.ArkServiceSubmitTreeSignatures(
 		ark_service.NewArkServiceSubmitTreeSignaturesParams().WithBody(body),
 	)
 	return err
@@ -236,7 +228,7 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.BatchEve
 	ctx, cancel := context.WithCancel(ctx)
 	eventsCh := make(chan client.BatchEventChannel)
 	chunkCh := make(chan chunk)
-	url := fmt.Sprintf("%s/v1/events", c.serverURL)
+	url := fmt.Sprintf("%s/v1/batch/events", c.serverURL)
 
 	go listenToStream(url, chunkCh)
 
@@ -322,9 +314,8 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.BatchEve
 					}
 				case resp.Result.TreeNoncesAggregated != nil:
 					e := resp.Result.TreeNoncesAggregated
-					reader := hex.NewDecoder(strings.NewReader(e.TreeNonces))
-					nonces, err := tree.DecodeNonces(reader)
-					if err != nil {
+					nonces := make(tree.TreeNonces)
+					if err := json.Unmarshal([]byte(e.TreeNonces), &nonces); err != nil {
 						_err = err
 						break
 					}
@@ -334,17 +325,23 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.BatchEve
 					}
 				case resp.Result.TreeTx != nil:
 					e := resp.Result.TreeTx
+					children := make(map[uint32]string)
+					for k, v := range e.Children {
+						kInt, err := strconv.ParseUint(k, 10, 32)
+						if err != nil {
+							_err = err
+							break
+						}
+						children[uint32(kInt)] = v
+					}
 					event = client.TreeTxEvent{
 						Id:         e.ID,
 						Topic:      e.Topic,
 						BatchIndex: e.BatchIndex,
-						Node: tree.Node{
-							Txid:       e.TreeTx.Txid,
-							Tx:         e.TreeTx.Tx,
-							ParentTxid: e.TreeTx.ParentTxid,
-							Leaf:       e.TreeTx.Leaf,
-							Level:      e.TreeTx.Level,
-							LevelIndex: e.TreeTx.LevelIndex,
+						TxGraphChunk: tree.TxGraphChunk{
+							Txid:     e.Txid,
+							Tx:       e.Tx,
+							Children: children,
 						},
 					}
 				case resp.Result.TreeSignature != nil:
@@ -353,8 +350,7 @@ func (c *restClient) GetEventStream(ctx context.Context) (<-chan client.BatchEve
 						Id:         e.ID,
 						Topic:      e.Topic,
 						BatchIndex: e.BatchIndex,
-						Level:      e.Level,
-						LevelIndex: e.LevelIndex,
+						Txid:       e.Txid,
 						Signature:  e.Signature,
 					}
 				}
@@ -403,7 +399,7 @@ func (c *restClient) GetTransactionsStream(ctx context.Context) (<-chan client.T
 	ctx, cancel := context.WithCancel(ctx)
 	eventsCh := make(chan client.TransactionEvent)
 	chunkCh := make(chan chunk)
-	url := fmt.Sprintf("%s/v1/transactions", c.serverURL)
+	url := fmt.Sprintf("%s/v1/txs", c.serverURL)
 
 	go listenToStream(url, chunkCh)
 

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/ark-network/ark/common/tree"
@@ -22,36 +21,23 @@ type CovenantlessRedeemBranch struct {
 
 func NewRedeemBranch(
 	explorer explorer.Explorer,
-	vtxoTree tree.TxTree, vtxo types.Vtxo,
+	graph *tree.TxGraph, vtxo types.Vtxo,
 ) (*CovenantlessRedeemBranch, error) {
-	root, err := vtxoTree.Root()
+	vtxoTreeExpiry, err := tree.GetVtxoTreeExpiry(graph.Root.Inputs[0])
 	if err != nil {
 		return nil, err
 	}
 
-	ptxRoot, err := psbt.NewFromRawBytes(strings.NewReader(root.Tx), true)
+	subGraph, err := graph.SubGraph([]string{vtxo.Txid})
 	if err != nil {
 		return nil, err
 	}
 
-	vtxoTreeExpiry, err := tree.GetVtxoTreeExpiry(ptxRoot.Inputs[0])
-	if err != nil {
-		return nil, err
-	}
-
-	nodes, err := vtxoTree.Branch(vtxo.Txid)
-	if err != nil {
-		return nil, err
-	}
-
-	branch := make([]*psbt.Packet, 0, len(nodes))
-	for _, node := range nodes {
-		ptx, err := psbt.NewFromRawBytes(strings.NewReader(node.Tx), true)
-		if err != nil {
-			return nil, err
-		}
-		branch = append(branch, ptx)
-	}
+	branch := make([]*psbt.Packet, 0)
+	_ = subGraph.Apply(func(g *tree.TxGraph) (bool, error) {
+		branch = append(branch, g.Root)
+		return true, nil
+	})
 
 	return &CovenantlessRedeemBranch{
 		vtxo:           vtxo,
@@ -114,7 +100,7 @@ func (r *CovenantlessRedeemBranch) ExpiresAt() (*time.Time, error) {
 	}
 
 	for _, ptx := range r.branch {
-		txid := ptx.UnsignedTx.TxHash().String()
+		txid := ptx.UnsignedTx.TxID()
 
 		confirmed, blocktime, err := r.explorer.GetTxBlockTime(txid)
 		if err != nil {
@@ -139,7 +125,7 @@ func (r *CovenantlessRedeemBranch) OffchainPath() ([]*psbt.Packet, error) {
 
 	for i := len(r.branch) - 1; i >= 0; i-- {
 		ptx := r.branch[i]
-		txHash := ptx.UnsignedTx.TxHash().String()
+		txHash := ptx.UnsignedTx.TxID()
 
 		confirmed, _, err := r.explorer.GetTxBlockTime(txHash)
 

@@ -19,23 +19,6 @@ message Output {
   uint64 amount = 2; // Amount to send in satoshis.
 }
 
-message Tree {
-  repeated TreeLevel levels = 1;
-}
-
-message TreeLevel {
-  repeated Node nodes = 1;
-}
-
-message Node {
-  string txid = 1;
-  string tx = 2;
-  string parent_txid = 3;
-  int32 level = 4;
-  int32 level_index = 5;
-  bool leaf = 6;
-}
-
 message Vtxo {
   Outpoint outpoint = 1;
   uint64 amount = 2;
@@ -111,16 +94,17 @@ message TreeNoncesAggregatedEvent {
 
 message TreeTxEvent {
   string id = 1;
-  repeated string topic  = 2;
+  repeated string topic = 2;
   int32 batch_index = 3;
-  Node tree_tx = 4;
+  string txid = 4;
+  string tx = 5;
+  map<uint32, string> children = 6; // output index -> child txid
 }
 
 message TreeSignatureEvent {
   string id = 1;
   repeated string topic = 2;
   int32 batch_index = 3;
-  int32 level = 4;
-  int32 level_index = 5;
-  string signature = 6;
+  string txid = 4;
+  string signature = 5;
 }

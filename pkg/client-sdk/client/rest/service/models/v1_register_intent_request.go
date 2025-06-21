@@ -18,7 +18,8 @@ import (
 // swagger:model v1RegisterIntentRequest
 type V1RegisterIntentRequest struct {
 
-	// BIP322 signature embeds the outpoints and the proof of funds
+	// BIP322 signature embeds the outpoints to be spent and new ones to be created, as well as the
+	// the proof of funds.
 	Intent *V1Bip322Signature `json:"intent,omitempty"`
 }
 

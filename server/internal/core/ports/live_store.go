@@ -33,7 +33,7 @@ type TxRequestsStore interface {
 }
 
 type ForfeitTxsStore interface {
-	Init(connectors tree.TxTree, requests []domain.TxRequest) error
+	Init(connectors []tree.TxGraphChunk, requests []domain.TxRequest) error
 	Sign(txs []string) error
 	Reset()
 	Pop() ([]string, error)

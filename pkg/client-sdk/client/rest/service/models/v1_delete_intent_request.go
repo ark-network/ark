@@ -18,7 +18,8 @@ import (
 // swagger:model v1DeleteIntentRequest
 type V1DeleteIntentRequest struct {
 
-	// proof
+	// A BIP322 signature that includes any of the inputs of the intent to be deleted to prove the
+	// ownership of that intent.
 	Proof *V1Bip322Signature `json:"proof,omitempty"`
 }
 

@@ -124,10 +124,8 @@ func (e *indexerService) GetVtxoTree(ctx context.Context, request *arkv1.GetVtxo
 	nodes := make([]*arkv1.IndexerNode, len(resp.Nodes))
 	for i, node := range resp.Nodes {
 		nodes[i] = &arkv1.IndexerNode{
-			Txid:       node.Txid,
-			ParentTxid: node.ParentTxid,
-			Level:      node.Level,
-			LevelIndex: node.LevelIndex,
+			Txid:     node.Txid,
+			Children: node.Children,
 		}
 	}
 
@@ -207,10 +205,8 @@ func (e *indexerService) GetConnectors(ctx context.Context, request *arkv1.GetCo
 	connectors := make([]*arkv1.IndexerNode, len(resp.Connectors))
 	for i, connector := range resp.Connectors {
 		connectors[i] = &arkv1.IndexerNode{
-			Txid:       connector.Txid,
-			ParentTxid: connector.ParentTxid,
-			Level:      connector.Level,
-			LevelIndex: connector.LevelIndex,
+			Txid:     connector.Txid,
+			Children: connector.Children,
 		}
 	}
 

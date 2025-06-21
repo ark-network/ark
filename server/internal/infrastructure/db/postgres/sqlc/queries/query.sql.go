@@ -10,10 +10,11 @@ import (
 	"database/sql"
 
 	"github.com/lib/pq"
+	"github.com/sqlc-dev/pqtype"
 )
 
 const getExistingRounds = `-- name: GetExistingRounds :many
-SELECT id, starting_timestamp, ending_timestamp, ended, failed, stage_code, connector_address, version, swept, vtxo_tree_expiration, txid, tx, round_id, type, position, tree_level, parent_txid, is_leaf FROM round_commitment_tx_vw r
+SELECT id, starting_timestamp, ending_timestamp, ended, failed, stage_code, connector_address, version, swept, vtxo_tree_expiration, txid, tx, round_id, type, position, children FROM round_commitment_tx_vw r
 WHERE r.txid = ANY($1::varchar[])
 `
 
@@ -42,9 +43,7 @@ func (q *Queries) GetExistingRounds(ctx context.Context, dollar_1 []string) ([]R
 			&i.RoundID,
 			&i.Type,
 			&i.Position,
-			&i.TreeLevel,
-			&i.ParentTxid,
-			&i.IsLeaf,
+			&i.Children,
 		); err != nil {
 			return nil, err
 		}
@@ -78,7 +77,7 @@ func (q *Queries) GetLatestMarketHour(ctx context.Context) (MarketHour, error) {
 }
 
 const getRoundConnectorTreeTxs = `-- name: GetRoundConnectorTreeTxs :many
-SELECT t.txid, t.tx, t.round_id, t.type, t.position, t.tree_level, t.parent_txid, t.is_leaf FROM tx t
+SELECT t.txid, t.tx, t.round_id, t.type, t.position, t.children FROM tx t
 WHERE t.round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = $1)
     AND t.type = 'connector'
 `
@@ -98,9 +97,7 @@ func (q *Queries) GetRoundConnectorTreeTxs(ctx context.Context, txid string) ([]
 			&i.RoundID,
 			&i.Type,
 			&i.Position,
-			&i.TreeLevel,
-			&i.ParentTxid,
-			&i.IsLeaf,
+			&i.Children,
 		); err != nil {
 			return nil, err
 		}
@@ -116,7 +113,7 @@ func (q *Queries) GetRoundConnectorTreeTxs(ctx context.Context, txid string) ([]
 }
 
 const getRoundForfeitTxs = `-- name: GetRoundForfeitTxs :many
-SELECT t.txid, t.tx, t.round_id, t.type, t.position, t.tree_level, t.parent_txid, t.is_leaf FROM tx t
+SELECT t.txid, t.tx, t.round_id, t.type, t.position, t.children FROM tx t
 WHERE t.round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = $1)
     AND t.type = 'forfeit'
 `
@@ -136,9 +133,7 @@ func (q *Queries) GetRoundForfeitTxs(ctx context.Context, txid string) ([]Tx, er
 			&i.RoundID,
 			&i.Type,
 			&i.Position,
-			&i.TreeLevel,
-			&i.ParentTxid,
-			&i.IsLeaf,
+			&i.Children,
 		); err != nil {
 			return nil, err
 		}
@@ -188,7 +183,7 @@ SELECT
         FROM tx t
         WHERE t.round_id = r.id
           AND t.type = 'tree'
-          AND t.is_leaf = TRUE
+          AND COALESCE(t.children, '{}'::jsonb) = '{}'::jsonb
     ) AS total_output_vtxos,
     (
         SELECT MAX(v.expire_at)
@@ -663,7 +658,7 @@ func (q *Queries) SelectRoundIdsInRange(ctx context.Context, arg SelectRoundIdsI
 const selectRoundWithRoundId = `-- name: SelectRoundWithRoundId :many
 SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.connector_address, round.version, round.swept, round.vtxo_tree_expiration,
        round_request_vw.id, round_request_vw.round_id,
-       round_tx_vw.txid, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
+       round_tx_vw.txid, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.children,
        request_receiver_vw.request_id, request_receiver_vw.pubkey, request_receiver_vw.onchain_address, request_receiver_vw.amount,
        request_vtxo_vw.txid, request_vtxo_vw.vout, request_vtxo_vw.pubkey, request_vtxo_vw.amount, request_vtxo_vw.commitment_txid, request_vtxo_vw.spent_by, request_vtxo_vw.spent, request_vtxo_vw.redeemed, request_vtxo_vw.swept, request_vtxo_vw.expire_at, request_vtxo_vw.created_at, request_vtxo_vw.request_id
 FROM round
@@ -709,9 +704,7 @@ func (q *Queries) SelectRoundWithRoundId(ctx context.Context, id string) ([]Sele
 			&i.RoundTxVw.RoundID,
 			&i.RoundTxVw.Type,
 			&i.RoundTxVw.Position,
-			&i.RoundTxVw.TreeLevel,
-			&i.RoundTxVw.ParentTxid,
-			&i.RoundTxVw.IsLeaf,
+			&i.RoundTxVw.Children,
 			&i.RequestReceiverVw.RequestID,
 			&i.RequestReceiverVw.Pubkey,
 			&i.RequestReceiverVw.OnchainAddress,
@@ -745,7 +738,7 @@ func (q *Queries) SelectRoundWithRoundId(ctx context.Context, id string) ([]Sele
 const selectRoundWithRoundTxId = `-- name: SelectRoundWithRoundTxId :many
 SELECT round.id, round.starting_timestamp, round.ending_timestamp, round.ended, round.failed, round.stage_code, round.connector_address, round.version, round.swept, round.vtxo_tree_expiration,
        round_request_vw.id, round_request_vw.round_id,
-       round_tx_vw.txid, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.tree_level, round_tx_vw.parent_txid, round_tx_vw.is_leaf,
+       round_tx_vw.txid, round_tx_vw.tx, round_tx_vw.round_id, round_tx_vw.type, round_tx_vw.position, round_tx_vw.children,
        request_receiver_vw.request_id, request_receiver_vw.pubkey, request_receiver_vw.onchain_address, request_receiver_vw.amount,
        request_vtxo_vw.txid, request_vtxo_vw.vout, request_vtxo_vw.pubkey, request_vtxo_vw.amount, request_vtxo_vw.commitment_txid, request_vtxo_vw.spent_by, request_vtxo_vw.spent, request_vtxo_vw.redeemed, request_vtxo_vw.swept, request_vtxo_vw.expire_at, request_vtxo_vw.created_at, request_vtxo_vw.request_id
 FROM round
@@ -793,9 +786,7 @@ func (q *Queries) SelectRoundWithRoundTxId(ctx context.Context, txid sql.NullStr
 			&i.RoundTxVw.RoundID,
 			&i.RoundTxVw.Type,
 			&i.RoundTxVw.Position,
-			&i.RoundTxVw.TreeLevel,
-			&i.RoundTxVw.ParentTxid,
-			&i.RoundTxVw.IsLeaf,
+			&i.RoundTxVw.Children,
 			&i.RequestReceiverVw.RequestID,
 			&i.RequestReceiverVw.Pubkey,
 			&i.RequestReceiverVw.OnchainAddress,
@@ -901,7 +892,7 @@ func (q *Queries) SelectSweptRoundsConnectorAddress(ctx context.Context) ([]stri
 }
 
 const selectTreeTxsWithRoundTxid = `-- name: SelectTreeTxsWithRoundTxid :many
-SELECT txid, tx, round_id, type, position, tree_level, parent_txid, is_leaf FROM tx
+SELECT txid, tx, round_id, type, position, children FROM tx
 WHERE round_id IN (SELECT rctv.round_id FROM round_commitment_tx_vw rctv WHERE rctv.txid = $1) AND type = 'tree'
 `
 
@@ -920,9 +911,7 @@ func (q *Queries) SelectTreeTxsWithRoundTxid(ctx context.Context, txid string) (
 			&i.RoundID,
 			&i.Type,
 			&i.Position,
-			&i.TreeLevel,
-			&i.ParentTxid,
-			&i.IsLeaf,
+			&i.Children,
 		); err != nil {
 			return nil, err
 		}
@@ -1311,28 +1300,24 @@ func (q *Queries) UpsertRound(ctx context.Context, arg UpsertRoundParams) error 
 
 const upsertTransaction = `-- name: UpsertTransaction :exec
 INSERT INTO tx (
-    tx, round_id, type, position, txid, tree_level, parent_txid, is_leaf
-) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+    tx, round_id, type, position, txid, children
+) VALUES ($1, $2, $3, $4, $5, $6)
     ON CONFLICT(txid) DO UPDATE SET
     tx = EXCLUDED.tx,
     round_id = EXCLUDED.round_id,
     type = EXCLUDED.type,
     position = EXCLUDED.position,
     txid = EXCLUDED.txid,
-    tree_level = EXCLUDED.tree_level,
-    parent_txid = EXCLUDED.parent_txid,
-    is_leaf = EXCLUDED.is_leaf
+    children = EXCLUDED.children
 `
 
 type UpsertTransactionParams struct {
-	Tx         string
-	RoundID    string
-	Type       string
-	Position   int32
-	Txid       string
-	TreeLevel  sql.NullInt32
-	ParentTxid sql.NullString
-	IsLeaf     sql.NullBool
+	Tx       string
+	RoundID  string
+	Type     string
+	Position int32
+	Txid     string
+	Children pqtype.NullRawMessage
 }
 
 func (q *Queries) UpsertTransaction(ctx context.Context, arg UpsertTransactionParams) error {
@@ -1342,9 +1327,7 @@ func (q *Queries) UpsertTransaction(ctx context.Context, arg UpsertTransactionPa
 		arg.Type,
 		arg.Position,
 		arg.Txid,
-		arg.TreeLevel,
-		arg.ParentTxid,
-		arg.IsLeaf,
+		arg.Children,
 	)
 	return err
 }

@@ -266,9 +266,7 @@ message IndexerOutpoint {
 
 message IndexerNode {
   string txid = 1;
-  string parent_txid = 3;
-  int32 level = 4;
-  int32 level_index = 5;
+  map<uint32, string> children = 2; // vout -> txid
 }
 
 message IndexerVtxo {

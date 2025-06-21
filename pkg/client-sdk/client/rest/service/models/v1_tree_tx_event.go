@@ -8,7 +8,6 @@ package models
 import (
 	"context"
 
-	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
 )
@@ -21,81 +20,29 @@ type V1TreeTxEvent struct {
 	// batch index
 	BatchIndex int32 `json:"batchIndex,omitempty"`
 
+	// output index -> child txid
+	Children map[string]string `json:"children,omitempty"`
+
 	// id
 	ID string `json:"id,omitempty"`
 
 	// topic
 	Topic []string `json:"topic"`
 
-	// tree tx
-	TreeTx *V1Node `json:"treeTx,omitempty"`
+	// tx
+	Tx string `json:"tx,omitempty"`
+
+	// txid
+	Txid string `json:"txid,omitempty"`
 }
 
 // Validate validates this v1 tree tx event
 func (m *V1TreeTxEvent) Validate(formats strfmt.Registry) error {
-	var res []error
-
-	if err := m.validateTreeTx(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
 	return nil
 }
 
-func (m *V1TreeTxEvent) validateTreeTx(formats strfmt.Registry) error {
-	if swag.IsZero(m.TreeTx) { // not required
-		return nil
-	}
-
-	if m.TreeTx != nil {
-		if err := m.TreeTx.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("treeTx")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("treeTx")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-// ContextValidate validate this v1 tree tx event based on the context it is used
+// ContextValidate validates this v1 tree tx event based on context it is used
 func (m *V1TreeTxEvent) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
-	var res []error
-
-	if err := m.contextValidateTreeTx(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *V1TreeTxEvent) contextValidateTreeTx(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.TreeTx != nil {
-
-		if swag.IsZero(m.TreeTx) { // not required
-			return nil
-		}
-
-		if err := m.TreeTx.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("treeTx")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("treeTx")
-			}
-			return err
-		}
-	}
-
 	return nil
 }
 
