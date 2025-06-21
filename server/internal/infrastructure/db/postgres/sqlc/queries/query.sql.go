@@ -183,7 +183,7 @@ SELECT
         FROM tx t
         WHERE t.round_id = r.id
           AND t.type = 'tree'
-          AND t.is_leaf = TRUE
+          AND TRIM(COALESCE(t.children, '')) = ''
     ) AS total_output_vtxos,
     (
         SELECT MAX(v.expire_at)
