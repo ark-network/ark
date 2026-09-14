@@ -109,6 +109,65 @@ func TestLiveStoreImplementations(t *testing.T) {
 	}
 }
 
+func TestRedisCurrentRoundUpsertRetriesWithLatestRound(t *testing.T) {
+	ctx := t.Context()
+	const currentRoundKey = "currentRoundStore:round"
+
+	// Two clients exercise overlapping store updates; DB 3 isolates this test.
+	firstClient := redis.NewClient(&redis.Options{Addr: "localhost:6379", DB: 3})
+	secondClient := redis.NewClient(&redis.Options{Addr: "localhost:6379", DB: 3})
+	t.Cleanup(func() { _ = firstClient.Close() })
+	t.Cleanup(func() { _ = secondClient.Close() })
+	t.Cleanup(func() {
+		require.NoError(t, firstClient.Del(context.Background(), currentRoundKey).Err())
+	})
+	require.NoError(t, firstClient.Del(ctx, currentRoundKey).Err())
+
+	firstStore := redislivestore.NewCurrentRoundStore(firstClient, 5)
+	secondStore := redislivestore.NewCurrentRoundStore(secondClient, 5)
+	round := domain.NewRound()
+	_, err := round.StartRegistration()
+	require.NoError(t, err)
+	require.NoError(t, firstStore.Upsert(ctx, func(*domain.Round) *domain.Round {
+		return round
+	}))
+
+	firstIntent := domain.Intent{
+		Id: "first-intent", Proof: "proof-a", Message: "message-a", Txid: "txid-a",
+		Receivers: []domain.Receiver{{PubKey: "pubkey-a", Amount: 1000}},
+	}
+	secondIntent := domain.Intent{
+		Id: "second-intent", Proof: "proof-b", Message: "message-b", Txid: "txid-b",
+		Receivers: []domain.Receiver{{PubKey: "pubkey-b", Amount: 2000}},
+	}
+
+	interleave := sync.OnceFunc(func() {
+		require.NoError(t, secondStore.Upsert(ctx, func(other *domain.Round) *domain.Round {
+			_, err := other.RegisterIntents([]domain.Intent{secondIntent})
+			require.NoError(t, err)
+			return other
+		}))
+	})
+
+	err = firstStore.Upsert(ctx, func(current *domain.Round) *domain.Round {
+		interleave()
+		_, err := current.RegisterIntents([]domain.Intent{firstIntent})
+		require.NoError(t, err)
+		return current
+	})
+	require.NoError(t, err, "both writers must report success before checking for lost updates")
+
+	stored, err := firstStore.Get(ctx)
+	require.NoError(t, err)
+	require.NotNil(t, stored)
+	require.Equal(t, map[string]domain.Intent{
+		firstIntent.Id:  firstIntent,
+		secondIntent.Id: secondIntent,
+	}, stored.Intents, "a successful Upsert must preserve the other writer's committed intent")
+	// Registration also appends events; those must survive the same interleaving.
+	require.Len(t, stored.Changes, 3, "expected the round start and both intent registrations")
+}
+
 func runLiveStoreTests(t *testing.T, store ports.LiveStore) {
 	t.Run("IntentStore", func(t *testing.T) {
 		ctx := t.Context()
