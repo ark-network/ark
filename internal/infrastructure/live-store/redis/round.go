@@ -33,24 +33,26 @@ func NewCurrentRoundStore(rdb *redis.Client, numOfRetries int) ports.CurrentRoun
 	}
 }
 
+// Upsert may invoke fn multiple times when concurrent writes cause a retry.
 func (s *currentRoundStore) Upsert(
 	ctx context.Context, fn func(m *domain.Round) *domain.Round,
 ) error {
-	round, err := s.Get(ctx)
-	if err != nil {
-		return err
-	}
-	if round == nil {
-		round = &domain.Round{}
-	}
-	updated := fn(round)
-	val, err := json.Marshal(updated)
-	if err != nil {
-		return err
-	}
-
+	var err error
 	for range s.numOfRetries {
 		if err = s.rdb.Watch(ctx, func(tx *redis.Tx) error {
+			round, err := s.getWith(ctx, tx)
+			if err != nil {
+				return err
+			}
+			if round == nil {
+				round = &domain.Round{}
+			}
+			updated := fn(round)
+			val, err := json.Marshal(updated)
+			if err != nil {
+				return err
+			}
+
 			_, err = tx.TxPipelined(ctx, func(pipe redis.Pipeliner) error {
 				pipe.Set(ctx, currentRoundKey, val, 0)
 				return nil
@@ -60,13 +62,20 @@ func (s *currentRoundStore) Upsert(
 		}, currentRoundKey); err == nil {
 			return nil
 		}
+		if !errors.Is(err, redis.TxFailedErr) {
+			return err
+		}
 		time.Sleep(s.retryDelay)
 	}
 	return fmt.Errorf("failed to update round after max number of retries: %v", err)
 }
 
 func (s *currentRoundStore) Get(ctx context.Context) (*domain.Round, error) {
-	data, err := s.rdb.Get(ctx, currentRoundKey).Bytes()
+	return s.getWith(ctx, s.rdb)
+}
+
+func (s *currentRoundStore) getWith(ctx context.Context, c redis.Cmdable) (*domain.Round, error) {
+	data, err := c.Get(ctx, currentRoundKey).Bytes()
 	if err != nil {
 		if errors.Is(err, redis.Nil) {
 			return nil, nil
