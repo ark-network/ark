@@ -913,6 +913,11 @@
           "forfeitPubkey": {
             "type": "string"
           },
+          "maxOffchainTxFee": {
+            "type": "integer",
+            "description": "maximum fee accepted in an offchain transaction, in sats",
+            "format": "int64"
+          },
           "maxOpReturnOutputs": {
             "type": "integer",
             "format": "int64"

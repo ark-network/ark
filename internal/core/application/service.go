@@ -482,20 +482,20 @@ func (s *service) SubmitOffchainTx(
 		sumOfOutputs += int64(output.Value)
 	}
 
-	if sumOfInputs != sumOfOutputs {
-		return nil, errors.INVALID_ARK_PSBT.New(
-			"sum(inputs) != sum(outputs) (%d != %d)",
-			sumOfInputs,
-			sumOfOutputs,
-		)
-	}
-
-	txid := arkPtx.UnsignedTx.TxID()
-
 	settings, err := s.cache.Settings().Get(ctx)
 	if err != nil {
 		return nil, errors.INTERNAL_ERROR.New("failed to get settings: %w", err)
 	}
+
+	maxTxFee := maxOffchainTxFee(settings.VtxoMinAmount)
+	if err := offchain.ValidateTxFee(sumOfInputs, sumOfOutputs, maxTxFee); err != nil {
+		return nil, errors.INVALID_ARK_PSBT.New(
+			"invalid offchain transaction amounts (%d inputs, %d outputs): %w",
+			sumOfInputs, sumOfOutputs, err,
+		)
+	}
+
+	txid := arkPtx.UnsignedTx.TxID()
 
 	banThreshold := settings.BanThreshold
 	minAllowedExitDelay := settings.UnilateralExitDelay
@@ -1026,8 +1026,8 @@ func (s *service) SubmitOffchainTx(
 	var rebuiltArkTx *psbt.Packet
 	var rebuiltCheckpointTxs []*psbt.Packet
 	// recompute all txs (checkpoint txs + ark tx)
-	rebuiltArkTx, rebuiltCheckpointTxs, err = offchain.BuildTxs(
-		ins, outputs, checkpointTapscript,
+	rebuiltArkTx, rebuiltCheckpointTxs, err = offchain.BuildTxsWithMaxFee(
+		ins, outputs, checkpointTapscript, maxTxFee,
 	)
 
 	if err != nil {
@@ -2471,6 +2471,7 @@ func (s *service) GetInfo(ctx context.Context) (*ServiceInfo, errors.Error) {
 		UtxoMinAmount:        utxoMinAmount,
 		UtxoMaxAmount:        utxoMaxAmount,
 		VtxoMinAmount:        vtxoMinAmount,
+		MaxOffchainTxFee:     maxOffchainTxFee(vtxoMinAmount),
 		VtxoMaxAmount:        vtxoMaxAmount,
 		CheckpointTapscript:  checkpointTapscript,
 		MaxTxWeight:          int64(maxTxWeight),
@@ -2480,6 +2481,13 @@ func (s *service) GetInfo(ctx context.Context) (*ServiceInfo, errors.Error) {
 		},
 		Digest: digest,
 	}, nil
+}
+
+func maxOffchainTxFee(vtxoMinAmount int64) int64 {
+	if vtxoMinAmount <= 1 {
+		return 0
+	}
+	return vtxoMinAmount - 1
 }
 
 // DeleteIntentsByProof deletes transaction intents matching the proof of ownership.

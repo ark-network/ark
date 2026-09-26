@@ -80,6 +80,7 @@ type ServiceInfo struct {
 	UtxoMinAmount        int64
 	UtxoMaxAmount        int64
 	VtxoMinAmount        int64
+	MaxOffchainTxFee     int64
 	VtxoMaxAmount        int64
 	CheckpointTapscript  string
 	Fees                 FeeInfo

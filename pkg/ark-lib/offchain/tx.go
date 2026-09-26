@@ -31,6 +31,13 @@ type VtxoInput struct {
 func BuildTxs(
 	vtxos []VtxoInput, outputs []*wire.TxOut, signerUnrollScript []byte,
 ) (*psbt.Packet, []*psbt.Packet, error) {
+	return BuildTxsWithMaxFee(vtxos, outputs, signerUnrollScript, 0)
+}
+
+// BuildTxsWithMaxFee builds an offchain transaction with a bounded fee.
+func BuildTxsWithMaxFee(
+	vtxos []VtxoInput, outputs []*wire.TxOut, signerUnrollScript []byte, maxFee int64,
+) (*psbt.Packet, []*psbt.Packet, error) {
 	checkpointInputs := make([]VtxoInput, 0, len(vtxos))
 	checkpointTxs := make([]*psbt.Packet, 0, len(vtxos))
 	inputAmount := int64(0)
@@ -60,8 +67,8 @@ func BuildTxs(
 		outputAmount += output.Value
 	}
 
-	if inputAmount != outputAmount {
-		return nil, nil, fmt.Errorf("input amount is not equal to output amount")
+	if err := ValidateTxFee(inputAmount, outputAmount, maxFee); err != nil {
+		return nil, nil, err
 	}
 
 	arkTx, err := buildArkTx(checkpointInputs, outputs)
@@ -70,6 +77,15 @@ func BuildTxs(
 	}
 
 	return arkTx, checkpointTxs, nil
+}
+
+// ValidateTxFee rejects overspending and fees above the operator's limit.
+func ValidateTxFee(inputAmount, outputAmount, maxFee int64) error {
+	if inputAmount < 0 || outputAmount < 0 || maxFee < 0 || outputAmount > inputAmount ||
+		inputAmount-outputAmount > maxFee {
+		return fmt.Errorf("offchain tx fee %d is outside allowed range 0..%d", inputAmount-outputAmount, maxFee)
+	}
+	return nil
 }
 
 // buildArkTx builds an ark tx for the given vtxos and outputs.

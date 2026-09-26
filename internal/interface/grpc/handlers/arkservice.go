@@ -76,6 +76,7 @@ func (h *handler) GetInfo(
 		UtxoMinAmount:       info.UtxoMinAmount,
 		UtxoMaxAmount:       info.UtxoMaxAmount,
 		VtxoMinAmount:       info.VtxoMinAmount,
+		MaxOffchainTxFee:    info.MaxOffchainTxFee,
 		VtxoMaxAmount:       info.VtxoMaxAmount,
 		CheckpointTapscript: info.CheckpointTapscript,
 		MaxTxWeight:         info.MaxTxWeight,
